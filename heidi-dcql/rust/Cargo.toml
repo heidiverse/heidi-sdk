@@ -1,0 +1,21 @@
+[package]
+name = "heidi-dcql-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "heidi_dcql_rust"
+
+[dependencies]
+uniffi.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+jlc = { git = "https://github.com/UbiqueInnovation/possum.git" }
+heidi-util-rust = { path = "../../heidi-util/rust" }
+heidi-credentials-rust = { path = "../../heidi-credentials/rust", default-features = false }
+
+[features]
+default = ["bbs"]
+bbs = ["heidi-credentials-rust/bbs"]

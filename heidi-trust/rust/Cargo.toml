@@ -1,0 +1,20 @@
+[package]
+name = "heidi-trust-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "heidi_trust_rust"
+
+[dependencies]
+uniffi.workspace = true
+anyhow.workspace = true
+openidconnect-federation.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+josekit.workspace = true
+
+[features]
+default = ["uniffi"]
+uniffi = []

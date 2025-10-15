@@ -1,0 +1,20 @@
+{
+	"capture_base": {
+		"attributes": {
+			"text": "Text",
+			"numeric": "Numeric",
+			"reference": "Reference",
+			"boolean": "Boolean",
+			"binary": "Binary",
+			"datetime": "DateTime",
+			"array": "Array[Text]",
+			"nestedArray": "Array[Array[Numeric]]",
+			"something": "Something"
+		},
+		"classification": "",
+		"digest": "EKpcSmz06sJs0b4g24e0Jc7OerbJrGN2iMVEnwLYKBS8",
+		"type": "spec/capture_base/1.0"
+	},
+	"overlays": [
+	]
+}

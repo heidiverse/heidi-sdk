@@ -1,0 +1,2 @@
+generate_serializable_records = true
+generate_immutable_records = true

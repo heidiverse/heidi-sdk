@@ -1,0 +1,357 @@
+{
+	"capture_base": {
+		"type": "spec/capture_base/1.0",
+		"digest": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+		"classification": "GICS:45102010",
+		"attributes": {
+			"dateOfBirth": "DateTime",
+			"dateOfExpiry": "DateTime",
+			"dateOfIssue": "DateTime",
+			"documentCode": "Text",
+			"documentNumber": "Text",
+			"documentType": "Text",
+			"fullName": "Text",
+			"issuedBy": "Text",
+			"issuingState": "Text",
+			"issuingStateCode": "Text",
+			"nationality": "Text",
+			"optionalData": "Text",
+			"optionalDocumentData": "Text",
+			"optionalPersonalData": "Text",
+			"personalNumber": "Text",
+			"photoImage": "Binary",
+			"placeOfBirth": "Text",
+			"primaryIdentifier": "Text",
+			"secondaryIdentifier": "Text",
+			"sex": "Text",
+			"signatureImage": "Binary"
+		},
+		"flagged_attributes": [
+			"documentNumber",
+			"fullName",
+			"primaryIdentifier",
+			"secondaryIdentifier",
+			"dateOfBirth",
+			"personalNumber",
+			"placeOfBirth",
+			"optionalPersonalData",
+			"optionalDocumentData",
+			"signatureImage",
+			"photoImage",
+			"optionalData"
+		]
+	},
+	"overlays": [
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "EJUFN-q4OBzuSjivf3TrXH0LTPDWmRQWRZR8yMPZl13Q",
+			"type": "spec/overlays/character_encoding/1.0",
+			"default_character_encoding": "utf-8",
+			"attribute_character_encoding": {
+				"dateOfBirth": "utf-8",
+				"dateOfExpiry": "utf-8",
+				"dateOfIssue": "utf-8",
+				"documentCode": "utf-8",
+				"documentNumber": "utf-8",
+				"documentType": "utf-8",
+				"fullName": "utf-8",
+				"issuedBy": "utf-8",
+				"issuingState": "utf-8",
+				"issuingStateCode": "utf-8",
+				"nationality": "utf-8",
+				"optionalData": "utf-8",
+				"optionalDocumentData": "utf-8",
+				"optionalPersonalData": "utf-8",
+				"personalNumber": "utf-8",
+				"photoImage": "base64",
+				"placeOfBirth": "utf-8",
+				"primaryIdentifier": "utf-8",
+				"secondaryIdentifier": "utf-8",
+				"sex": "utf-8",
+				"signatureImage": "base64"
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "E6inEd0mX5l1918MF_Cvc2E6KYftK05n0bVE-bYpab8Q",
+			"type": "spec/overlays/entry/1.0",
+			"language": "en",
+			"attribute_entries": {
+				"documentType": {
+					"PASSPORT": "PASSPORT"
+				},
+				"issuingState": "Els6NxGvFfyL5aiBWR3j7YiaS7F4j4O-F0EIlZu-dO0g",
+				"issuingStateCode": "EdxqlME_1Zt0Y_YJ3c0uMIzd41mSDATbH-rp7ElqhNes",
+				"nationality": "EXdSkFdYnAzZ2U2Qyo-q76CJMYelgV9NXN8GhmtY2ErY",
+				"sex": {
+					"F": "Female",
+					"M": "Male",
+					"X": "Unspecified"
+				}
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "EGhbM7wTbFLPN9b91hNlqMrCKA-1MNHf1Q0rxfyUgUS8",
+			"type": "spec/overlays/entry/1.0",
+			"language": "fr",
+			"attribute_entries": {
+				"documentType": {
+					"PASSPORT": "PASSEPORT"
+				},
+				"issuingState": "Emj736NIuEKdR-3sfXB4wfPokFzgE7uiRm6EXKaJRyE4",
+				"issuingStateCode": "EdxqlME_1Zt0Y_YJ3c0uMIzd41mSDATbH-rp7ElqhNes",
+				"nationality": "Ez_5-oggNDr7gUFaz3GSof1y579gK0MKXIVesRjGzyqY",
+				"sex": {
+					"F": "Femelle",
+					"M": "Mâle",
+					"X": "Non spécifié"
+				}
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "EelYt9QHQYbCqJlTFs1k7ia2eLPaZVM82jbcrCQpbHAk",
+			"type": "spec/overlays/entry_code/1.0",
+			"attribute_entry_codes": {
+				"documentType": [
+					"PASSPORT"
+				],
+				"issuingState": "EGyWgdQR9dW_I5oHlHBMoO9AA_eMeb2p3XzcCRCBbKCM",
+				"issuingStateCode": "EGyWgdQR9dW_I5oHlHBMoO9AA_eMeb2p3XzcCRCBbKCM",
+				"nationality": "EmXip-eMwEeLWH9_AfH642_Zb-oGZXk7jI49qafz_XrU",
+				"sex": [
+					"F",
+					"M",
+					"X"
+				]
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "Epkrga7Ynfyw468kj-X9k3LjkwHOShtUU1oZCwRJqQk8",
+			"type": "spec/overlays/format/1.0",
+			"attribute_formats": {
+				"dateOfBirth": "dd.MM.yyyy",
+				"dateOfExpiry": "dd.MM.yyyy",
+				"dateOfIssue": "dd.MM.yyyy",
+				"documentCode": "P[A-Z0-9]{1}",
+				"documentNumber": "[A-Z0-9]{9}",
+				"issuingStateCode": "[A-Z]{3}",
+				"personalNumber": "[A-Z0-9]{14}",
+				"photoImage": "image/jpeg",
+				"signatureImage": "image/jpeg"
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "EvC3XPq7OqmxBZUbz8VzxuhMYY2KOfSrava60fvLnqLw",
+			"type": "spec/overlays/information/1.0",
+			"language": "en",
+			"attribute_information": {
+				"dateOfBirth": "Holder’s date of birth as recorded by the issuing State or organization. If the date of birth is unknown, see Doc 9303-3 for guidance.",
+				"dateOfExpiry": "Date of expiry of the MRP. For additional details see Doc 9303-3.",
+				"dateOfIssue": "For details see Doc 9303-3.",
+				"documentCode": "Capital letter P to designate an MRP. One additional capital letter may be used, in the character position after the letter P and at the discretion of the issuing State or organization, to designate other types of passports such as MRP issued to diplomatic staff, an MRP issued for travel on government business, or a passport issued for a special purpose.",
+				"documentNumber": "As given by the issuing State or organization to uniquely identify the document from all other MRTDs issued by the State or organization. For additional details see Doc 9303-3.",
+				"documentType": "The word for “passport” in the language of the issuing State or organization.",
+				"fullName": "The full name of the holder, as identified by the issuing State or organization. For additional details see Doc 9303-3.",
+				"issuedBy": "Authority or issuing organization for the MRP. This field shall be used to indicate the issuing authority or issuing organization and, optionally, its location, which may be personalized within this field. For additional details see Doc 9303-3.",
+				"issuingState": "The name of the State or organization responsible for issuing the MRP shall be displayed in full.",
+				"issuingStateCode": "As abbreviated in the three-letter code specified in Doc 9303-3.",
+				"nationality": "For details see Doc 9303-3.",
+				"optionalData": "Additional optional data elements at the discretion of the issuing State or organization. For additional details see Doc 9303-3.",
+				"optionalDocumentData": "Optional data elements relating to the document. For additional details see Doc 9303-3.",
+				"optionalPersonalData": "Optional personal data elements e.g. personal identification number or fingerprint, at the discretion of the issuing State or organization. If a fingerprint is included in this field, it should be presented as a 1:1 representation of the original. If a date is included, it shall follow the form of presentation described in Doc 9303-3.",
+				"personalNumber": "Field optionally used for personal identification number given to holder by the issuing State or organization. For additional details see Doc 9303-3.",
+				"photoImage": "This field shall contain a portrait of the holder. The portrait shall not be larger than 45.0 mm x 35.0 mm_x005F_x005F_x005F_x005F_x000b_(1.77 in x 1.38 in) nor smaller than 32.0 mm x 26.0 mm (1.26 in x 1.02 in). The position of the field concerned shall be aligned to the left of Zones II, III and IV. See Doc 9303-3 for additional specifications for the portrait.",
+				"placeOfBirth": "Field optionally used for city and State of the holder’s birthplace. Refer to Doc 9303-3 for further details.",
+				"primaryIdentifier": "Predominant component(s) of the name of the holder as described in Doc 9303-3. In cases where the predominant component(s) of the name of the holder (e.g. where this consists of composite names) cannot be shown in full or in the same order, owing to space limitations of Field(s) 06 and/or 07 or national practice, the most important component(s) (as determined by the State or organization) of the primary identifier shall be inserted.",
+				"secondaryIdentifier": "Secondary component(s) of the name of the holder as described in Doc 9303-3. The most important component(s) (as determined by the State or organization) of the secondary identifier of the holder shall be inserted in full, up to the maximum dimensions of the field frame. Other components, where necessary, may be represented by initials. Where the holder’s name has only predominant component(s), this data field shall be left blank. A State may optionally utilize the whole zone comprising Fields 06 and 07 as a single field. In such a case, the primary identifier shall be placed first, followed by a comma and a space, followed by the secondary identifier.",
+				"sex": "Sex of the holder, to be specified by use of the single initial commonly used in the language of the State or organization where the document is issued and, if translation into English, French or Spanish is necessary, followed by an oblique and the capital letter F for female, M for male, or X for unspecified.",
+				"signatureImage": "At the discretion of the issuing State or organization, the signature or usual mark may be located in Zone VI. The size of the field to be allocated to the signature or usual mark on the adjoining page shall be at the discretion of the issuing State or organization, subject to the overall dimensional limits of the MRP. For additional details see Doc 9303-3."
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "Eu2WMGoUVsx15cXbYjdUjxp4fXk3QIehWkcrN9g4HWbI",
+			"type": "spec/overlays/information/1.0",
+			"language": "fr",
+			"attribute_information": {
+				"dateOfBirth": "Date de naissance du titulaire enregistrée par l'État ou l'organisme émetteur. Si la date de naissance est inconnue, consultez le Doc 9303-3 pour obtenir des conseils.",
+				"dateOfExpiry": "Date d'expiration du MRP. Pour plus de détails, voir Doc 9303-3.",
+				"dateOfIssue": "Pour plus de détails, voir Doc 9303-3.",
+				"documentCode": "Lettre majuscule P pour désigner un MRP. Une lettre majuscule supplémentaire peut être utilisée, en position de caractère après la lettre P et à la discrétion de l'État ou de l'organisation émetteur, pour désigner d'autres types de passeports tels que le MRP délivré au personnel diplomatique, un MRP délivré pour les voyages d'affaires du gouvernement, ou un passeport délivré à des fins particulières.",
+				"documentNumber": "Tel qu'indiqué par l'État ou l'organisation émetteur pour identifier de manière unique le document parmi tous les autres DVLM émis par l'État ou l'organisation. Pour plus de détails, voir Doc 9303-3.",
+				"documentType": "Le mot pour \"passeport\" dans la langue de l'État ou de l'organisation émetteur.",
+				"fullName": "Le nom complet du titulaire, tel qu'identifié par l'État ou l'organisme émetteur. Pour plus de détails, voir Doc 9303-3.",
+				"issuedBy": "Autorité ou organisme émetteur du MRP. Ce champ est utilisé pour indiquer l'autorité ou l'organisme émetteur et, éventuellement, sa localisation, qui peut être personnalisée dans ce champ. Pour plus de détails, voir Doc 9303-3.",
+				"issuingState": "Le nom de l'État ou de l'organisme responsable de la délivrance du MRP doit être indiqué en toutes lettres.",
+				"issuingStateCode": "Comme abrégé dans le code à trois lettres spécifié dans le Doc 9303-3.",
+				"nationality": "Pour plus de détails, voir Doc 9303-3.",
+				"optionalData": "Éléments de données facultatifs supplémentaires à la discrétion de l'État ou de l'organisation émetteur. Pour plus de détails, voir Doc 9303-3.",
+				"optionalDocumentData": "Éléments de données facultatifs relatifs au document. Pour plus de détails, voir Doc 9303-3.",
+				"optionalPersonalData": "Éléments de données personnelles facultatifs, par ex. numéro d'identification personnel ou empreinte digitale, à la discrétion de l'État ou de l'organisation émetteur. Si une empreinte digitale est incluse dans ce champ, elle doit être présentée comme une représentation 1:1 de l'original. Si une date est incluse, elle doit suivre le mode de présentation décrit dans le Doc 9303-3.",
+				"personalNumber": "Champ éventuellement utilisé pour le numéro d'identification personnel attribué au titulaire par l'État ou l'organisme émetteur. Pour plus de détails, voir Doc 9303-3.",
+				"photoImage": "Ce champ doit contenir un portrait du titulaire. Le portrait ne doit pas être plus grand que 45,0 mm x 35,0 mm (1,77 po x 1,38 po) ni inférieure à 32,0 mm x 26,0 mm (1,26 po x 1,02 po). La position du champ concerné doit être alignée à gauche des zones II, III et IV. Voir le Doc 9303-3 pour des spécifications supplémentaires pour le portrait.",
+				"placeOfBirth": "Champ éventuellement utilisé pour la ville et l'État du lieu de naissance du titulaire. Reportez-vous au Doc 9303-3 pour plus de détails.",
+				"primaryIdentifier": "Élément(s) prédominant(s) du nom du titulaire tel que décrit dans le Doc 9303-3. Dans les cas où le ou les éléments prédominants du nom du titulaire (par exemple, lorsqu'il s'agit de noms composés) ne peuvent pas être indiqués en entier ou dans le même ordre, en raison du manque d'espace des champs 06 et/ou 07 ou pratique nationale, le ou les composants les plus importants (tels que déterminés par l'État ou l'organisation) de l'identifiant primaire doivent être insérés.",
+				"secondaryIdentifier": "Élément(s) secondaire(s) du nom du titulaire tel que décrit dans le Doc 9303-3. Le ou les éléments les plus importants (tels que déterminés par l'État ou l'organisation) de l'identifiant secondaire du titulaire doivent être insérés en entier, jusqu'aux dimensions maximales du cadre de champ. D'autres composants, si nécessaire, peuvent être représentés par des initiales. Lorsque le nom du titulaire n'a qu'un ou plusieurs éléments prédominants, ce champ de données doit rester vide. Un État peut éventuellement utiliser toute la zone comprenant les champs 06 et 07 comme un champ unique. Dans ce cas, l'identifiant primaire doit être placé en premier, suivi d'une virgule et d'un espace, suivi de l'identifiant secondaire.",
+				"sex": "Sexe du titulaire, à préciser par l'utilisation de l'initiale unique couramment utilisée dans la langue de l'État ou de l'organisation où le document est délivré et, si une traduction en anglais, français ou espagnol est nécessaire, suivie d'une oblique et d'une majuscule F pour femelle, M pour mâle ou X pour non spécifié.",
+				"signatureImage": "Au choix de l'État ou de l'organisme émetteur, la signature ou la marque usuelle peut être située dans la zone VI. La taille du champ à attribuer à la signature ou à la marque usuelle sur la page attenante est à la discrétion de l'État ou de l'organisme émetteur, sous réserve des limites dimensionnelles globales du MRP. Pour plus de détails, voir Doc 9303-3."
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "EGPOEHuzZ074hniBlml50c6JWuPBc23nAz01iWkLnLu4",
+			"type": "spec/overlays/label/1.0",
+			"language": "en",
+			"attribute_labels": {
+				"dateOfBirth": "Date of birth",
+				"dateOfExpiry": "Date of expiry",
+				"dateOfIssue": "Date of issue",
+				"documentCode": "Document code",
+				"documentNumber": "Passport Number",
+				"documentType": "Document",
+				"fullName": "Name",
+				"issuedBy": "Authority or issuing organization",
+				"issuingState": "Issuing State or organization (in full)",
+				"issuingStateCode": "Issuing State or organization (in code)",
+				"nationality": "Nationality",
+				"optionalData": "Optional data elements",
+				"optionalDocumentData": "Optional document data elements",
+				"optionalPersonalData": "Optional personal data elements",
+				"personalNumber": "Personal number",
+				"photoImage": "Identification feature",
+				"placeOfBirth": "Place of birth",
+				"primaryIdentifier": "Primary Identifier",
+				"secondaryIdentifier": "Secondary Identifier",
+				"sex": "Sex",
+				"signatureImage": "Holder’s signature or usual mark"
+			},
+			"attribute_categories": [
+				"_cat-1_",
+				"_cat-2_",
+				"_cat-3_",
+				"_cat-4_",
+				"_cat-5_",
+				"_cat-6_"
+			],
+			"category_labels": {
+				"_cat-1_": "Mandatory header",
+				"_cat-2_": "Mandatory and optional personal data elements",
+				"_cat-3_": "Mandatory and optional document data elements",
+				"_cat-4_": "Mandatory holder’s signature or usual mark (original or reproduction)",
+				"_cat-5_": "Mandatory identification feature",
+				"_cat-6_": "Optional data elements"
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "E9fhDp1BtxpWuWOdf6Jt_O9CH2z4LctkZFKra2V3EQlY",
+			"type": "spec/overlays/label/1.0",
+			"language": "fr",
+			"attribute_labels": {
+				"dateOfBirth": "Date de naissance",
+				"dateOfExpiry": "Date d'expiration",
+				"dateOfIssue": "Date d'émission",
+				"documentCode": "Code du document",
+				"documentNumber": "Numéro de passeport",
+				"documentType": "Document",
+				"fullName": "Nom",
+				"issuedBy": "Autorité ou organisme émetteur",
+				"issuingState": "État ou organisme émetteur (au complet)",
+				"issuingStateCode": "État ou organisme émetteur (en code)",
+				"nationality": "Nationalité",
+				"optionalData": "Éléments de données facultatifs",
+				"optionalDocumentData": "Éléments de données de document facultatifs",
+				"optionalPersonalData": "Éléments de données personnelles facultatifs",
+				"personalNumber": "Numéro personnel",
+				"photoImage": "Caractéristique d'identification",
+				"placeOfBirth": "Lieu de naissance",
+				"primaryIdentifier": "Identifiant principal",
+				"secondaryIdentifier": "Identifiant secondaire",
+				"sex": "Sexe",
+				"signatureImage": "Signature du titulaire ou marque usuelle"
+			},
+			"attribute_categories": [
+				"_cat-1_",
+				"_cat-2_",
+				"_cat-3_",
+				"_cat-4_",
+				"_cat-5_",
+				"_cat-6_"
+			],
+			"category_labels": {
+				"_cat-1_": "En-tête obligatoire",
+				"_cat-2_": "Éléments de données personnelles obligatoires et facultatifs",
+				"_cat-3_": "Éléments de données obligatoires et facultatifs du document",
+				"_cat-4_": "Signature obligatoire du titulaire ou marque usuelle (original ou reproduction)",
+				"_cat-5_": "Élément d'identification obligatoire",
+				"_cat-6_": "Éléments de données facultatifs"
+			}
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "E339B9ZbuOj0D1pTqu3Trxx8UOSKQTqpwKXVFSkVk6Y8",
+			"type": "spec/overlays/meta/1.0",
+			"language": "en",
+			"name": "VIZ for Digital Passport",
+			"description": "A form to be used for capturing Visual Inspection Zone data for a Digital Passport"
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "Ea898ln3npPyvbd90b-2q8Nyg1nkDgs-OJT3jFyhO-98",
+			"type": "spec/overlays/meta/1.0",
+			"language": "fr",
+			"name": "VIZ pour passeport numérique",
+			"description": "Un formulaire à utiliser pour capturer les données de la zone d'inspection visuelle pour un passeport numérique"
+		},
+		{
+			"capture_base": "Ezk3JiB2xru1K-cd-iW4kScdrpP7bKYizk-mrvFHoZLY",
+			"digest": "EqsS_RtN_D5EkHG5Sc5ucpqthe2xPEERCdTJP0VHWQCA",
+			"type": "spec/overlays/unit/1.0",
+			"metric_system": "SI",
+			"attribute_units": {
+				"optionalPersonalData": "cm"
+			}
+		},
+		{
+			"capture_base": "IDnzU7K8-ndOuuI1p81uO6zTnrpfXJx2DDFJXbmZZWwf",
+			"type": "admin-ch/overlays/cluster_ordering/1.0",
+			"language": "en",
+			"cluster_order": {
+				"personal": 1,
+				"document": 2,
+				"additional": 3
+			},
+			"cluster_labels": {
+				"personal": "Personal Information",
+				"document": "Document Data",
+				"additional": "Additional Data"
+			},
+			"attribute_cluster_order": {
+				"personal": {
+					"fullName": 1,
+					"dateOfBirth": 2,
+					"placeOfBirth": 3,
+					"nationality": 4,
+					"sex": 5
+				},
+				"document": {
+					"documentType": 1,
+					"documentNumber": 2,
+					"dateOfIssue": 3,
+					"dateOfExpiry": 4,
+					"issuedBy": 5,
+					"issuingState": 6
+				},
+				"additional": {
+					"optionalData": 1,
+					"optionalDocumentData": 2,
+					"optionalPersonalData": 3
+				}
+			}
+		}
+	]
+}

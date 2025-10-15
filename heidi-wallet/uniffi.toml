@@ -1,0 +1,3 @@
+#package_name = "uniffi.heidi.wallet"
+generate_immutable_records = true
+generate_serializable_records = true

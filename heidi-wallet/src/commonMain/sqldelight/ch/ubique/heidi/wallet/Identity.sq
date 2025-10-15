@@ -1,0 +1,67 @@
+
+CREATE TABLE identityEntity (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    tokens TEXT NOT NULL,
+    frost_blob TEXT DEFAULT (NULL ),
+    emergency_tokens TEXT DEFAULT(NULL),
+    oidc_settings TEXT DEFAULT(NULL),
+    fk_issuer_url TEXT NOT NULL,
+    credential_configuration_ids TEXT DEFAULT(NULL),
+    is_pid INTEGER DEFAULT (0),
+	FOREIGN KEY (fk_issuer_url) REFERENCES issuerEntity(url) ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+insert:
+INSERT INTO identityEntity(name, tokens, oidc_settings, fk_issuer_url, credential_configuration_ids, is_pid)
+VALUES (?, ?, ? ,? , ?, ?);
+
+fullInsert:
+INSERT INTO identityEntity(id, name, tokens, frost_blob, emergency_tokens, oidc_settings, fk_issuer_url, credential_configuration_ids, is_pid)
+VALUES (?, ?, ?,?,?, ?, ?, ?, ?);
+
+getAll:
+SELECT * FROM identityEntity;
+
+getPids:
+SELECT * FROM identityEntity WHERE is_pid = 1;
+
+getNonPids:
+SELECT * FROM identityEntity WHERE is_pid = 0;
+
+getNonPidCount:
+SELECT COUNT(id) FROM identityEntity WHERE is_pid = 0;
+
+getByName:
+SELECT * FROM identityEntity WHERE name = ?;
+
+getById:
+SELECT * FROM identityEntity WHERE id = ?;
+
+getByActivityId:
+SELECT i.* FROM identityEntity i
+INNER JOIN activityEntity a ON i.id = a.identity_id
+WHERE a.id = ?;
+
+removeById:
+DELETE FROM identityEntity WHERE id = ?;
+
+removeByName:
+DELETE FROM identityEntity WHERE name = ?;
+
+setBackup:
+UPDATE identityEntity SET frost_blob = :frost_blob, emergency_tokens = :emergency_tokens WHERE  name = :name;
+
+setTokens:
+UPDATE identityEntity SET tokens = :tokens WHERE id = :id;
+
+getIdByCredentialId:
+SELECT i.id FROM identityEntity i
+INNER JOIN credentialEntity c ON i.id = c.fk_identity_id
+WHERE c.id = ?;
+
+clear:
+DELETE FROM identityEntity;
+
+existId:
+SELECT EXISTS (SELECT 1 FROM identityEntity LIMIT 1);

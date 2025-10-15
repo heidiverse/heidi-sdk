@@ -1,0 +1,11 @@
+-- Migration from DB version 3 to version 4
+-- This migration does not contain any schema migrations, only data migrations:
+CREATE TABLE deferredCredentialEntity(
+	id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	transaction_id TEXT NOT NULL,
+	metadata TEXT NOT NULL,
+	doc_type TEXT NOT NULL,
+	fk_identity_id INTEGER NOT NULL,
+	used INTEGER NOT NULL DEFAULT (0),
+	FOREIGN KEY (fk_identity_id) REFERENCES identityEntity(id) ON UPDATE CASCADE ON DELETE CASCADE
+);

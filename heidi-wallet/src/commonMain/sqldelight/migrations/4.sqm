@@ -1,0 +1,9 @@
+-- Migration from DB version 4 to version 5
+-- This migration does not contain any schema migrations, only data migrations:
+CREATE TABLE signedDocumentEntity (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    file_name TEXT NOT NULL,
+    file_data BLOB NOT NULL,
+    transaction_id TEXT NOT NULL,
+    signed_date INTEGER NOT NULL
+);

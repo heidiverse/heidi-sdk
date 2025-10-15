@@ -1,0 +1,18 @@
+{
+	"documentType": "PA",
+	"issuingState": "CHE",
+	"issuingStateCode": "che",
+	"documentNumber": "c0000000",
+	"primaryIdentifier": "John",
+	"secondaryIdentifier": "Citizen",
+	"fullName": "John Citizen",
+	"nationality": "CHE",
+	"dateOfBirth": "28.01.2000",
+	"personalNumber": "",
+	"sex": "M",
+	"placeOfBirth": "Luzern LU",
+	"optionalPersonalData": "170",
+	"dateOfIssue": "11.07.2000",
+	"issuedBy": "Luzern LU",
+	"dateOfExpiry": "11.07.3000"
+}

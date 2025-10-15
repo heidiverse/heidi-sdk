@@ -1,0 +1,22 @@
+CREATE TABLE keyValueEntity (
+    key TEXT NOT NULL PRIMARY KEY UNIQUE,
+    value TEXT,
+    updated_at INTEGER DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+fullInsert:
+INSERT OR REPLACE INTO keyValueEntity(key, value, updated_at)
+VALUES (?, ?, ?);
+
+setValueForKey:
+INSERT OR REPLACE INTO keyValueEntity (key, value, updated_at)
+VALUES (:key,:value, :updated_at);
+
+getByKey:
+SELECT * FROM keyValueEntity WHERE key = :key LIMIT 1;
+
+getAll:
+SELECT * FROM keyValueEntity;
+
+clear:
+DELETE FROM keyValueEntity;

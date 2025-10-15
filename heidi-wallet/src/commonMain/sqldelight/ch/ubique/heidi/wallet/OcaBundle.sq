@@ -1,0 +1,28 @@
+CREATE TABLE ocaBundleEntity (
+	url TEXT PRIMARY KEY,
+	content TEXT NOT NULL,
+	updated_at INTEGER DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+insert:
+INSERT INTO ocaBundleEntity(url, content, updated_at)
+VALUES (?,?,?);
+
+fullInsert:
+INSERT INTO ocaBundleEntity(url, content, updated_at)
+VALUES (?, ?, ?);
+
+update:
+UPDATE ocaBundleEntity SET content = :content, updated_at = :updated_at WHERE url = :url;
+
+exists:
+SELECT EXISTS(SELECT 1 FROM ocaBundleEntity WHERE url = :url LIMIT 1);
+
+getByUrl:
+SELECT * FROM ocaBundleEntity WHERE url = :url LIMIT 1;
+
+getAll:
+SELECT * FROM ocaBundleEntity;
+
+clear:
+DELETE FROM ocaBundleEntity;

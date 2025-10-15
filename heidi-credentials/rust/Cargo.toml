@@ -1,0 +1,32 @@
+[package]
+name = "heidi-credentials-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "heidi_credentials_rust"
+
+[dependencies]
+anyhow.workspace = true
+uniffi.workspace = true
+base64.workspace = true
+ciborium.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+chrono.workspace = true
+heidi-util-rust = { path = "../../heidi-util/rust" }
+zkp-util = { git = "https://github.com/UbiqueInnovation/sprind-next-gen-signing-service", optional = true }
+rdf-util = { git = "https://github.com/UbiqueInnovation/sprind-next-gen-signing-service", optional = true }
+next-gen-signatures = { git = "https://github.com/UbiqueInnovation/sprind-next-gen-signing-service", features = [
+    "zkp",
+], optional = true }
+rand_core.workspace = true
+ark-serialize.workspace = true
+num-bigint = "0.4.6"
+
+[features]
+default = ["bbs"]
+bbs = ["next-gen-signatures", "zkp-util", "rdf-util"]

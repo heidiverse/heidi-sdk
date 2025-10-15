@@ -1,0 +1,29 @@
+CREATE TABLE issuerEntity (
+	url TEXT PRIMARY KEY,
+	credential_issuer_metadata TEXT NOT NULL,
+	authorization_server_metadata TEXT DEFAULT(NULL),
+	updated_at INTEGER DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+insert:
+INSERT INTO issuerEntity(url, credential_issuer_metadata, authorization_server_metadata, updated_at)
+VALUES (?,?, ?, ?);
+
+fullInsert:
+INSERT INTO issuerEntity(url, credential_issuer_metadata, authorization_server_metadata, updated_at)
+VALUES (?, ?, ?,?);
+
+update:
+UPDATE issuerEntity SET credential_issuer_metadata = :credential_issuer_metadata, authorization_server_metadata = :authorization_server_metadata, updated_at = :updated_at WHERE url = :url;
+
+exists:
+SELECT EXISTS(SELECT 1 FROM issuerEntity WHERE url = :url LIMIT 1);
+
+getByUrl:
+SELECT * FROM issuerEntity WHERE url = :url LIMIT 1;
+
+getAll:
+SELECT * FROM issuerEntity;
+
+clear:
+DELETE FROM issuerEntity;

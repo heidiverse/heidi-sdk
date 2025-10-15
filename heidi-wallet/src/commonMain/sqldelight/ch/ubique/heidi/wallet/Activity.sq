@@ -1,0 +1,45 @@
+import ch.ubique.heidi.wallet.credentials.activity.ActivityType;
+
+CREATE TABLE activityEntity (
+	id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    type TEXT AS ActivityType,
+    content TEXT NOT NULL,
+    frameworkId TEXT DEFAULT NULL,
+    base_url TEXT NOT NULL,
+    identity_jwt TEXT,
+    issuance_jwt TEXT,
+    verification_jwt TEXT,
+    is_verified INTEGER NOT NULL,
+    is_trusted INTEGER NOT NULL,
+    inserted_at INTEGER DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    identity_id INTEGER NOT NULL,
+    credential_id INTEGER NOT NULL,
+    FOREIGN KEY (identity_id) REFERENCES identityEntity(id) ON DELETE CASCADE,
+    FOREIGN KEY (credential_id) REFERENCES credentialEntity(id) ON DELETE CASCADE
+);
+
+insert:
+INSERT INTO activityEntity(type, content, base_url, frameworkId, identity_jwt, issuance_jwt, verification_jwt, is_verified, is_trusted, inserted_at, identity_id, credential_id)
+VALUES (?,?, ?,?,?, ?,?,?,?,?, ?, ?);
+
+fullInsert:
+INSERT INTO activityEntity(id, type, content, base_url, frameworkId, identity_jwt, issuance_jwt, verification_jwt, is_verified, is_trusted, inserted_at, identity_id, credential_id)
+VALUES (?, ?, ?, ?,?,?, ?,?,?,?, ?, ?, ?);
+
+getById:
+SELECT * FROM activityEntity WHERE id = ?;
+
+getByIdentityId:
+SELECT * FROM activityEntity WHERE identity_id = ? ORDER BY inserted_at DESC;
+
+getByCredentialId:
+SELECT * FROM activityEntity WHERE credential_id = ? ORDER BY inserted_at DESC;
+
+getByCredentialIds:
+SELECT * FROM activityEntity WHERE credential_id IN ? ORDER BY inserted_at DESC;
+
+getAll:
+SELECT * FROM activityEntity;
+
+clear:
+DELETE FROM activityEntity;

@@ -1,0 +1,98 @@
+[versions]
+accompanist = "0.37.3"
+agp = "8.10.1"
+android-compileSdk = "36"
+android-minSdk = "28"
+android-targetSdk = "34"
+android-ndk = "28.2.13676358"
+androidx-activity-compose = "1.11.0"
+androidx-appcompat = "1.7.0"
+androidx-browser = "1.9.0"
+androidx-coreKtx = "1.17.0"
+androidx-lifecycle-runtimeKtx = "2.9.4"
+bouncycastle = "1.82"
+compose-bom = "2025.09.01"
+compose-multiplatform = "1.9.0"
+koin = "4.1.1"
+kotlin = "2.2.10"
+kotlin-coroutines = "1.10.2"
+kotlin-datetime = "0.7.1"
+kotlin-serialization = "1.9.0"
+ksp = "2.2.10-2.0.2"
+ktor = "3.3.0"
+ktorfit = "2.6.4"
+owf-identity = "202411.1"
+skie = "0.10.6"
+sqldelight = "2.1.0"
+ubique-gradle-alpaka = "8.10.0"
+ubique-gradle-preset = "8.10.0"
+ubique-gradle-signing = "8.10.0"
+ubique-qrscanner = "1.1.1"
+vanniktech-publish = "0.34.0"
+uniffi-bindgen = "v0.6.14"
+uniffi-plugin = "0.4.0"
+material-icons = "1.7.8"
+
+[libraries]
+accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanist" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-compose" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "androidx-appcompat" }
+androidx-browser = { module = "androidx.browser:browser", version.ref = "androidx-browser" }
+androidx-coreKtx = { group = "androidx.core", name = "core-ktx", version.ref = "androidx-coreKtx" }
+androidx-lifecycle-runtimeKtx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidx-lifecycle-runtimeKtx" }
+bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlin-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlin-coroutines" }
+kotlin-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlin-datetime" }
+kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlin-serialization" }
+kotlin-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version="1.10.2"}
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-serialization-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktorfit = { module = "de.jensklingenberg.ktorfit:ktorfit-lib", version.ref = "ktorfit" }
+ktorfit-converters-response = { module = "de.jensklingenberg.ktorfit:ktorfit-converters-response", version.ref = "ktorfit" }
+ktorfit-converters-call = { module = "de.jensklingenberg.ktorfit:ktorfit-converters-call", version.ref = "ktorfit" }
+ktorfit-converters-flow = { module = "de.jensklingenberg.ktorfit:ktorfit-converters-flow", version.ref = "ktorfit" }
+owf-identity = { group = "com.android.identity", name = "identity", version.ref = "owf-identity" }
+owf-identity-mdoc = { group = "com.android.identity", name = "identity-mdoc", version.ref = "owf-identity" }
+skie = { module = "co.touchlab.skie:configuration-annotations", version.ref = "skie" }
+sqldelight-android = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
+sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+sqldelight-native = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+sqldelight-sqlite = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
+ubique-qrscanner-compose = { module = "ch.ubique.android:qrscanner-compose", version.ref = "ubique-qrscanner" }
+ubique-qrscanner-zxing = { module = "ch.ubique.android:qrscanner-zxing", version.ref = "ubique-qrscanner" }
+compose-material-icons = {module = "androidx.compose.material:material-icons-extended", version.ref = "material-icons"}
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-atomicfu = { id = "org.jetbrains.kotlin.plugin.atomicfu", version.ref = "kotlin" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+ktorfit = { id = "de.jensklingenberg.ktorfit", version.ref = "ktorfit" }
+skie = { id = "co.touchlab.skie", version.ref = "skie" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+uniffi-plugin = { id = "ch.ubique.uniffi.plugin", version.ref = "uniffi-plugin" }
+ubique-alpaka = { id = "ch.ubique.gradle.alpaka", version.ref = "ubique-gradle-alpaka" }
+ubique-preset = { id = "ch.ubique.gradle.preset", version.ref = "ubique-gradle-preset" }
+ubique-signing = { id = "ch.ubique.gradle.signing", version.ref = "ubique-gradle-signing" }
+vanniktech-publish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktech-publish" }
+jetbrains-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

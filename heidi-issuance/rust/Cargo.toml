@@ -1,0 +1,25 @@
+[package]
+name = "heidi-issuance-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "heidi_issuance_rust"
+
+[dependencies]
+reqwest = { features = ["cookies"], optional = true, workspace = true }
+uniffi = { features = ["tokio"], optional = true, workspace = true }
+oid4vc = { optional = true, workspace = true }
+base64.workspace = true
+heidi-util-rust = { path = "../../heidi-util/rust"}
+serde_json.workspace = true
+serde.workspace = true
+tokio = { features = ["time"], optional = true, workspace = true }
+heidi-jwt.workspace = true
+
+
+[features]
+default = ["uniffi", "oid4vp"]
+uniffi = ["dep:uniffi", "dep:tokio"]
+oid4vp = ["dep:oid4vc", "dep:reqwest"]
