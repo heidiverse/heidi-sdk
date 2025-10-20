@@ -21,8 +21,19 @@ under the License.
 package ch.ubique.heidi.util.extensions
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
 
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.JsonNumber
@@ -57,6 +68,13 @@ inline fun <reified T> Value.transform() : T? {
     }
 }
 
+inline fun <reified T> Value.safeTransform() : T? {
+    return try {
+        json.decodeFromString(this.toCanonicalJson())
+    } catch (ex: Exception) {
+        null
+    }
+}
 fun Value.printableString() : String {
     return when(this) {
         is Value.Array -> this.v1.map { it.printableString() }.joinToString { "," }
@@ -315,11 +333,30 @@ fun Value.toCanonicalJson(): String = when (this) {
     is Value.Boolean -> if (this.v1) "true" else "false"
     is Value.Bytes -> throw Exception("Cannot convert Bytes to canonical Json")
     Value.Null -> "null"
-    is Value.Number -> this.v1.toString()
+    is Value.Number -> when (this.v1) {
+        is JsonNumber.Integer -> this.v1.v1.toString()
+        is JsonNumber.Float -> this.v1.v1.toString()
+    }
     is Value.Object -> this.v1.entries
         .sortedBy { it.key }
         .joinToString(separator = ",", prefix = "{", postfix = "}") { "\"${it.key}\":${it.value.toCanonicalJson()}"}
     is Value.OrderedObject -> throw Exception("Cannot convert OrderedObject to canonical Json")
     is Value.String -> "\"${this.v1}\""
     is Tag -> throw Exception("Cannot convert Tag to canonical Json")
+}
+
+// NOTE: This function is preferred over directly deserializing into Value
+//       class when the Json contains "null" elements. Null elements cannot
+//       be handled properly by the built in deserializer.
+fun Value.Companion.fromJsonElement(json: JsonElement): Value = when (json) {
+    is JsonNull -> Value.Null
+    is JsonPrimitive -> when {
+        json.isString -> Value.String(json.content)
+        json.booleanOrNull != null -> Value.Boolean(json.boolean)
+        json.longOrNull != null -> Value.Number(JsonNumber.Integer(json.long))
+        json.doubleOrNull != null -> Value.Number(JsonNumber.Float(json.double))
+        else -> error("Unknown primitive type: $json")
+    }
+    is JsonArray -> Value.Array(json.map { fromJsonElement(it) })
+    is JsonObject -> Value.Object(json.mapValues { (_, v) -> fromJsonElement(v) })
 }

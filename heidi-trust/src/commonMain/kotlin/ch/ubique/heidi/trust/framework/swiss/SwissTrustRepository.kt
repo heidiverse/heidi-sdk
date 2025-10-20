@@ -141,7 +141,7 @@ internal class SwissTrustRepository(
 			return@withContext getOldVerificationTrustData(baseUrl, trustStatements)
 		} else {
 			// check presentation request integrity
-			val presentationDidDoc = trustService.getDidDocument(did = presentationRequest.clientId)?.doc()
+			val presentationDidDoc = trustService.getDidDocument(did = presentationRequest.clientId)
 			if(presentationDidDoc == null) {
 				return@withContext null
 			}
@@ -150,7 +150,7 @@ internal class SwissTrustRepository(
 			val trustedIdentityJwt = trustService.getTrustFromDid(presentationRequest.clientId).firstOrNull()
 			val trustedIdentitySdJwt = trustedIdentityJwt?.let { SdJwt.parse(it) }
 
-			val didDoc = trustedIdentitySdJwt?.let { trustService.getDidDocument(did = trustedIdentitySdJwt.innerJwt.claims["iss"].asString()!!) }?.doc()
+			val didDoc = trustedIdentitySdJwt?.let { trustService.getDidDocument(did = trustedIdentitySdJwt.innerJwt.claims["iss"].asString()!!) }
 			val isVerified = didDoc?.let { validateJwtWithDidDocument(trustedIdentitySdJwt.innerJwt.originalJwt, didDoc, true) }
 			val trustedIdentity : TrustedIdentityV2? = isVerified?.let {  trustedIdentitySdJwt.innerJwt.claims.transform<TrustedIdentityV2>() }
 			return@withContext TrustData.Verification(
