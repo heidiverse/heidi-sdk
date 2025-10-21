@@ -166,6 +166,12 @@ class ProximityVerifier<T> private constructor(
 		verifierStateMutable.update { ProximityVerifierState.Initial }
 	}
 
+	fun connect() {
+		scope.launch {
+			transportProtocol.connect()
+		}
+	}
+
 	private fun processMessageReceived(message: ByteArray) {
 		scope.launch(Dispatchers.IO) {
 			when (protocol) {
