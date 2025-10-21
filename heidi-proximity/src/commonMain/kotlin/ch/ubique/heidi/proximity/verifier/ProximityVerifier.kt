@@ -132,7 +132,7 @@ class ProximityVerifier<T> private constructor(
 									val data = documentRequest.asDcRequest()
 									val encryptedData = sessionCipher!!.encrypt(data.encodeToByteArray())
 									var sessionEstablishment = MdlSessionEstablishment(readerKey!!, encryptedData!!, true)
-									transportProtocol.sendMessage(encodeCbor(sessionEstablishment.toCbor()))
+									transportProtocol.sendMessage(sessionEstablishment.asCbor())
 									verifierStateMutable.update {
 										ProximityVerifierState.AwaitingDocuments
 									}
