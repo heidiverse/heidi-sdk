@@ -6,6 +6,7 @@ import ch.ubique.heidi.util.extensions.asBoolean
 import ch.ubique.heidi.util.extensions.asBytes
 import ch.ubique.heidi.util.extensions.asOrderedObject
 import ch.ubique.heidi.util.extensions.asString
+import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
 import uniffi.heidi_crypto_rust.base64UrlDecode
@@ -65,7 +66,7 @@ data class MdlEngagement(val coseKey: ByteArray,
 				null
 			}
 			return MdlEngagement(
-				coseKey = coseKey?.asBytes()!!,
+				coseKey = coseKey?.get(1)?.asTag()?.value?.get(0)?.asBytes()!!,
 				centralClientUuid,
 				peripheralServerUuid,
 				centralClientModeSupported = centralClientModeSupported?.asBoolean()!!,
