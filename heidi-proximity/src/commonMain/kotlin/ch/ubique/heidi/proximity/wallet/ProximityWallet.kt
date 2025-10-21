@@ -245,13 +245,14 @@ class ProximityWallet private constructor(
 							isDcApi = true
 							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
 							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
+							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
 							//TODO: handle multiple requests and such
 							val dcRequest = Json.decodeFromString<JsonObject>(result!!.decodeToString())
 							// We for now just pick the first request
 							val data = dcRequest["requests"]!!.jsonArray[0].jsonObject["data"]!!.jsonObject["request"]?.jsonPrimitive?.content!!
 							// Update our state to openid4vp document selection (and set the origin to the session transcript hash)
 							walletStateMutable.update {
-								ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(data, origin = "iso-18013-5://${sessionTranscriptBytesHash}"))
+								ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(data, origin = origin))
 							}
 						} else {
 							val request = decodeCbor(result)

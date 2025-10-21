@@ -22,15 +22,34 @@ package ch.ubique.heidi.sample.wallet.feature.proximity
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ch.ubique.heidi.credentials.ClaimsPointer
+import ch.ubique.heidi.credentials.SdJwt
+import ch.ubique.heidi.credentials.toClaimsPointer
+import ch.ubique.heidi.dcql.Attribute
+import ch.ubique.heidi.dcql.AttributeType
+import ch.ubique.heidi.dcql.getVpToken
+import ch.ubique.heidi.dcql.sdJwtDcqlClaimsFromAttributes
+import ch.ubique.heidi.presentation.request.PresentationRequest
 import ch.ubique.heidi.proximity.ProximityProtocol
+import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.wallet.ProximityWallet
 import ch.ubique.heidi.proximity.wallet.ProximityWalletState
+import ch.ubique.heidi.util.extensions.toCbor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
+import uniffi.heidi_credentials_rust.SignatureCreator
+import uniffi.heidi_crypto_rust.SoftwareKeyPair
+import uniffi.heidi_dcql_rust.CredentialQuery
+import uniffi.heidi_dcql_rust.DcqlQuery
+import uniffi.heidi_dcql_rust.Meta
+import uniffi.heidi_util_rust.Value
+import kotlin.String
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -77,16 +96,50 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 
 	fun submitDocument() {
 		viewModelScope.launch {
-			wallet.submitDocument("success".encodeToByteArray())
+			val sdjwt = SdJwt.create(claims = mapOf<String, String>(
+				"firstName" to "Pascal",
+				"lastName" to "Tester"
+			).toCbor(),
+				disclosures = listOf(listOf("firstName").toClaimsPointer()!!),
+				keyId = "keyId", key = TestSigner(SoftwareKeyPair()), null)
+			val credentialQuery = dcqlQuery!!.credentials?.first()!!
+			val vpToken = sdjwt!!.getVpToken(
+				credentialQuery,
+				"test",
+				null,
+				null,
+				"",
+				null
+			).getOrThrow()
+			wallet.submitDocument(Json.encodeToString(mapOf<String, String>(
+				"test" to vpToken
+			)).encodeToByteArray())
 		}
 	}
-
+	var dcqlQuery : DcqlQuery? = null
 	private fun startCollectingWalletState() {
 		viewModelScope.launch {
 			wallet.walletState.collect { state ->
 				proximityStateMutable.value = state
+				if (state is ProximityWalletState.RequestingDocuments) {
+					if(state.request is DocumentRequest.OpenId4Vp) {
+						val v : Value = Json.decodeFromString<Value>((state.request as DocumentRequest.OpenId4Vp).parJwt)
+						var pr = PresentationRequest.fromValue(v)
+						dcqlQuery = pr!!.dcqlQuery
+					}
+				}
 			}
 		}
 	}
 
+}
+
+class TestSigner(private val kp : SoftwareKeyPair) : SignatureCreator {
+	override fun alg(): String {
+		return "ES256"
+	}
+
+	override fun sign(bytes: ByteArray): ByteArray {
+		return kp.signWithKey(bytes)
+	}
 }
