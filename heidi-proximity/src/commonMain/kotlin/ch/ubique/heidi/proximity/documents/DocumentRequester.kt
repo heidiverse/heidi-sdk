@@ -24,7 +24,7 @@ interface DocumentRequester<T> {
 	/**
 	 * Creates a document request to be transmitted to the wallet. This might involve network requests.
 	 */
-	suspend fun createDocumentRequest(): DocumentRequest
+	suspend fun createDocumentRequest(expectedOrigin: String? = null): DocumentRequest
 
 	/**
 	 * Verifies the submitted documents. This might involve network requests.

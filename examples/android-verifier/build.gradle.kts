@@ -67,6 +67,7 @@ dependencies {
 	implementation(project(":heidi-wallet"))
 	implementation(project(":heidi-proximity"))
 
+
 	implementation(libs.androidx.coreKtx)
 	implementation(libs.androidx.appcompat)
 	implementation(libs.androidx.lifecycle.runtimeKtx)

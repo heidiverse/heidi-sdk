@@ -25,26 +25,21 @@ import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
-import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionEstablishment
 import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocolExtensions
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
 import ch.ubique.heidi.util.extensions.toCbor
-import io.ktor.utils.io.core.toByteArray
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
 import uniffi.heidi_crypto_rust.base64UrlEncode
+import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.encodeCbor
 import kotlin.uuid.Uuid
@@ -123,16 +118,22 @@ class ProximityVerifier<T> private constructor(
 					verifierStateMutable.update { ProximityVerifierState.Connected }
 					if(protocol == ProximityProtocol.MDL) {
 						scope.launch {
-							var documentRequest = documentRequester.createDocumentRequest()
+							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
+							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
+							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
+							var documentRequest = documentRequester.createDocumentRequest(origin)
 							when(documentRequest) {
 								is DocumentRequest.Mdl -> {
 
 								}
 								is DocumentRequest.OpenId4Vp -> {
 									val data = documentRequest.asDcRequest()
-									val encryptedData = sessionCipher!!.encrypt(data.toByteArray())
+									val encryptedData = sessionCipher!!.encrypt(data.encodeToByteArray())
 									var sessionEstablishment = MdlSessionEstablishment(readerKey!!, encryptedData!!, true)
 									transportProtocol.sendMessage(encodeCbor(sessionEstablishment.toCbor()))
+									verifierStateMutable.update {
+										ProximityVerifierState.AwaitingDocuments
+									}
 								}
 							}
 

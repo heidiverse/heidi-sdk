@@ -115,7 +115,7 @@ class BluetoothViewModel(
 //			)
 //		}
 
-		override suspend fun createDocumentRequest(): DocumentRequest {
+		override suspend fun createDocumentRequest(expectedOrigin : String?): DocumentRequest {
 			val randomBytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
 			val nonce = Base64.getEncoder().encodeToString(randomBytes)
 
