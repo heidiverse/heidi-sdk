@@ -20,19 +20,21 @@ under the License.
 
 package ch.ubique.heidi.proximity.protocol.mdl
 
+import ch.ubique.heidi.util.extensions.asBoolean
 import ch.ubique.heidi.util.extensions.asBytes
 import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.decodeCbor
 
-data class MdlSessionEstablishment(val eReaderKey: Value, val data: ByteArray) {
+data class MdlSessionEstablishment(val eReaderKey: Value, val data: ByteArray, val dcApiSelected: Boolean?) {
     companion object {
         fun fromCbor(data: ByteArray) : MdlSessionEstablishment? {
             val decoded = kotlin.runCatching { decodeCbor(data) }.getOrNull() ?: return null
             val eReaderKey = decoded.get("eReaderKey").asTag() ?: return null
             val d = decoded.get("data").asBytes() ?: return null
-            return MdlSessionEstablishment(eReaderKey, d)
+            val dcApiSelected = decoded.get("dcApiSelected").asBoolean() ?: false
+            return MdlSessionEstablishment(eReaderKey, d, dcApiSelected)
         }
     }
 }

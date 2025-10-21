@@ -24,6 +24,7 @@ sealed interface DocumentRequest {
 	data class OpenId4Vp(
 		// TODO For now we just send the entire JWT we receive from the /par endpoint. In the end we want to send the presentation definition and verifier trust statements
 		val parJwt: String,
+		val origin: String? = null
 //		val presentationDefinition: String,
 	) : DocumentRequest
 	data class Mdl (

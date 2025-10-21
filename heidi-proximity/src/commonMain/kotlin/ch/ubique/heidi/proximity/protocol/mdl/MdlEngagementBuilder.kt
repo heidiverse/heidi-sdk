@@ -46,7 +46,7 @@ class MdlEngagementBuilder(
     }
     fun getEngagementBytes() : ByteArray {
         val deviceEngagement = mutableMapOf(
-            0 to "1.0",
+            0 to "1.1",
             1 to listOf(
                 1,
                 24 to coseKey.toCbor()
