@@ -20,7 +20,8 @@ under the License.
 
 package ch.ubique.heidi.trust.framework.swiss
 
-import ch.ubique.heidi.trust.didtdw.DidTdwResolver
+import ch.ubique.heidi.trust.did.models.DidLogEntry
+import ch.ubique.heidi.trust.did.tdw03.DidTdwResolver
 import ch.ubique.heidi.trust.framework.swiss.dto.IssuanceTrustStatementsDto
 import ch.ubique.heidi.trust.framework.swiss.dto.VerificationTrustStatementsDto
 import io.ktor.client.HttpClient
@@ -34,7 +35,7 @@ import io.ktor.http.appendPathSegments
 import kotlinx.serialization.json.Json
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
-import uniffi.heidi_util_rust.Value
+import uniffi.heidi_crypto_rust.DidVerificationDocument
 
 internal class SwissTrustService(
 	private val httpClient: HttpClient,
@@ -79,7 +80,7 @@ internal class SwissTrustService(
 			return Json {  }.decodeFromString(result)
 		}.getOrDefault(emptyList())
 	}
-	suspend fun getDidDocument(did: String): DidTdwResolver.Entry? {
+	suspend fun getDidDocument(did: String): DidVerificationDocument? {
 		val matches = DID_REGEX.matchEntire(did) ?: return null
 		val url = matches.groups["domain"]?.value ?: return null
 		val path = matches.groups["path"]?.value?.replace(":", "/")?.let {
@@ -101,7 +102,7 @@ internal class SwissTrustService(
 		return runCatching {
 			val jsonl = res.split('\n').toList()
 			val resolver = DidTdwResolver.parse(jsonl)
-			resolver.resolveLatest()
+			resolver.resolveLatest().doc()
 		}.getOrNull()
 	}
 
