@@ -33,7 +33,8 @@ class MdlEngagementBuilder(
     private val centralClientUuid: Uuid,
     private val peripheralServerUuid: Uuid,
     private val centralClientModeSupported: Boolean,
-    private val peripheralServerModeSupported: Boolean
+    private val peripheralServerModeSupported: Boolean,
+    private val capabilities: MdlCapabilities? = null,
 ) : EngagementBuilder {
     @OptIn(ExperimentalEncodingApi::class)
     override fun createQrCodeForEngagement(): String {
@@ -44,7 +45,7 @@ class MdlEngagementBuilder(
         }"
     }
     fun getEngagementBytes() : ByteArray {
-        val deviceEngagement = mapOf(
+        val deviceEngagement = mutableMapOf(
             0 to "1.0",
             1 to listOf(
                 1,
@@ -63,6 +64,9 @@ class MdlEngagementBuilder(
                 )
             )
         )
+        capabilities?.let {
+            deviceEngagement.put(6, capabilities.getValue())
+        }
         return encodeCbor(deviceEngagement.toCbor())
     }
 }
