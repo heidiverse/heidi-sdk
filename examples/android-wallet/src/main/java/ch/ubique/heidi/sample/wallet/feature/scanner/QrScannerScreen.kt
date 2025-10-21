@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.ubique.heidi.sample.wallet.extensions.dpToPx
 import ch.ubique.qrscanner.compose.QrScanner
+import ch.ubique.qrscanner.scanner.BarcodeFormat
 import ch.ubique.qrscanner.scanner.ScanningMode
 import ch.ubique.qrscanner.state.DecodingState
 import ch.ubique.qrscanner.zxing.decoder.GlobalHistogramImageDecoder
@@ -98,8 +99,8 @@ private fun QrScannerContent(
 	) {
 		QrScanner(
 			imageDecoders = listOf(
-				GlobalHistogramImageDecoder(),
-				HybridImageDecoder(),
+				GlobalHistogramImageDecoder(listOf(BarcodeFormat.QR_CODE)),
+				HybridImageDecoder(listOf(BarcodeFormat.QR_CODE)),
 			),
 			scannerCallback = scannerCallback,
 			modifier = Modifier.fillMaxSize(),
