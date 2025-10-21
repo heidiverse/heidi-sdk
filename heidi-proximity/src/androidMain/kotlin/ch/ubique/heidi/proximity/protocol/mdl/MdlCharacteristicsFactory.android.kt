@@ -57,28 +57,36 @@ internal actual class MdlCharacteristicsFactory {
     }
 
     internal actual fun createServerVerifierCharacteristics(): List<BleGattCharacteristic> {
+        val notify = BluetoothGattDescriptor(MdlPeripheralServerModeTransportProtocol.characteristicConfigurationUuid.toJavaUuid(),BluetoothGattDescriptor.PERMISSION_WRITE)
+        val stateChar = BluetoothGattCharacteristic(
+            MdlCentralClientModeTransportProtocol.characteristicStateUuid.toJavaUuid(),
+            BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
+            BluetoothGattCharacteristic.PERMISSION_WRITE,
+        )
+        notify.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        stateChar.addDescriptor(notify)
+        val server2ClientChar = BluetoothGattCharacteristic(
+            MdlCentralClientModeTransportProtocol.characteristicServer2ClientUuid.toJavaUuid(),
+            BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+            BluetoothGattCharacteristic.PERMISSION_WRITE,
+        )
+        val notify2 = BluetoothGattDescriptor(MdlPeripheralServerModeTransportProtocol.characteristicConfigurationUuid.toJavaUuid(),BluetoothGattDescriptor.PERMISSION_WRITE)
+        notify2.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        server2ClientChar.addDescriptor(notify2)
+
+        val ident = BluetoothGattCharacteristic(MdlCentralClientModeTransportProtocol.characteristicIdentUuid.toJavaUuid(),
+            BluetoothGattCharacteristic.PROPERTY_READ,
+            BluetoothGattCharacteristic.PERMISSION_WRITE)
+
         return listOf(
-            BluetoothGattCharacteristic(
-                MdlCentralClientModeTransportProtocol.characteristicStateUuid.toJavaUuid(),
-                BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE or BluetoothGattCharacteristic.PROPERTY_WRITE,
-                BluetoothGattCharacteristic.PERMISSION_WRITE,
-            ),
+            stateChar,
             BluetoothGattCharacteristic(
                 MdlCentralClientModeTransportProtocol.characteristicClient2ServerUuid.toJavaUuid(),
-                BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE or BluetoothGattCharacteristic.PROPERTY_WRITE,
+                BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
                 BluetoothGattCharacteristic.PERMISSION_WRITE,
             ),
-            BluetoothGattCharacteristic(
-                MdlCentralClientModeTransportProtocol.characteristicServer2ClientUuid.toJavaUuid(),
-                BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-                BluetoothGattCharacteristic.PERMISSION_WRITE,
-            ),
-            BluetoothGattCharacteristic(
-                MdlCentralClientModeTransportProtocol.characteristicIdentUuid.toJavaUuid(),
-                BluetoothGattCharacteristic.PROPERTY_READ,
-                BluetoothGattCharacteristic.PERMISSION_READ,
-            ),
-
-            ).map { BleGattCharacteristic(it) }
+            server2ClientChar,
+            ident
+        ).map { BleGattCharacteristic(it) }
     }
 }

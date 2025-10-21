@@ -75,10 +75,11 @@ abstract class TransportProtocol(
 	}
 
 	protected fun reportConnected() {
-		isConnected = true
 		if(isConnected) {
 			return
 		}
+		isConnected = true
+
 		if (!inhibitCallbacks) {
 			listener?.onConnected()
 		}

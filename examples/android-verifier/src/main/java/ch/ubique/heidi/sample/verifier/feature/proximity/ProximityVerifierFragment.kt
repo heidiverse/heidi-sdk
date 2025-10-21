@@ -45,8 +45,16 @@ class ProximityVerifierFragment : Fragment(), KoinComponent {
 	private var _binding: FragmentComposeBinding? = null
 	private val binding get() = _binding!!
 
+
+
 	private val launcher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
 		if (permissions.all { it.value }) {
+			locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+		}
+	}
+
+	private val locationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+		if (granted) {
 			// TODO Handle permissions properly?
 		}
 	}

@@ -81,9 +81,9 @@ class ProximityVerifier<T> private constructor(
 						//y
 						-3 to publicKey.publicKey().slice(33..<65).toByteArray(),
 					).toCbor()
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid!!,  deviceEngagement.peripheralServerUuid!!, publicKey)
-					val sessionCipher = transportProtocol.getSessionCipher(deviceEngagement.originalData, encodeCbor(coseKey.toCbor()))
-					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester, sessionCipher = sessionCipher, readerKey = coseKey, preferDcApi = preferDcApi)
+					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid,  deviceEngagement?.peripheralServerUuid, publicKey)
+
+					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester, readerKey = coseKey, preferDcApi = preferDcApi)
 				}
 				ProximityProtocol.OPENID4VP -> {
 					val serviceUuid = Uuid.random()
@@ -116,7 +116,9 @@ class ProximityVerifier<T> private constructor(
 
 				override fun onConnected() {
 					verifierStateMutable.update { ProximityVerifierState.Connected }
+
 					if(protocol == ProximityProtocol.MDL) {
+						val sessionCipher = (transportProtocol as MdlTransportProtocolExtensions).getSessionCipher((engagementBuilder as MdlEngagement).originalData, encodeCbor(readerKey.toCbor()))
 						scope.launch {
 							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
 							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
@@ -197,9 +199,13 @@ class ProximityVerifier<T> private constructor(
 	}
 
 	fun connect() {
-		scope.launch {
+		verifierStateMutable.update {
+			ProximityVerifierState.Connecting
+		}
+		scope.launch(Dispatchers.IO) {
 			transportProtocol.connect()
 		}
+
 	}
 
 	private fun processMessageReceived(message: ByteArray) {
