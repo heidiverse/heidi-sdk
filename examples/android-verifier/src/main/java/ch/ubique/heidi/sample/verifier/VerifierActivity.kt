@@ -22,7 +22,7 @@ package ch.ubique.heidi.sample.verifier
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import ch.ubique.heidi.sample.verifier.feature.proximity.ProximityVerifierFragment
+import ch.ubique.heidi.sample.verifier.feature.bluetooth.BluetoothFragment
 
 class VerifierActivity : AppCompatActivity() {
 	override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,7 +32,7 @@ class VerifierActivity : AppCompatActivity() {
 
 		if (savedInstanceState == null) {
 			supportFragmentManager.beginTransaction()
-				.replace(R.id.fragmentContainerView, ProximityVerifierFragment.newInstance())
+				.replace(R.id.fragmentContainerView, BluetoothFragment.newInstance())
 				.commit()
 		}
 	}

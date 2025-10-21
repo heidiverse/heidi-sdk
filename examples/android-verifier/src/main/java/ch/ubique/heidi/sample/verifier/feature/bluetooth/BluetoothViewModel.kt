@@ -21,18 +21,33 @@ under the License.
 
 package ch.ubique.heidi.sample.verifier.feature.bluetooth
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import ch.ubique.heidi.proximity.ProximityProtocol
+import ch.ubique.heidi.proximity.documents.DocumentRequest
+import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.proximity.verifier.ProximityVerifier
+import ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult
+import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
+import ch.ubique.heidi.sample.verifier.feature.network.VerifierRepository
+import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
+import java.security.SecureRandom
+import java.util.Base64
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-class BluetoothViewModel : ViewModel(), KoinComponent {
+class BluetoothViewModel(
+	private val verifierRepository: VerifierRepository,
+) : ViewModel(), KoinComponent {
 
 	companion object {
 		val koinModule = module {
@@ -78,6 +93,71 @@ class BluetoothViewModel : ViewModel(), KoinComponent {
 
 	private val bluetoothLogMutable = MutableStateFlow<List<String>>(emptyList())
 	val bluetoothLog = bluetoothLogMutable.asStateFlow()
+
+	private val proofTemplateMutable = MutableStateFlow(ProofTemplate.IDENTITY_CARD_CHECK)
+	val proofTemplate = proofTemplateMutable.asStateFlow()
+
+
+	private val requester = object : DocumentRequester<VerificationDisclosureResult> {
+		private var transactionId: String? = null
+
+//		override suspend fun createDocumentRequest(): DocumentRequest {
+
+
+
+//			return DocumentRequest.Mdl(
+//				listOf(
+//					DocumentRequest.MdlDocument(
+//						"doctype",
+//						listOf(DocumentRequest.MdlDocumentItem("namespace", "identifier", false))
+//					)
+//				)
+//			)
+//		}
+
+		override suspend fun createDocumentRequest(): DocumentRequest {
+			val randomBytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
+			val nonce = Base64.getEncoder().encodeToString(randomBytes)
+
+			val verificationRequest = verifierRepository.getVerificationRequest(proofTemplate.value, nonce)
+			val flow = verificationRequest.sameDeviceFlow
+			transactionId = flow.transactionId
+			val presentationDefinition = verifierRepository.getPresentationDefinition(flow.requestUri)
+			return DocumentRequest.OpenId4Vp(presentationDefinition)
+		}
+
+		override suspend fun verifySubmittedDocuments(data: ByteArray): VerificationDisclosureResult {
+			val transactionId = transactionId ?: return VerificationDisclosureResult(isVerificationSuccessful = false)
+
+			val disclosures = try {
+				val response = data.decodeToString()
+				verifierRepository.verifyDocuments(response)
+				verifierRepository.getAuthorization(transactionId).disclosures
+			} catch (e: ResponseException) {
+				null
+			}
+
+			return VerificationDisclosureResult(
+				isVerificationSuccessful = disclosures != null,
+				disclosures = disclosures,
+			)
+		}
+	}
+
+	fun startEngagement(qrCodeData: String) {
+		viewModelScope.launch {
+			val verifierName = "Sample Verifier"
+//			val publicKey = qrCodeUri.getQueryParameter("key")
+//			val serviceUuid = Uuid.parse(qrCodeUri.getQueryParameter("uuid")!!)
+
+//			print("serviceUuid: " + serviceUuid)
+			val verifier = ProximityVerifier.create(ProximityProtocol.MDL, viewModelScope, verifierName, requester, qrCodeData)
+			verifier.connect()
+//			verifier = ProximityVerifier.create(ProximityProtocol.OPENID4VP, viewModelScope, serviceUuid)
+//			verifier.startEngagement(verifierName)
+//			startCollectingWalletState()
+		}
+	}
 
 	fun startServerMode(role: TransportProtocol.Role) {
 		bluetoothLogMutable.value = emptyList()

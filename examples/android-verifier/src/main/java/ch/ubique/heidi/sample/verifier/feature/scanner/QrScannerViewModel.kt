@@ -34,11 +34,6 @@ import org.koin.dsl.module
 
 class QrScannerViewModel : ViewModel() {
 	companion object {
-		private val supportedSchemes = setOf(
-			"openid-credential-offer",
-			"openid4vp",
-		)
-
 		val koinModule = module {
 			viewModelOf(::QrScannerViewModel)
 		}
@@ -68,15 +63,7 @@ class QrScannerViewModel : ViewModel() {
 		viewModelScope.launch { errorMutable.emit(null) }
 		return when (decodingState) {
 			is DecodingState.Decoded -> {
-				val uri = Uri.parse(decodingState.content)
-				if (uri.scheme in supportedSchemes) {
-					isScanning = false
-					DecodingResult.Valid(decodingState.content)
-				} else {
-					val errorId = R.string.app_name
-					viewModelScope.launch { errorMutable.emit(errorId) }
-					DecodingResult.Nothing
-				}
+				DecodingResult.Valid(decodingState.content.removePrefix("mdoc:"))
 			}
 			else -> DecodingResult.Nothing
 		}

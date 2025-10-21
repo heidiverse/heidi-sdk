@@ -28,6 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreen
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreenCallbacks
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
 
 @Composable
 fun BluetoothScreen(
@@ -35,6 +38,8 @@ fun BluetoothScreen(
 	log: State<List<String>>,
 	onStartServer: (role: TransportProtocol.Role) -> Unit,
 	onStartClient: (role: TransportProtocol.Role) -> Unit,
+	qrScannerViewModel: QrScannerViewModel,
+	scannerCallbacks: QrScannerScreenCallbacks,
 	sendMessage: (String) -> Unit,
 	onStopClicked: () -> Unit,
 ) {
@@ -46,7 +51,7 @@ fun BluetoothScreen(
 		) {
 			val bluetoothState = state.value
 
-			var role by remember { mutableStateOf(TransportProtocol.Role.WALLET) }
+			var role by remember { mutableStateOf(TransportProtocol.Role.VERIFIER) }
 			Row(
 				modifier = Modifier.fillMaxWidth(),
 				horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -111,6 +116,11 @@ fun BluetoothScreen(
 			Text("State: $bluetoothState")
 
 			Spacer(Modifier.height(8.dp))
+
+			QrScannerScreen(
+				qrScannerViewModel,
+				scannerCallbacks,
+			)
 
 			if (bluetoothState is BluetoothState.Connected) {
 				Row(

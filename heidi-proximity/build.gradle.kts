@@ -38,6 +38,7 @@ kotlin {
 			implementation(project(":heidi-crypto"))
 			implementation(libs.kotlin.coroutines)
 			implementation(libs.koin.core)
+			implementation(libs.kotlin.serialization)
 		}
 
 		commonTest.dependencies {
