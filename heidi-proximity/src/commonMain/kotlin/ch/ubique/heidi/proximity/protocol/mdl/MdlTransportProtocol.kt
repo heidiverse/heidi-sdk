@@ -31,8 +31,8 @@ import kotlin.uuid.Uuid
 
 internal class MdlTransportProtocol(
     role: Role,
-    private val serviceUuidCentralMode: Uuid,
-    private val serviceUuidPeripheralMode: Uuid,
+    private val serviceUuidCentralMode: Uuid?,
+    private val serviceUuidPeripheralMode: Uuid?,
     private val ephemeralKey: EphemeralKey,
     private val deviceMacAddress: String? = null
 ) : BleTransportProtocol(role), HeidiProximityKoinComponent, MdlTransportProtocolExtensions {
@@ -49,12 +49,17 @@ internal class MdlTransportProtocol(
             TODO("Session Transcript should not be overridden")
         }
     init {
-        centralClientModeTransportProtocol = MdlCentralClientModeTransportProtocol(role, serviceUuidCentralMode, ephemeralKey, deviceMacAddress)
-        peripheralServerModeTransportProtocol = MdlPeripheralServerModeTransportProtocol(role, serviceUuidPeripheralMode, ephemeralKey, deviceMacAddress)
+        centralClientModeTransportProtocol = if (serviceUuidCentralMode != null) { MdlCentralClientModeTransportProtocol(role, serviceUuidCentralMode, ephemeralKey, deviceMacAddress) } else { null }
+        peripheralServerModeTransportProtocol = if(serviceUuidPeripheralMode != null){ MdlPeripheralServerModeTransportProtocol(role, serviceUuidPeripheralMode, ephemeralKey, deviceMacAddress) } else {
+            null
+        }
         if(centralClientModeTransportProtocol?.isSupported() == false) {
             centralClientModeTransportProtocol = null
         }
         if(peripheralServerModeTransportProtocol?.isSupported() == false) {
+            peripheralServerModeTransportProtocol = null
+        }
+        if (peripheralServerModeTransportProtocol != null && centralClientModeTransportProtocol != null) {
             peripheralServerModeTransportProtocol = null
         }
     }

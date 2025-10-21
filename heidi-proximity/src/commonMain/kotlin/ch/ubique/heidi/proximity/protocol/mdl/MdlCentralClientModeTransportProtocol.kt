@@ -252,6 +252,7 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onMtuChanged(mtu: Int) {
+			print(mtu)
 			// TODO Read Ident characteristic
 		}
 

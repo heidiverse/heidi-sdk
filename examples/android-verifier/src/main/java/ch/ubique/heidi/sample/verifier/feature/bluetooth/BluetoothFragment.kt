@@ -19,6 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.sample.verifier.feature.bluetooth
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -26,6 +27,7 @@ import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.fragment.app.Fragment
 import ch.ubique.heidi.sample.verifier.compose.theme.HeidiTheme
@@ -49,6 +51,18 @@ class BluetoothFragment : Fragment() {
 	private var _binding: FragmentComposeBinding? = null
 	private val binding get() = _binding!!
 
+	private val launcher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+		if (permissions.all { it.value }) {
+			locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+		}
+	}
+
+	private val locationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+		if (granted) {
+			// TODO Handle permissions properly?
+		}
+	}
+
 	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
 		_binding = FragmentComposeBinding.inflate(inflater, container, false)
 		return binding.root
@@ -56,6 +70,14 @@ class BluetoothFragment : Fragment() {
 
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
+		launcher.launch(
+			arrayOf(
+				Manifest.permission.BLUETOOTH,
+				Manifest.permission.BLUETOOTH_SCAN,
+				Manifest.permission.BLUETOOTH_ADVERTISE,
+				Manifest.permission.BLUETOOTH_CONNECT,
+			)
+		)
 		binding.composeView.setContent {
 			HeidiTheme {
 				BluetoothScreen(
