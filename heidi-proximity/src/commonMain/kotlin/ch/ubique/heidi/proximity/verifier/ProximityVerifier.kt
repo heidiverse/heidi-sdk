@@ -20,6 +20,7 @@ under the License.
 package ch.ubique.heidi.proximity.verifier
 
 import ch.ubique.heidi.proximity.ProximityProtocol
+import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
@@ -27,16 +28,24 @@ import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionEstablishment
 import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocolExtensions
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
 import ch.ubique.heidi.util.extensions.toCbor
+import io.ktor.utils.io.core.toByteArray
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
+import uniffi.heidi_crypto_rust.SessionCipher
 import uniffi.heidi_crypto_rust.base64UrlEncode
+import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.encodeCbor
 import kotlin.uuid.Uuid
 
@@ -49,6 +58,9 @@ class ProximityVerifier<T> private constructor(
 	private val engagementBuilder: EngagementBuilder?,
 	private val transportProtocol: TransportProtocol,
 	private val documentRequester: DocumentRequester<T>,
+	private var sessionCipher: SessionCipher? = null,
+	private val preferDcApi : Boolean = true,
+	private val readerKey: Value? = null
 ) {
 
 	companion object {
@@ -57,13 +69,14 @@ class ProximityVerifier<T> private constructor(
 			scope: CoroutineScope,
 			verifierName: String,
 			requester: DocumentRequester<T>,
-			qrcodeData: String? = null
+			qrcodeData: String? = null,
+			preferDcApi: Boolean = true
 		): ProximityVerifier<T> {
 			val publicKey = EphemeralKey(Role.SK_READER) // TODO Generate ephemeral key pair
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
 					val deviceEngagement = MdlEngagement.fromQrCode(qrcodeData!!)
-					val coseKey = encodeCbor(mapOf(
+					val coseKey =mapOf(
 						//ECDH
 						-1 to 1,
 						// EC
@@ -72,10 +85,10 @@ class ProximityVerifier<T> private constructor(
 						-2 to publicKey.publicKey().slice(1..<33).toByteArray(),
 						//y
 						-3 to publicKey.publicKey().slice(33..<65).toByteArray(),
-					).toCbor())
-
+					).toCbor()
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid!!,  deviceEngagement.peripheralServerUuid!!, publicKey)
-					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester)
+					val sessionCipher = transportProtocol.getSessionCipher(deviceEngagement.originalData, encodeCbor(coseKey.toCbor()))
+					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester, sessionCipher = sessionCipher, readerKey = coseKey, preferDcApi = preferDcApi)
 				}
 				ProximityProtocol.OPENID4VP -> {
 					val serviceUuid = Uuid.random()
@@ -108,7 +121,23 @@ class ProximityVerifier<T> private constructor(
 
 				override fun onConnected() {
 					verifierStateMutable.update { ProximityVerifierState.Connected }
+					if(protocol == ProximityProtocol.MDL) {
+						scope.launch {
+							var documentRequest = documentRequester.createDocumentRequest()
+							when(documentRequest) {
+								is DocumentRequest.Mdl -> {
 
+								}
+								is DocumentRequest.OpenId4Vp -> {
+									val data = documentRequest.asDcRequest()
+									val encryptedData = sessionCipher!!.encrypt(data.toByteArray())
+									var sessionEstablishment = MdlSessionEstablishment(readerKey!!, encryptedData!!, true)
+									transportProtocol.sendMessage(encodeCbor(sessionEstablishment.toCbor()))
+								}
+							}
+
+						}
+					}
 				}
 
 				override fun onDisconnected() {
