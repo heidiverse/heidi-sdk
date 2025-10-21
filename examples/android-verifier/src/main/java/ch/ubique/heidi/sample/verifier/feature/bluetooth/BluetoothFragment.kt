@@ -19,7 +19,10 @@ under the License.
  */
 package ch.ubique.heidi.sample.verifier.feature.bluetooth
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -27,6 +30,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.fragment.app.Fragment
 import ch.ubique.heidi.sample.verifier.compose.theme.HeidiTheme
 import ch.ubique.heidi.sample.verifier.databinding.FragmentComposeBinding
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreenCallbacks
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class BluetoothFragment : Fragment() {
@@ -38,6 +43,8 @@ class BluetoothFragment : Fragment() {
 	}
 
 	private val viewModel by viewModel<BluetoothViewModel>()
+
+	private val qrScannerViewModel by viewModel<QrScannerViewModel>()
 
 	private var _binding: FragmentComposeBinding? = null
 	private val binding get() = _binding!!
@@ -56,6 +63,19 @@ class BluetoothFragment : Fragment() {
 					log = viewModel.bluetoothLog.collectAsState(),
 					onStartServer = viewModel::startServerMode,
 					onStartClient = viewModel::startClientMode,
+					qrScannerViewModel = qrScannerViewModel,
+					scannerCallbacks = object : QrScannerScreenCallbacks {
+						override fun onPermissionInSettingsChange() {
+							val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+								.addCategory(Intent.CATEGORY_DEFAULT)
+								.setData(Uri.parse("package:${requireContext().packageName}"))
+							startActivity(intent)
+						}
+
+						override fun onSuccess(data: String) {
+							viewModel.startEngagement(data)
+						}
+					},
 					sendMessage = viewModel::sendMessage,
 					onStopClicked = viewModel::stop,
 				)
