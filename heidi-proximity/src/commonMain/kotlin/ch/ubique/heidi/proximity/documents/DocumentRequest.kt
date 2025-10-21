@@ -26,7 +26,11 @@ sealed interface DocumentRequest {
 		val parJwt: String,
 		val origin: String? = null
 //		val presentationDefinition: String,
-	) : DocumentRequest
+	) : DocumentRequest {
+		fun asDcRequest() : String {
+			return this.parJwt
+		}
+	}
 	data class Mdl (
 			val documents: List<MdlDocument>
 			) : DocumentRequest

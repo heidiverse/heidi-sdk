@@ -248,7 +248,7 @@ class ProximityWallet private constructor(
 							//TODO: handle multiple requests and such
 							val dcRequest = Json.decodeFromString<JsonObject>(result!!.decodeToString())
 							// We for now just pick the first request
-							val data = Json.encodeToString(dcRequest["requests"]!!.jsonArray[0].jsonObject["data"]!!.jsonObject)
+							val data = dcRequest["requests"]!!.jsonArray[0].jsonObject["data"]!!.jsonObject["request"]?.jsonPrimitive?.content!!
 							// Update our state to openid4vp document selection (and set the origin to the session transcript hash)
 							walletStateMutable.update {
 								ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(data, origin = "iso-18013-5://${sessionTranscriptBytesHash}"))
