@@ -23,12 +23,21 @@ import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
+import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
+import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionEstablishment
+import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocol
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
+import ch.ubique.heidi.util.extensions.toCbor
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import uniffi.heidi_crypto_rust.EphemeralKey
+import uniffi.heidi_crypto_rust.Role
+import uniffi.heidi_crypto_rust.base64UrlEncode
+import uniffi.heidi_util_rust.encodeCbor
 import kotlin.uuid.Uuid
 
 /**
@@ -48,14 +57,29 @@ class ProximityVerifier<T> private constructor(
 			scope: CoroutineScope,
 			verifierName: String,
 			requester: DocumentRequester<T>,
+			qrcodeData: String? = null
 		): ProximityVerifier<T> {
-			val publicKey = "myPublicKey" // TODO Generate ephemeral key pair
-
+			val publicKey = EphemeralKey(Role.SK_READER) // TODO Generate ephemeral key pair
 			return when (protocol) {
-				ProximityProtocol.MDL -> TODO("Not yet supported")
+				ProximityProtocol.MDL -> {
+					val deviceEngagement = MdlEngagement.fromQrCode(qrcodeData!!)
+					val coseKey = encodeCbor(mapOf(
+						//ECDH
+						-1 to 1,
+						// EC
+						1 to 2,
+						//x
+						-2 to publicKey.publicKey().slice(1..<33).toByteArray(),
+						//y
+						-3 to publicKey.publicKey().slice(33..<65).toByteArray(),
+					).toCbor())
+
+					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid!!,  deviceEngagement.peripheralServerUuid!!, publicKey)
+					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester)
+				}
 				ProximityProtocol.OPENID4VP -> {
 					val serviceUuid = Uuid.random()
-					val engagementBuilder = OpenId4VpEngagementBuilder(verifierName, publicKey, serviceUuid)
+					val engagementBuilder = OpenId4VpEngagementBuilder(verifierName,  base64UrlEncode(publicKey.publicKey()), serviceUuid)
 					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.VERIFIER, serviceUuid, requester)
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester)
 				}
@@ -84,6 +108,7 @@ class ProximityVerifier<T> private constructor(
 
 				override fun onConnected() {
 					verifierStateMutable.update { ProximityVerifierState.Connected }
+
 				}
 
 				override fun onDisconnected() {
