@@ -49,6 +49,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
@@ -66,7 +71,7 @@ class ProximityWallet private constructor(
 	private val engagementBuilder: EngagementBuilder?,
 	private val transportProtocol: TransportProtocol,
 	private var sessionCipher: SessionCipher? = null,
-	private var isDcApi: Boolean = false
+	var isDcApi: Boolean = false
 ) {
 	companion object {
 		fun create(
@@ -240,10 +245,13 @@ class ProximityWallet private constructor(
 							isDcApi = true
 							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
 							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
-
-							val vpRequest = result.decodeToString()
+							//TODO: handle multiple requests and such
+							val dcRequest = Json.decodeFromString<JsonObject>(result!!.decodeToString())
+							// We for now just pick the first request
+							val data = Json.encodeToString(dcRequest["requests"]!!.jsonArray[0].jsonObject["data"]!!.jsonObject)
+							// Update our state to openid4vp document selection (and set the origin to the session transcript hash)
 							walletStateMutable.update {
-								ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(vpRequest, origin = "iso-18013-5://${sessionTranscriptBytesHash}"))
+								ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(data, origin = "iso-18013-5://${sessionTranscriptBytesHash}"))
 							}
 						} else {
 							val request = decodeCbor(result)
