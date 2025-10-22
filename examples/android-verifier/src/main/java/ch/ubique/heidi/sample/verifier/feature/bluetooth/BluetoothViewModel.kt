@@ -212,6 +212,8 @@ class BluetoothViewModel(
 		override suspend fun createDocumentRequest(expectedOrigin: String?): DocumentRequest {
 
 			//TODO: we should save the chosen request template for later verification
+			// Else we might verify against a different template than we requested if the user
+			// changes it in the ui in the meantime.
 			var currentTemplate = proofTemplate.value
 
 			var dcqlQuery = getDcqlQueryForProofTemplate(currentTemplate)
