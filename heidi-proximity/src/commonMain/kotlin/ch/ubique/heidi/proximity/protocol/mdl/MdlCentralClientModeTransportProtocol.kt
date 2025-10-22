@@ -197,7 +197,7 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onPeerConnected() {
-			reportConnected()
+
 			gattServer?.stopAdvertising()
 		}
 
@@ -207,6 +207,21 @@ internal class MdlCentralClientModeTransportProtocol(
 
 		override fun onError(error: Throwable) {
 			reportError(error)
+		}
+
+		override fun onDescriptorWriteRequest(descriptor: BleGattCharacteristicDescriptor): GattRequestResult {
+			print("test")
+			return super.onDescriptorWriteRequest(descriptor)
+		}
+
+		override fun onCharacteristicReadRequest(characteristic: BleGattCharacteristic): GattRequestResult {
+			return super.onCharacteristicReadRequest(characteristic)
+		}
+
+		override fun onMtuChanged(mtu: Int) {
+			super.onMtuChanged(mtu)
+			// after the mtu was negotiated we can start sending data.
+			reportConnected()
 		}
 
 		override fun onCharacteristicWriteRequest(characteristic: BleGattCharacteristic): GattRequestResult {
@@ -334,7 +349,7 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onDescriptorWrite(descriptor: BleGattCharacteristicDescriptor) {
-			// TODO Protocol specific stuff
+			print("on descriptor write")
 		}
 	}
 }

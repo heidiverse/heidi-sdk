@@ -31,16 +31,11 @@ import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocolExtensions
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
-import ch.ubique.heidi.proximity.wallet.ProximityWalletState
 import ch.ubique.heidi.util.extensions.toCbor
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.Json.Default.decodeFromString
-import kotlinx.serialization.json.JsonElement
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
