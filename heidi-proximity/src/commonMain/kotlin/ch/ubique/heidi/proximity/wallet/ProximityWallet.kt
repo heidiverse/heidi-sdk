@@ -128,6 +128,8 @@ class ProximityWallet private constructor(
 					).toCbor())
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET,serviceUuid, peripheralServerUuid!!, keypair)
+					//TODO: we probably should expose the lis of capabilities somehow to the constructor, or at least let the constructor
+					// choose, which protocols we wish to support.
 					val engagementBuilder = MdlEngagementBuilder("", coseKey, serviceUuid, peripheralServerUuid!!, transportProtocol.centralClientModeTransportProtocol != null, transportProtocol.peripheralServerModeTransportProtocol != null,capabilities = MdlCapabilities(mapOf(
 						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
 					)))
@@ -241,12 +243,15 @@ class ProximityWallet private constructor(
 							disconnect()
 							return@launch
 						}
+						// The reader selected dcAPI
 						if(sessionEstablishment.dcApiSelected == true) {
 							isDcApi = true
 							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
 							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
 							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
 							//TODO: handle multiple requests and such
+							//TODO: we should correctly unpack the request (dcapi object)
+							//TODO: we should choose which protocols we support and wish (e.g .signed not signed)
 							val dcRequest = Json.decodeFromString<JsonObject>(result.decodeToString())
 							// We for now just pick the first request
 //							val data = dcRequest["requests"]!!.jsonArray[0].jsonObject["data"]!!.jsonObject["request"]?.jsonPrimitive?.content!!
