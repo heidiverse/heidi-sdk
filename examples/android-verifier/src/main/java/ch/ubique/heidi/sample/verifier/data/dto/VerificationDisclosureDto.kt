@@ -22,9 +22,9 @@ package ch.ubique.heidi.sample.verifier.data.dto
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
-typealias VerificationDisclosureMap = Map<String, Map<String, List<JsonElement>>>
+typealias VerificationDisclosureMap = Map<String, Map<String, Any>>
 
-@Serializable
+
 data class VerificationDisclosureDto(
 	val disclosures: VerificationDisclosureMap?,
 )

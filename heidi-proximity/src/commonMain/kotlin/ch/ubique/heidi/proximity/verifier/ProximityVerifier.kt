@@ -229,9 +229,9 @@ class ProximityVerifier<T> private constructor(
 					val data = sessionCipher?.decrypt(sessionData.data!!)!!
 					if(isDcApi){
 						// data should be the dcql response
-						val response = data.decodeToString()
+						val response = documentRequester.verifySubmittedDocuments(data)
 						verifierStateMutable.update {
-							ProximityVerifierState.VerificationResult(data.decodeToString())
+							ProximityVerifierState.VerificationResult(response)
 						}
 					} else {
 						// handle mdl device response
