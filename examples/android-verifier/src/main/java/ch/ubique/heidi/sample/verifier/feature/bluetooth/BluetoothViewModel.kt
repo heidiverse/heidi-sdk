@@ -24,8 +24,13 @@ package ch.ubique.heidi.sample.verifier.feature.bluetooth
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ch.ubique.heidi.credentials.SdJwt
+import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.dcql.Attribute
 import ch.ubique.heidi.dcql.AttributeType
+import ch.ubique.heidi.dcql.CheckVpTokenCallback
+import ch.ubique.heidi.dcql.DcqlPresentation
+import ch.ubique.heidi.dcql.checkDcqlPresentation
 import ch.ubique.heidi.dcql.sdJwtDcqlClaimsFromAttributes
 import ch.ubique.heidi.presentation.request.PresentationRequest
 import ch.ubique.heidi.proximity.ProximityProtocol
@@ -36,11 +41,13 @@ import ch.ubique.heidi.proximity.verifier.ProximityVerifier
 import ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult
 import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
 import ch.ubique.heidi.sample.verifier.feature.network.VerifierRepository
+import ch.ubique.heidi.util.extensions.asObject
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.module.dsl.viewModelOf
@@ -108,11 +115,8 @@ class BluetoothViewModel(
 	private val requester = object : DocumentRequester<VerificationDisclosureResult> {
 		private var transactionId: String? = null
 
-		override suspend fun createDocumentRequest(expectedOrigin: String?): DocumentRequest {
-
-			var currentTemplate = proofTemplate.value
-
-			var dcqlQuery = when (currentTemplate) {
+		fun getDcqlQueryForProofTemplate(proofTemplate: ProofTemplate) : DcqlQuery {
+			return when (proofTemplate) {
 				ProofTemplate.IDENTITY_CARD_CHECK ->
 					DcqlQuery(
 						credentials = listOf(
@@ -190,6 +194,13 @@ class BluetoothViewModel(
 					)
 				)
 			}
+		}
+
+		override suspend fun createDocumentRequest(expectedOrigin: String?): DocumentRequest {
+
+			var currentTemplate = proofTemplate.value
+
+			var dcqlQuery = getDcqlQueryForProofTemplate(currentTemplate)
 
 			var presentationRequest = PresentationRequest(
 				clientId = "x509_san_dns:example.com",
@@ -200,20 +211,33 @@ class BluetoothViewModel(
 		}
 
 		override suspend fun verifySubmittedDocuments(data: ByteArray): VerificationDisclosureResult {
-			val transactionId = transactionId ?: return VerificationDisclosureResult(isVerificationSuccessful = false)
+			var tokenMap = data.decodeToString()
+			var dcqlPresentation : DcqlPresentation = Json.decodeFromString(tokenMap)
+			var currentTemplate = proofTemplate.value
+			var dcqlQuery = getDcqlQueryForProofTemplate(currentTemplate)
 
-			val disclosures = try {
-				val response = data.decodeToString()
-				verifierRepository.verifyDocuments(response)
-				verifierRepository.getAuthorization(transactionId).disclosures
-			} catch (e: ResponseException) {
-				null
+			val result = checkDcqlPresentation(dcqlQuery, dcqlPresentation, object: CheckVpTokenCallback {
+				override fun check(
+					credentialType: CredentialType,
+					vpToken: String,
+					queryId: String,
+				): Map<String, Any> {
+					var token = SdJwt.parse(vpToken)
+					return token.innerJwt.claims.asObject()!!
+				}
+			})
+			if(result.isSuccess) {
+				return VerificationDisclosureResult(
+					isVerificationSuccessful = false,
+					disclosures = result.getOrThrow(),
+				)
+			} else {
+				return VerificationDisclosureResult(
+					isVerificationSuccessful = false,
+					disclosures = emptyMap(),
+				)
 			}
 
-			return VerificationDisclosureResult(
-				isVerificationSuccessful = disclosures != null,
-				disclosures = disclosures,
-			)
 		}
 	}
 

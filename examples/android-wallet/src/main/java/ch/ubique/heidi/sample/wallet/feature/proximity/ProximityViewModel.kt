@@ -98,6 +98,7 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 	fun submitDocument() {
 		viewModelScope.launch {
 			val sdjwt = SdJwt.create(claims = mapOf<String, Any>(
+				"vct" to "beta-id",
 				"firstName" to "Pascal",
 				"lastName" to "Tester",
 				"age_over_16" to true,
