@@ -46,7 +46,8 @@ fun ProximityScreen(
 	qrScannerViewModel: QrScannerViewModel,
 	scannerCallbacks: QrScannerScreenCallbacks,
 	onSubmitDocumentClicked: () -> Unit,
-	onStartEngagementClicked: () -> Unit
+	onStartEngagementClicked: () -> Unit,
+	onResetState: () -> Unit
 ) {
 	Scaffold { innerPadding ->
 		AnimatedContent(
@@ -94,6 +95,11 @@ fun ProximityScreen(
 					}
 					is ProximityWalletState.PresentationCompleted -> {
 						Text("Verification completed")
+						Button(onClick = {
+							onResetState()
+						}){
+							Text("Reset")
+						}
 					}
 					is ProximityWalletState.Disconnected -> {
 						Text("Disconnected")
