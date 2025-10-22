@@ -83,6 +83,8 @@ class BluetoothFragment : Fragment() {
 				BluetoothScreen(
 					state = viewModel.bluetoothState.collectAsState(),
 					log = viewModel.bluetoothLog.collectAsState(),
+					proofTemplate = viewModel.proofTemplate.collectAsState(),
+					onProofTemplateChanged = viewModel::updateProofTemplate,
 					onStartServer = viewModel::startServerMode,
 					onStartClient = viewModel::startClientMode,
 					qrScannerViewModel = qrScannerViewModel,

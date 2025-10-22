@@ -102,39 +102,100 @@ class BluetoothViewModel(
 	private val bluetoothLogMutable = MutableStateFlow<List<String>>(emptyList())
 	val bluetoothLog = bluetoothLogMutable.asStateFlow()
 
-	private val proofTemplateMutable = MutableStateFlow(ProofTemplate.IDENTITY_CARD_CHECK)
+	private val proofTemplateMutable = MutableStateFlow(ProofTemplate.AGE_OVER_18)
 	val proofTemplate = proofTemplateMutable.asStateFlow()
-
 
 	private val requester = object : DocumentRequester<VerificationDisclosureResult> {
 		private var transactionId: String? = null
 
-//		override suspend fun createDocumentRequest(): DocumentRequest {
+		override suspend fun createDocumentRequest(expectedOrigin: String?): DocumentRequest {
 
+			var currentTemplate = proofTemplate.value
 
+			var dcqlQuery = when (currentTemplate) {
+				ProofTemplate.IDENTITY_CARD_CHECK ->
+					DcqlQuery(
+						credentials = listOf(
+							CredentialQuery(
+								id = "test",
+								format = "dc+sd-jwt",
+								meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
+								claims = sdJwtDcqlClaimsFromAttributes(
+									listOf(
+										Attribute(
+											0, "firstName", AttributeType.STRING, displayName = mapOf(
+												"de" to "Vorname"
+											)
+										)
+									)
+								)
+							)
+						)
+					)
 
-//			return DocumentRequest.Mdl(
-//				listOf(
-//					DocumentRequest.MdlDocument(
-//						"doctype",
-//						listOf(DocumentRequest.MdlDocumentItem("namespace", "identifier", false))
-//					)
-//				)
-//			)
-//		}
+				ProofTemplate.AGE_OVER_16 -> DcqlQuery(
+					credentials = listOf(
+						CredentialQuery(
+							id = "test",
+							format = "dc+sd-jwt",
+							meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
+							claims = sdJwtDcqlClaimsFromAttributes(
+								listOf(
+									Attribute(
+										0, "age_over_16", AttributeType.BOOLEAN, displayName = mapOf(
+											"de" to "Über 16"
+										)
+									)
+								)
+							)
+						)
+					)
+				)
 
-		override suspend fun createDocumentRequest(expectedOrigin : String?): DocumentRequest {
-			var dcqlQuery = DcqlQuery(credentials = listOf(
-				CredentialQuery(id = "test",
-					format = "dc+sd-jwt",
-					meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
-					claims = sdJwtDcqlClaimsFromAttributes(listOf(
-						Attribute(0, "firstName", AttributeType.STRING, displayName = mapOf(
-							"de" to "Vorname"
-						))
-					)))
-			))
-			var presentationRequest = PresentationRequest(clientId = "x509_san_dns:example.com", dcqlQuery = dcqlQuery, expectedOrigins = listOf(expectedOrigin!!))
+				ProofTemplate.AGE_OVER_18 -> DcqlQuery(
+					credentials = listOf(
+						CredentialQuery(
+							id = "test",
+							format = "dc+sd-jwt",
+							meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
+							claims = sdJwtDcqlClaimsFromAttributes(
+								listOf(
+									Attribute(
+										0, "age_over_18", AttributeType.BOOLEAN, displayName = mapOf(
+											"de" to "Über 18"
+										)
+									)
+								)
+							)
+						)
+					)
+				)
+
+				ProofTemplate.AGE_OVER_65 -> DcqlQuery(
+					credentials = listOf(
+						CredentialQuery(
+							id = "test",
+							format = "dc+sd-jwt",
+							meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
+							claims = sdJwtDcqlClaimsFromAttributes(
+								listOf(
+									Attribute(
+										0, "age_over_65", AttributeType.BOOLEAN, displayName = mapOf(
+											"de" to "Über 65"
+										)
+									)
+								)
+							)
+						)
+					)
+				)
+			}
+
+			var presentationRequest = PresentationRequest(
+				clientId = "x509_san_dns:example.com",
+				dcqlQuery = dcqlQuery,
+				expectedOrigins = listOf(expectedOrigin!!)
+			)
 			return DocumentRequest.OpenId4Vp(Json.encodeToString(presentationRequest))
 		}
 
@@ -159,15 +220,8 @@ class BluetoothViewModel(
 	fun startEngagement(qrCodeData: String) {
 		viewModelScope.launch {
 			val verifierName = "Sample Verifier"
-//			val publicKey = qrCodeUri.getQueryParameter("key")
-//			val serviceUuid = Uuid.parse(qrCodeUri.getQueryParameter("uuid")!!)
-
-//			print("serviceUuid: " + serviceUuid)
 			val verifier = ProximityVerifier.create(ProximityProtocol.MDL, viewModelScope, verifierName, requester, qrCodeData)
 			verifier.connect()
-//			verifier = ProximityVerifier.create(ProximityProtocol.OPENID4VP, viewModelScope, serviceUuid)
-//			verifier.startEngagement(verifierName)
-//			startCollectingWalletState()
 		}
 	}
 
@@ -209,6 +263,10 @@ class BluetoothViewModel(
 		transportProtocol?.disconnect()
 		transportProtocol = null
 		bluetoothStateMutable.value = BluetoothState.Idle
+	}
+
+	fun updateProofTemplate(template: ProofTemplate) {
+		proofTemplateMutable.value = template
 	}
 
 }

@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
 import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreen
 import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreenCallbacks
 import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
@@ -36,6 +37,8 @@ import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
 fun BluetoothScreen(
 	state: State<BluetoothState>,
 	log: State<List<String>>,
+	proofTemplate: State<ProofTemplate>,
+	onProofTemplateChanged: (ProofTemplate) -> Unit,
 	onStartServer: (role: TransportProtocol.Role) -> Unit,
 	onStartClient: (role: TransportProtocol.Role) -> Unit,
 	qrScannerViewModel: QrScannerViewModel,
@@ -51,65 +54,128 @@ fun BluetoothScreen(
 		) {
 			val bluetoothState = state.value
 
-			var role by remember { mutableStateOf(TransportProtocol.Role.VERIFIER) }
-			Row(
-				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.spacedBy(4.dp),
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				Row(verticalAlignment = Alignment.CenterVertically) {
-					RadioButton(
-						selected = role == TransportProtocol.Role.WALLET,
-						onClick = { role = TransportProtocol.Role.WALLET },
-					)
-					Text("Act as wallet")
-				}
-				Row(verticalAlignment = Alignment.CenterVertically) {
-					RadioButton(
-						selected = role == TransportProtocol.Role.VERIFIER,
-						onClick = { role = TransportProtocol.Role.VERIFIER },
-					)
-					Text("Act as verifier")
-				}
-			}
+//			var role by remember { mutableStateOf(TransportProtocol.Role.VERIFIER) }
+//			Row(
+//				modifier = Modifier.fillMaxWidth(),
+//				horizontalArrangement = Arrangement.spacedBy(4.dp),
+//				verticalAlignment = Alignment.CenterVertically,
+//			) {
+//				Row(verticalAlignment = Alignment.CenterVertically) {
+//					RadioButton(
+//						selected = role == TransportProtocol.Role.WALLET,
+//						onClick = { role = TransportProtocol.Role.WALLET },
+//					)
+//					Text("Act as wallet")
+//				}
+//				Row(verticalAlignment = Alignment.CenterVertically) {
+//					RadioButton(
+//						selected = role == TransportProtocol.Role.VERIFIER,
+//						onClick = { role = TransportProtocol.Role.VERIFIER },
+//					)
+//					Text("Act as verifier")
+//				}
+//			}
+
+//			Spacer(Modifier.height(8.dp))
+
+			var expanded by remember { mutableStateOf(false) }
 
 			Row(
 				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.spacedBy(4.dp),
+				horizontalArrangement = Arrangement.spacedBy(8.dp),
 				verticalAlignment = Alignment.CenterVertically,
 			) {
-				Button(
-					onClick = { onStartServer.invoke(role) },
-					modifier = Modifier.weight(1f),
-					enabled = bluetoothState is BluetoothState.Idle,
-					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-				) {
-					Text("Peripheral Server Mode", maxLines = 1)
-				}
-				Button(
-					onClick = { onStartClient.invoke(role) },
-					modifier = Modifier.weight(1f),
-					enabled = bluetoothState is BluetoothState.Idle,
-					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-				) {
-					Text("Central Client Mode", maxLines = 1)
+				Text("Proof Template:", modifier = Modifier.weight(1f))
+				Box {
+					Button(
+						onClick = { expanded = true },
+						contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+					) {
+						Text(
+							when (proofTemplate.value) {
+								ProofTemplate.IDENTITY_CARD_CHECK -> "ID Check"
+								ProofTemplate.AGE_OVER_16 -> "Age 16+"
+								ProofTemplate.AGE_OVER_18 -> "Age 18+"
+								ProofTemplate.AGE_OVER_65 -> "Age 65+"
+							},
+							maxLines = 1
+						)
+					}
+					DropdownMenu(
+						expanded = expanded,
+						onDismissRequest = { expanded = false }
+					) {
+						DropdownMenuItem(
+							text = { Text("Identity Card Check (First Name)") },
+							onClick = {
+								onProofTemplateChanged(ProofTemplate.IDENTITY_CARD_CHECK)
+								expanded = false
+							}
+						)
+						DropdownMenuItem(
+							text = { Text("Age Over 16") },
+							onClick = {
+								onProofTemplateChanged(ProofTemplate.AGE_OVER_16)
+								expanded = false
+							}
+						)
+						DropdownMenuItem(
+							text = { Text("Age Over 18") },
+							onClick = {
+								onProofTemplateChanged(ProofTemplate.AGE_OVER_18)
+								expanded = false
+							}
+						)
+						DropdownMenuItem(
+							text = { Text("Age Over 65") },
+							onClick = {
+								onProofTemplateChanged(ProofTemplate.AGE_OVER_65)
+								expanded = false
+							}
+						)
+					}
 				}
 			}
 
-			Row(
-				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.SpaceAround,
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				Button(
-					onClick = onStopClicked,
-					modifier = Modifier.fillMaxWidth(0.5f),
-					enabled = bluetoothState !is BluetoothState.Idle,
-					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-				) {
-					Text("Stop", maxLines = 1)
-				}
-			}
+//			Spacer(Modifier.height(8.dp))
+
+//			Row(
+//				modifier = Modifier.fillMaxWidth(),
+//				horizontalArrangement = Arrangement.spacedBy(4.dp),
+//				verticalAlignment = Alignment.CenterVertically,
+//			) {
+//				Button(
+//					onClick = { onStartServer.invoke(role) },
+//					modifier = Modifier.weight(1f),
+//					enabled = bluetoothState is BluetoothState.Idle,
+//					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+//				) {
+//					Text("Peripheral Server Mode", maxLines = 1)
+//				}
+//				Button(
+//					onClick = { onStartClient.invoke(role) },
+//					modifier = Modifier.weight(1f),
+//					enabled = bluetoothState is BluetoothState.Idle,
+//					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+//				) {
+//					Text("Central Client Mode", maxLines = 1)
+//				}
+//			}
+//
+//			Row(
+//				modifier = Modifier.fillMaxWidth(),
+//				horizontalArrangement = Arrangement.SpaceAround,
+//				verticalAlignment = Alignment.CenterVertically,
+//			) {
+//				Button(
+//					onClick = onStopClicked,
+//					modifier = Modifier.fillMaxWidth(0.5f),
+//					enabled = bluetoothState !is BluetoothState.Idle,
+//					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+//				) {
+//					Text("Stop", maxLines = 1)
+//				}
+//			}
 
 			Spacer(Modifier.height(8.dp))
 
