@@ -134,6 +134,8 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 				null
 			).getOrThrow()
 			wallet.submitDocument(Json.encodeToString(mapOf<String, String>(
+				// we use the credential query id from the dcql query as the key to identify the credential in the verifier
+				// Must match what the verifier expects
 				credentialQuery.id to vpToken
 			)).encodeToByteArray())
 		}
