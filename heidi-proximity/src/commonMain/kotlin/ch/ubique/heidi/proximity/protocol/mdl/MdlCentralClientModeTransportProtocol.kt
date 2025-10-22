@@ -76,13 +76,19 @@ internal class MdlCentralClientModeTransportProtocol(
 		return true
 	}
 
-	override fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray) : SessionCipher {
+	/*
+	* Get the session cipher struct, for session encryption. In the case of the mDl (wallet) we only use eReaderKeyBytes
+	* as they are part of the session transcript and also the peer public key.
+	* For the mDl reader we need the public key, which was presented in the QR-Code.
+	* */
+	override fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?) : SessionCipher {
 		sessionTranscript = listOf(24 to engagementBytes, 24 to eReaderKeyBytes, Value.Null).toCbor()
 		val sessionTranscriptBs = encodeCbor(sessionTranscript!!)
 		val sessionTranscriptBytes = encodeCbor(
 			(24 to sessionTranscriptBs).toCbor()
 		)
-		val coseKey = decodeCbor(eReaderKeyBytes)
+		// Use the peerKey if we are the mdl reader
+		val coseKey = decodeCbor( peerCoseKey?: eReaderKeyBytes)
 		val x = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes()!!
 		val y = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes()!!
 		val publicKey = byteArrayOf(0x04) + x + y

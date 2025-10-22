@@ -76,13 +76,13 @@ internal class MdlPeripheralServerModeTransportProtocol(
 		return true
 	}
 
-	override fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray) : SessionCipher {
+	override fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?) : SessionCipher {
 		sessionTranscript = listOf(24 to engagementBytes, 24 to eReaderKeyBytes, Value.Null).toCbor()
 		val sessionTranscriptBs = encodeCbor(sessionTranscript!!)
 		val sessionTranscriptBytes = encodeCbor(
 			(24 to sessionTranscriptBs).toCbor()
 		)
-		val coseKey = decodeCbor(eReaderKeyBytes)
+		val coseKey = decodeCbor(peerCoseKey?: eReaderKeyBytes)
 		val x = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes()!!
 		val y = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes()!!
 		val publicKey = byteArrayOf(0x04) + x + y

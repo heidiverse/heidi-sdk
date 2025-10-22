@@ -24,6 +24,6 @@ import uniffi.heidi_crypto_rust.SessionCipher
 import uniffi.heidi_util_rust.Value
 
 interface MdlTransportProtocolExtensions {
-    fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray) : SessionCipher
+    fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray? = null) : SessionCipher
     var sessionTranscript: Value?
 }
