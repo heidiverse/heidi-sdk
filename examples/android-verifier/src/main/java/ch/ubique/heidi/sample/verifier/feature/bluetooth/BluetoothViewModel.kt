@@ -38,6 +38,7 @@ import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
 import ch.ubique.heidi.proximity.verifier.ProximityVerifier
+import ch.ubique.heidi.proximity.verifier.ProximityVerifierState
 import ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult
 import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
 import ch.ubique.heidi.sample.verifier.feature.network.VerifierRepository
@@ -76,15 +77,15 @@ class BluetoothViewModel(
 
 	private val transportProtocolListener = object : TransportProtocol.Listener {
 		override fun onConnecting() {
-			bluetoothStateMutable.value = BluetoothState.Connecting
+			bluetoothStateMutable.value = ProximityVerifierState.Connecting
 		}
 
 		override fun onConnected() {
-			bluetoothStateMutable.value = BluetoothState.Connected
+			bluetoothStateMutable.value = ProximityVerifierState.Connected
 		}
 
 		override fun onDisconnected() {
-			bluetoothStateMutable.value = BluetoothState.Disconnected
+			bluetoothStateMutable.value = ProximityVerifierState.Disconnected
 		}
 
 		override fun onMessageReceived() {
@@ -103,7 +104,7 @@ class BluetoothViewModel(
 		}
 	}
 
-	private val bluetoothStateMutable = MutableStateFlow<BluetoothState>(BluetoothState.Idle)
+	private val bluetoothStateMutable = MutableStateFlow<ProximityVerifierState>(ProximityVerifierState.Initial)
 	val bluetoothState = bluetoothStateMutable.asStateFlow()
 
 	private val bluetoothLogMutable = MutableStateFlow<List<String>>(emptyList())
@@ -111,6 +112,8 @@ class BluetoothViewModel(
 
 	private val proofTemplateMutable = MutableStateFlow(ProofTemplate.AGE_OVER_18)
 	val proofTemplate = proofTemplateMutable.asStateFlow()
+
+	private lateinit var verifier: ProximityVerifier<VerificationDisclosureResult>
 
 	private val requester = object : DocumentRequester<VerificationDisclosureResult> {
 		private var transactionId: String? = null
@@ -244,8 +247,23 @@ class BluetoothViewModel(
 	fun startEngagement(qrCodeData: String) {
 		viewModelScope.launch {
 			val verifierName = "Sample Verifier"
-			val verifier = ProximityVerifier.create(ProximityProtocol.MDL, viewModelScope, verifierName, requester, qrCodeData)
+			verifier = ProximityVerifier.create(ProximityProtocol.MDL, viewModelScope, verifierName, requester, qrCodeData)
 			verifier.connect()
+			verifier.verifierState
+			startCollectingWalletState()
+		}
+	}
+
+	private fun startCollectingWalletState() {
+		viewModelScope.launch {
+			verifier.verifierState.collect { state ->
+
+				bluetoothStateMutable.value = state
+
+//				if (state is ProximityVerifierState.VerificationResult<>) {
+//					 parse the disclosures and show them on the screen
+//				}
+			}
 		}
 	}
 
@@ -281,12 +299,13 @@ class BluetoothViewModel(
 
 	fun sendMessage(message: String) {
 		transportProtocol?.sendMessage(message.encodeToByteArray())
+//		bluetoothStateMutable.value = BluetoothState.
 	}
 
 	fun stop() {
 		transportProtocol?.disconnect()
 		transportProtocol = null
-		bluetoothStateMutable.value = BluetoothState.Idle
+		bluetoothStateMutable.value = ProximityVerifierState.Initial
 	}
 
 	fun updateProofTemplate(template: ProofTemplate) {
