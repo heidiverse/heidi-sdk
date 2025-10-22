@@ -231,13 +231,13 @@ class BluetoothViewModel(
 			})
 			if(result.isSuccess) {
 				return VerificationDisclosureResult(
-					isVerificationSuccessful = false,
+					isVerificationSuccessful = true,
 					disclosures = result.getOrThrow(),
 				)
 			} else {
 				return VerificationDisclosureResult(
 					isVerificationSuccessful = false,
-					disclosures = emptyMap(),
+					disclosures = null,
 				)
 			}
 

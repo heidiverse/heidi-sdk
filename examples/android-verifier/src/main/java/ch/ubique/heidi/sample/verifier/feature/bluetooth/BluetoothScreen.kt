@@ -113,14 +113,72 @@ fun BluetoothScreen(
 				}
 			}
 
-			Text("State: $bluetoothState")
+			if (bluetoothState !is ProximityVerifierState.VerificationResult<*>) {
+				Text("State: $bluetoothState")
+				Spacer(Modifier.height(8.dp))
+			}
 
-			QrScannerScreen(
-				qrScannerViewModel,
-				scannerCallbacks,
-			)
+			if (bluetoothState is ProximityVerifierState.Initial) {
+				QrScannerScreen(
+					qrScannerViewModel,
+					scannerCallbacks,
+				)
+			}
 
-			if (bluetoothState is BluetoothState.Connected) {
+			if (bluetoothState is ProximityVerifierState.VerificationResult<*>) {
+				val result = bluetoothState.result
+				if (result is ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult) {
+					Card(
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(vertical = 8.dp)
+					) {
+						Column(
+							modifier = Modifier
+								.padding(16.dp)
+								.verticalScroll(rememberScrollState())
+						) {
+							Text(
+								"Verification Result",
+								style = MaterialTheme.typography.titleMedium,
+								modifier = Modifier.padding(bottom = 8.dp)
+							)
+							Text(
+								"Status: ${if (result.isVerificationSuccessful) "Success" else "Failed"}",
+								style = MaterialTheme.typography.bodyLarge,
+								color = if (result.isVerificationSuccessful) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+								modifier = Modifier.padding(bottom = 8.dp)
+							)
+
+							result.disclosures?.let { disclosures ->
+								Text(
+									"Disclosures:",
+									style = MaterialTheme.typography.titleSmall,
+									modifier = Modifier.padding(bottom = 4.dp, top = 8.dp)
+								)
+								disclosures.forEach { (credentialId, claims) ->
+									Text(
+										"Credential: $credentialId",
+										style = MaterialTheme.typography.bodyMedium,
+										modifier = Modifier.padding(vertical = 4.dp)
+									)
+									claims.forEach { (key, value) ->
+										if (key != "_sd") {
+											Text(
+												"  • $key: $value",
+												style = MaterialTheme.typography.bodySmall,
+												modifier = Modifier.padding(all = 8.dp)
+											)
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if (bluetoothState is ProximityVerifierState.Connected) {
 				Row(
 					verticalAlignment = Alignment.CenterVertically,
 					horizontalArrangement = Arrangement.spacedBy(4.dp),
