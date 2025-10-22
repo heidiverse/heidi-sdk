@@ -119,7 +119,6 @@ class ProximityVerifier<T> private constructor(
 					verifierStateMutable.update { ProximityVerifierState.Connected }
 
 					if(protocol == ProximityProtocol.MDL) {
-
 						sessionCipher = (transportProtocol as MdlTransportProtocolExtensions).getSessionCipher((engagementBuilder as MdlEngagement).originalData, encodeCbor(readerKey.toCbor()), engagementBuilder.coseKey)
 						scope.launch {
 							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
@@ -228,6 +227,9 @@ class ProximityVerifier<T> private constructor(
 					}
 					val data = sessionCipher?.decrypt(sessionData.data!!)!!
 					if(isDcApi){
+						//TODO: we need to unpack the dcapi object here. So check what is the newest
+						// model.
+
 						// data should be the dcql response
 						val response = documentRequester.verifySubmittedDocuments(data)
 						verifierStateMutable.update {

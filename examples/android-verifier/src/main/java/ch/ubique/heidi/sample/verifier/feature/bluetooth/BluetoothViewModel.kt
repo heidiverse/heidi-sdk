@@ -61,6 +61,8 @@ import java.util.Base64
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+private const val DC_SD_JWT = "dc+sd-jwt"
+
 class BluetoothViewModel(
 	private val verifierRepository: VerifierRepository,
 ) : ViewModel(), KoinComponent {
@@ -118,6 +120,9 @@ class BluetoothViewModel(
 	private val requester = object : DocumentRequester<VerificationDisclosureResult> {
 		private var transactionId: String? = null
 
+		/**
+		 * We hardcode some of the proof templates.
+		 */
 		fun getDcqlQueryForProofTemplate(proofTemplate: ProofTemplate) : DcqlQuery {
 			return when (proofTemplate) {
 				ProofTemplate.IDENTITY_CARD_CHECK ->
@@ -125,7 +130,8 @@ class BluetoothViewModel(
 						credentials = listOf(
 							CredentialQuery(
 								id = "test",
-								format = "dc+sd-jwt",
+								format = DC_SD_JWT,
+								// TODO: we probably should be able to select and/or change this from the ui
 								meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
 								claims = sdJwtDcqlClaimsFromAttributes(
 									listOf(
@@ -144,7 +150,7 @@ class BluetoothViewModel(
 					credentials = listOf(
 						CredentialQuery(
 							id = "test",
-							format = "dc+sd-jwt",
+							format = DC_SD_JWT,
 							meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
 							claims = sdJwtDcqlClaimsFromAttributes(
 								listOf(
@@ -163,7 +169,7 @@ class BluetoothViewModel(
 					credentials = listOf(
 						CredentialQuery(
 							id = "test",
-							format = "dc+sd-jwt",
+							format = DC_SD_JWT,
 							meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
 							claims = sdJwtDcqlClaimsFromAttributes(
 								listOf(
@@ -182,7 +188,7 @@ class BluetoothViewModel(
 					credentials = listOf(
 						CredentialQuery(
 							id = "test",
-							format = "dc+sd-jwt",
+							format = DC_SD_JWT,
 							meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
 							claims = sdJwtDcqlClaimsFromAttributes(
 								listOf(
@@ -199,25 +205,44 @@ class BluetoothViewModel(
 			}
 		}
 
+		/**
+			Creates a document request as a OpenID4VP Presentation Request. Uses expectedOrigin (supplied from the
+			transport library) for session binding of the DC-API request.
+		 */
 		override suspend fun createDocumentRequest(expectedOrigin: String?): DocumentRequest {
 
+			//TODO: we should save the chosen request template for later verification
 			var currentTemplate = proofTemplate.value
 
 			var dcqlQuery = getDcqlQueryForProofTemplate(currentTemplate)
 
+			//TODO: we need to create the correct presentation request:
+			// - Use the correct clientID (e.g. did:...)
+			// - Sign the presentation request with heidi_crypto or similiar (JWT use key from clientId resolution)
+			// - Add potentially needed client_metadata (maybe not needed)
 			var presentationRequest = PresentationRequest(
 				clientId = "x509_san_dns:example.com",
 				dcqlQuery = dcqlQuery,
 				expectedOrigins = listOf(expectedOrigin!!)
 			)
+			// If we have a signed presentation (e.g. the above returns a JWT(S), we already have a string, so no encoding needed)
 			return DocumentRequest.OpenId4Vp(Json.encodeToString(presentationRequest))
 		}
 
+		/**
+		 * The transport library calls this function after receiving the vp token. Data is, in the realm of DC-API over ISO
+		 * a openid4vp dcql response (e.g. map with vp-tokens)
+		 */
 		override suspend fun verifySubmittedDocuments(data: ByteArray): VerificationDisclosureResult {
 			var tokenMap = data.decodeToString()
 			var dcqlPresentation : DcqlPresentation = Json.decodeFromString(tokenMap)
+			//TODO: use the same template as we used for requesting before
 			var currentTemplate = proofTemplate.value
 			var dcqlQuery = getDcqlQueryForProofTemplate(currentTemplate)
+
+			//TODO: we probably should already try to load the public keys and status lists here. It potentially makes sense
+			// to already parse the token(s) here (in an early version we anyways only ever have one token) and load keys (did-logs etc.)
+			// and check status list. So the later `CheckVpTokenCallback` does not need to run async/suspending functions
 
 			val result = checkDcqlPresentation(dcqlQuery, dcqlPresentation, object: CheckVpTokenCallback {
 				override fun check(
@@ -225,10 +250,19 @@ class BluetoothViewModel(
 					vpToken: String,
 					queryId: String,
 				): Map<String, Any> {
+					//TODO: This should use credentialType to switch on the actual type and then use
+					// the corresponding format types to verify the credential.
+					// In a first version we only support SD-JWT, so we should make sure the classic SD-JWt properties
+					// like `exp` `iat` `nbf` and others are checked.
 					var token = SdJwt.parse(vpToken)
 					return token.innerJwt.claims.asObject()!!
 				}
 			})
+			//TODO: result probably needs to be extended in order to represent states like the following
+			// - Could not load (refresh) the did-log -> we don't have a key for verification
+			// - We could load the did-log -> still no key
+			// - We couldn't fetch or understand the status list
+			// - ....
 			if(result.isSuccess) {
 				return VerificationDisclosureResult(
 					isVerificationSuccessful = true,

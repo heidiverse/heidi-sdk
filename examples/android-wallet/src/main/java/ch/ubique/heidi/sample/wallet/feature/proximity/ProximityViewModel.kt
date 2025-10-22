@@ -85,10 +85,15 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 			startCollectingWalletState()
 		}
 	}
+
+	/**
+	 * Start a engagement via QR-Code for a ISO mdl flow
+	 */
 	fun startEngagementMdl() {
 		viewModelScope.launch {
 			val serviceUuid = Uuid.random()
 			val peripheralUuid = Uuid.random()
+			// The wallet chooses to use one of the two (or both modes).
 			wallet = ProximityWallet.create(ProximityProtocol.MDL, viewModelScope, serviceUuid, peripheralUuid)
 			wallet.startEngagement("")
 			startCollectingWalletState()
@@ -97,7 +102,10 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 
 	fun submitDocument() {
 		viewModelScope.launch {
+			//TODO: allow this credential to be chosen from UI (e.g. to test verification of properties like age)
+			// on the check app
 			val sdjwt = SdJwt.create(claims = mapOf<String, Any>(
+				//TODO: add necessary exp, nbf, iat claims here, so we can check integrity on the check app
 				"vct" to "beta-id",
 				"firstName" to "Pascal",
 				"lastName" to "Tester",
@@ -112,10 +120,13 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 					listOf("age_over_18").toClaimsPointer()!!,
 					listOf("age_over_65").toClaimsPointer()!!,
 				),
+				//TODO: Ideally we have a pubKeyJwk here and a signer, to actually sign the KB-JWT for verification
 				keyId = "keyId", key = TestSigner(SoftwareKeyPair()), null)
+			//TODO: ideally we would use the dcqlquery's select credential function with a database of tokens (c.f. in the wallet module)
 			val credentialQuery = dcqlQuery!!.credentials?.first()!!
 			val vpToken = sdjwt!!.getVpToken(
 				credentialQuery,
+				//TODO: double check what the audience in our flow should be
 				"test",
 				null,
 				null,
@@ -123,7 +134,7 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 				null
 			).getOrThrow()
 			wallet.submitDocument(Json.encodeToString(mapOf<String, String>(
-				"test" to vpToken
+				credentialQuery.id to vpToken
 			)).encodeToByteArray())
 		}
 	}
@@ -134,8 +145,13 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 				proximityStateMutable.value = state
 				if (state is ProximityWalletState.RequestingDocuments) {
 					if(state.request is DocumentRequest.OpenId4Vp) {
+						//TODO: this is probably signed (or at least it could be signed) we need to check the signature
+						// and then check that verifier_info contains a wallet attestation attesting to the key used for signing the request
 						val v : Value = Json.decodeFromString<Value>((state.request as DocumentRequest.OpenId4Vp).parJwt)
 						var pr = PresentationRequest.fromValue(v)
+						//TODO: we would want to check if `origin`, which the wallet calculated itself, is actually found in expected
+						// origins of the request.
+//						(state.request as DocumentRequest.OpenId4Vp).origin
 						dcqlQuery = pr!!.dcqlQuery
 					}
 				}
