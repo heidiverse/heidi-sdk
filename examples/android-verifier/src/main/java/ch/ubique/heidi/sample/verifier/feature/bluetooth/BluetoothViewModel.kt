@@ -24,6 +24,10 @@ package ch.ubique.heidi.sample.verifier.feature.bluetooth
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ch.ubique.heidi.dcql.Attribute
+import ch.ubique.heidi.dcql.AttributeType
+import ch.ubique.heidi.dcql.sdJwtDcqlClaimsFromAttributes
+import ch.ubique.heidi.presentation.request.PresentationRequest
 import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.documents.DocumentRequester
@@ -37,9 +41,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
+import uniffi.heidi_dcql_rust.CredentialQuery
+import uniffi.heidi_dcql_rust.DcqlQuery
+import uniffi.heidi_dcql_rust.Meta
 import java.security.SecureRandom
 import java.util.Base64
 import kotlin.uuid.ExperimentalUuidApi
@@ -116,14 +124,18 @@ class BluetoothViewModel(
 //		}
 
 		override suspend fun createDocumentRequest(expectedOrigin : String?): DocumentRequest {
-			val randomBytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
-			val nonce = Base64.getEncoder().encodeToString(randomBytes)
-
-			val verificationRequest = verifierRepository.getVerificationRequest(proofTemplate.value, nonce)
-			val flow = verificationRequest.sameDeviceFlow
-			transactionId = flow.transactionId
-			val presentationDefinition = verifierRepository.getPresentationDefinition(flow.requestUri)
-			return DocumentRequest.OpenId4Vp(presentationDefinition)
+			var dcqlQuery = DcqlQuery(credentials = listOf(
+				CredentialQuery(id = "test",
+					format = "dc+sd-jwt",
+					meta = Meta.SdjwtVc(vctValues = listOf("beta-id")),
+					claims = sdJwtDcqlClaimsFromAttributes(listOf(
+						Attribute(0, "firstName", AttributeType.STRING, displayName = mapOf(
+							"de" to "Vorname"
+						))
+					)))
+			))
+			var presentationRequest = PresentationRequest(clientId = "x509_san_dns:example.com", dcqlQuery = dcqlQuery, expectedOrigins = listOf(expectedOrigin!!))
+			return DocumentRequest.OpenId4Vp(Json.encodeToString(presentationRequest))
 		}
 
 		override suspend fun verifySubmittedDocuments(data: ByteArray): VerificationDisclosureResult {
