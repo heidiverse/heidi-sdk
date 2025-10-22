@@ -312,4 +312,10 @@ class BluetoothViewModel(
 		proofTemplateMutable.value = template
 	}
 
+	fun reset() {
+		if (::verifier.isInitialized) {
+			verifier.reset()
+		}
+	}
+
 }
