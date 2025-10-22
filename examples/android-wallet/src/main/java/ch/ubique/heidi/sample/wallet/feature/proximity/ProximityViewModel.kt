@@ -37,6 +37,7 @@ import ch.ubique.heidi.proximity.wallet.ProximityWalletState
 import ch.ubique.heidi.util.extensions.toCbor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -96,11 +97,20 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 
 	fun submitDocument() {
 		viewModelScope.launch {
-			val sdjwt = SdJwt.create(claims = mapOf<String, String>(
+			val sdjwt = SdJwt.create(claims = mapOf<String, Any>(
 				"firstName" to "Pascal",
-				"lastName" to "Tester"
+				"lastName" to "Tester",
+				"age_over_16" to true,
+				"age_over_18" to true,
+				"age_over_65" to false
 			).toCbor(),
-				disclosures = listOf(listOf("firstName").toClaimsPointer()!!),
+				disclosures = listOf(
+					listOf("firstName").toClaimsPointer()!!,
+					listOf("lastName").toClaimsPointer()!!,
+					listOf("age_over_16").toClaimsPointer()!!,
+					listOf("age_over_18").toClaimsPointer()!!,
+					listOf("age_over_65").toClaimsPointer()!!,
+				),
 				keyId = "keyId", key = TestSigner(SoftwareKeyPair()), null)
 			val credentialQuery = dcqlQuery!!.credentials?.first()!!
 			val vpToken = sdjwt!!.getVpToken(
@@ -131,7 +141,9 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 			}
 		}
 	}
-
+	fun reset() {
+		wallet.disconnect()
+	}
 }
 
 class TestSigner(private val kp : SoftwareKeyPair) : SignatureCreator {

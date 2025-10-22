@@ -98,7 +98,8 @@ class ProximityFragment : Fragment(), KoinComponent {
 						}
 					},
 					onSubmitDocumentClicked = viewModel::submitDocument,
-					onStartEngagementClicked = viewModel::startEngagementMdl
+					onStartEngagementClicked = viewModel::startEngagementMdl,
+					onResetState = viewModel::reset
 				)
 			}
 		}
