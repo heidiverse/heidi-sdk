@@ -102,6 +102,7 @@ class BluetoothFragment : Fragment() {
 					},
 					sendMessage = viewModel::sendMessage,
 					onStopClicked = viewModel::stop,
+					onResetClicked = viewModel::reset,
 				)
 			}
 		}

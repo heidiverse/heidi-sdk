@@ -46,6 +46,7 @@ fun BluetoothScreen(
 	scannerCallbacks: QrScannerScreenCallbacks,
 	sendMessage: (String) -> Unit,
 	onStopClicked: () -> Unit,
+	onResetClicked: () -> Unit,
 ) {
 	Scaffold { innerPadding ->
 		Column(
@@ -214,6 +215,17 @@ fun BluetoothScreen(
 					it.forEach { message ->
 						Text(message)
 					}
+				}
+			}
+
+			Spacer(Modifier.height(16.dp))
+
+			if (bluetoothState !is ProximityVerifierState.Initial) {
+				Button(
+					onClick = onResetClicked,
+					modifier = Modifier.fillMaxWidth(),
+				) {
+					Text("Reset")
 				}
 			}
 		}
