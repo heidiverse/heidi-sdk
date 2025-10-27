@@ -28,6 +28,7 @@ import platform.CoreBluetooth.CBCharacteristicPropertyNotify
 import platform.CoreBluetooth.CBCharacteristicPropertyRead
 import platform.CoreBluetooth.CBCharacteristicPropertyWrite
 import platform.CoreBluetooth.CBCharacteristicPropertyWriteWithoutResponse
+import platform.CoreBluetooth.CBDescriptor
 import platform.CoreBluetooth.CBMutableCharacteristic
 import platform.CoreBluetooth.CBMutableDescriptor
 import platform.CoreBluetooth.CBUUID
@@ -65,27 +66,27 @@ internal actual class MdlCharacteristicsFactory {
 		return listOf(
 			CBMutableCharacteristic(
 				CBUUID.UUIDWithString(MdlCentralClientModeTransportProtocol.characteristicStateUuid.toString()),
-				CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyWrite,
+				CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyWrite or CBCharacteristicPropertyRead or CBCharacteristicPropertyNotify,
 				null,
-				CBAttributePermissionsWriteable
+				CBAttributePermissionsWriteable or CBAttributePermissionsReadable
 			),
 			CBMutableCharacteristic(
 				CBUUID.UUIDWithString(MdlCentralClientModeTransportProtocol.characteristicClient2ServerUuid.toString()),
-				CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyWrite,
+				CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyWrite or CBCharacteristicPropertyRead or CBCharacteristicPropertyNotify,
 				null,
-				CBAttributePermissionsWriteable
+				CBAttributePermissionsWriteable or CBAttributePermissionsReadable
 			),
 			CBMutableCharacteristic(
 				CBUUID.UUIDWithString(MdlCentralClientModeTransportProtocol.characteristicServer2ClientUuid.toString()),
-				CBCharacteristicPropertyNotify,
+				CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyWrite or CBCharacteristicPropertyRead or CBCharacteristicPropertyNotify,
 				null,
-				CBAttributePermissionsWriteable
+				CBAttributePermissionsWriteable or CBAttributePermissionsReadable
 			),
 			CBMutableCharacteristic(
 				CBUUID.UUIDWithString(MdlCentralClientModeTransportProtocol.characteristicIdentUuid.toString()),
-				CBCharacteristicPropertyNotify,
+				CBCharacteristicPropertyWriteWithoutResponse or CBCharacteristicPropertyWrite or CBCharacteristicPropertyRead or CBCharacteristicPropertyNotify,
 				null,
-				CBAttributePermissionsReadable
+				CBAttributePermissionsWriteable or CBAttributePermissionsReadable
 			),
 		).map { BleGattCharacteristic(it) }
 	}

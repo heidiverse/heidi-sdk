@@ -29,6 +29,8 @@ import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.ble.gatt.BleGattService
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.MdlCentralClientModeTransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.MdlPeripheralServerModeTransportProtocol
 import ch.ubique.heidi.util.log.Logger
 import java.io.ByteArrayOutputStream
 import java.lang.reflect.InvocationTargetException
@@ -260,55 +262,119 @@ internal class GattClient(
         }
     }
 
-    override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-        if (status == BluetoothGatt.GATT_SUCCESS) {
-            val isServiceDiscovered = gatt.services.any { it.uuid == serviceUuid }
-            if (!isServiceDiscovered) {
-                reportError(Error("Service $serviceUuid not discovered"))
-                return
-            }
+    private val cccdQueue: ArrayDeque<Pair<BluetoothGattDescriptor, ByteArray>> = ArrayDeque()
+    private var cccdInFlight = false
+    private var mtuRequested = false
+    private var deferMtuUntilCccdDone = false
 
-            characteristics = requireListener().onServicesDiscovered(gatt.services.map { BleGattService(it) })
-            characteristics.forEach { characteristic ->
-                gatt.setCharacteristicNotification(characteristic.characteristic, characteristic.supportsNotifications)
+    // Start by bumping MTU, callback in onMtuChanged()...
+    //
+    // Which MTU should we choose? On Android the maximum MTU size is said to be 517.
+    //
+    // Also 18013-5 section 8.3.3.1.1.6 Data retrieval says to write attributes to
+    // Client2Server and Server2Client characteristics of a size which 3 less the
+    // MTU size. If we chose an MTU of 517 then the attribute we'd write would be
+    // 514 bytes long.
+    //
+    // Also note that Bluetooth Core specification Part F section 3.2.9 Long attribute
+    // values says "The maximum length of an attribute value shall be 512 octets." ... so
+    // with an MTU of 517 we'd blow through that limit. An MTU limited to 515 bytes
+    // will work though.
+    //
+    // ... so we request 515 bytes for the MTU. We might not get such a big MTU, the way
+    // it works is that the requestMtu() call will trigger a negotiation between the client (us)
+    // and the server (the remote device).
+    //
+    // We'll get notified in BluetoothGattCallback.onMtuChanged() below.
+    //
+    // The server will also be notified about the new MTU - if it's running Android
+    // it'll be via BluetoothGattServerCallback.onMtuChanged(), see GattServer.java
+    // for that in our implementation.
+    private fun requestMtuSafely(gatt: BluetoothGatt, size: Int = 515) {
+        if (mtuRequested) return
+        try {
+            if (!gatt.requestMtu(size)) {
+                reportError(Error("Error requesting MTU"))
+            } else {
+                mtuRequested = true
             }
-
-            // Start by bumping MTU, callback in onMtuChanged()...
-            //
-            // Which MTU should we choose? On Android the maximum MTU size is said to be 517.
-            //
-            // Also 18013-5 section 8.3.3.1.1.6 Data retrieval says to write attributes to
-            // Client2Server and Server2Client characteristics of a size which 3 less the
-            // MTU size. If we chose an MTU of 517 then the attribute we'd write would be
-            // 514 bytes long.
-            //
-            // Also note that Bluetooth Core specification Part F section 3.2.9 Long attribute
-            // values says "The maximum length of an attribute value shall be 512 octets." ... so
-            // with an MTU of 517 we'd blow through that limit. An MTU limited to 515 bytes
-            // will work though.
-            //
-            // ... so we request 515 bytes for the MTU. We might not get such a big MTU, the way
-            // it works is that the requestMtu() call will trigger a negotiation between the client (us)
-            // and the server (the remote device).
-            //
-            // We'll get notified in BluetoothGattCallback.onMtuChanged() below.
-            //
-            // The server will also be notified about the new MTU - if it's running Android
-            // it'll be via BluetoothGattServerCallback.onMtuChanged(), see GattServer.java
-            // for that in our implementation.
-            try {
-                // Once the services are discovered, request a specific MTU size
-                if (!gatt.requestMtu(515)) {
-                    reportError(Error("Error requesting MTU"))
-                    return
-                }
-            } catch (e: SecurityException) {
-                reportError(e)
-                return
-            }
-            this.gatt = gatt
+        } catch (e: SecurityException) {
+            reportError(e)
         }
     }
+
+    private fun enqueueCccd(descriptor: BluetoothGattDescriptor, value: ByteArray) {
+        cccdQueue.add(descriptor to value)
+    }
+
+    private fun writeNextCccd(gatt: BluetoothGatt) {
+        val next = cccdQueue.poll()
+        if (next == null) {
+            cccdInFlight = false
+            // All CCCDs done → now request MTU if we were deferring it
+            if (deferMtuUntilCccdDone && !mtuRequested) {
+                requestMtuSafely(gatt)
+            }
+            return
+        }
+
+        cccdInFlight = true
+        val (desc, value) = next
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            gatt.writeDescriptor(desc, value)
+        } else {
+            @Suppress("DEPRECATION")
+            run {
+                desc.value = value
+                gatt.writeDescriptor(desc)
+            }
+        }
+    }
+
+
+    override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+        if (status != BluetoothGatt.GATT_SUCCESS) return
+        val service = gatt.services.any { it.uuid == serviceUuid }
+        if (!service) { reportError(Error("Service $serviceUuid not discovered")); return }
+
+        characteristics = requireListener().onServicesDiscovered(gatt.services.map { BleGattService(it) })
+
+        // Prepare CCCD writes
+        characteristics.forEach { c ->
+            val ch = c.characteristic
+            val supportsNotify   = (ch.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0
+            val supportsIndicate = (ch.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
+            val shouldEnable = c.supportsNotifications && (supportsNotify || supportsIndicate)
+
+            gatt.setCharacteristicNotification(ch, shouldEnable)
+
+            val cccd = ch.getDescriptor(
+                MdlPeripheralServerModeTransportProtocol.characteristicConfigurationUuid.toJavaUuid()
+            )
+
+            if (cccd != null && shouldEnable) {
+                val v = if (supportsIndicate)
+                    BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                else
+                    BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+
+                enqueueCccd(cccd, v)
+            }
+        }
+
+        // If there are CCCDs to write, defer MTU until they’re done.
+        deferMtuUntilCccdDone = cccdQueue.isNotEmpty()
+
+        // Kick off CCCD writes (one at a time) or request MTU immediately if none.
+        if (deferMtuUntilCccdDone) {
+            writeNextCccd(gatt)
+        } else {
+            requestMtuSafely(gatt) // no CCCDs to write
+        }
+
+        this.gatt = gatt
+    }
+
 
     override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
         if (status != BluetoothGatt.GATT_SUCCESS) {
@@ -421,12 +487,10 @@ internal class GattClient(
         requireListener().onDescriptorRead(descriptor)
     }
 
-    override fun onDescriptorWrite(
-        gatt: BluetoothGatt,
-        descriptor: BluetoothGattDescriptor,
-        status: Int
-    ) {
+    override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
         requireListener().onDescriptorWrite(descriptor)
+        // Continue the CCCD queue; when it empties, MTU will be requested.
+        writeNextCccd(gatt)
     }
 
     private fun reportPeerConnecting() {

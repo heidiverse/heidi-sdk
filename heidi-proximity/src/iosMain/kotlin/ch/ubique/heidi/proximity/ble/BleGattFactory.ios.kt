@@ -39,6 +39,6 @@ internal actual class BleGattFactory() {
 		return GattClient(serviceUuid)
 	}
 	internal actual fun isBleAdvSupported() : Boolean {
-		return false
+		return true
 	}
 }

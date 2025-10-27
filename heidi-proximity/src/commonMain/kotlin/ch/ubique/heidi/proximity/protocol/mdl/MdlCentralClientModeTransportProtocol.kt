@@ -197,8 +197,8 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onPeerConnected() {
-
 			gattServer?.stopAdvertising()
+			reportConnected()
 		}
 
 		override fun onPeerDisconnected() {
@@ -221,7 +221,7 @@ internal class MdlCentralClientModeTransportProtocol(
 		override fun onMtuChanged(mtu: Int) {
 			super.onMtuChanged(mtu)
 			// after the mtu was negotiated we can start sending data.
-			reportConnected()
+//			reportConnected()
 		}
 
 		override fun onCharacteristicWriteRequest(characteristic: BleGattCharacteristic): GattRequestResult {
@@ -240,8 +240,12 @@ internal class MdlCentralClientModeTransportProtocol(
 						reportTransportSpecificSessionTermination()
 						GattRequestResult(isSuccessful = true)
 					}
+					value[0] == 0x01.toByte() -> {
+						reportConnected()
+						GattRequestResult(isSuccessful = true)
+					}
 					else -> {
-						reportError(Error("Invalid value for state characteristic"))
+						reportError(Error("Invalid value for state characteristic ${value.toHexString()}"))
 						GattRequestResult(isSuccessful = false)
 					}
 				}

@@ -24,6 +24,7 @@ import ch.ubique.heidi.util.extensions.toData
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import platform.CoreBluetooth.CBAdvertisementDataServiceUUIDsKey
 import platform.CoreBluetooth.CBMutableCharacteristic
 import platform.CoreBluetooth.CBMutableService
 import platform.CoreBluetooth.CBPeripheralManager
@@ -49,24 +50,32 @@ internal class GattServer (
 
 	override fun setListener(listener: BleGattServerListener?) {
 		this.listener = listener
+		delegate.listener = listener
 	}
 
 	override fun start(characteristics: List<BleGattCharacteristic>): Boolean {
 		while(!isReady) {
 			runBlocking { delay(300) }
 		}
-		// TODO BM: why is this crashing, its not if called from swift code
 		service = CBMutableService(CBUUID.UUIDWithString(serviceUuid.toString()), true).also {
 			it.setCharacteristics(characteristics.map { it.characteristic })
 		}
 		manager?.addService(service!!)
+
+		service?.characteristics?.forEach {
+			val mut = it as? CBMutableCharacteristic
+			Logger.debug("Characteristc: ${mut?.UUID?.UUIDString} properties: ${mut?.properties} descriptors: ${mut?.descriptors}")
+		}
+
 		return true
 	}
 
 
 	override fun startAdvertising(listener: BleAdvertiserListener) {
 		advertiserListener = listener
-		manager?.startAdvertising(null)
+		manager?.startAdvertising(mapOf(
+			CBAdvertisementDataServiceUUIDsKey to listOf(CBUUID.UUIDWithString(serviceUuid.toString()))
+		))
 	}
 
 	override fun stopAdvertising() {
@@ -82,15 +91,18 @@ internal class GattServer (
 	}
 
 	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
-		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID.UUIDString == charUuid.toString() }?.let {
+		Logger.debug("GattServer: trying to write to: $charUuid")
+		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
 			chunkMessage(data) { chunked ->
-				manager?.updateValue(chunked.toData(), it, null)
+				Logger.debug("GattServer: sending chunk ${chunked.size} bytes to characteristic ${it.toString()}")
+				val result = manager?.updateValue(chunked.toData(), it, null)
+				Logger.debug("GattServer: sending returned $result")
 			}
 		}
 	}
 
 	override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
-		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID.UUIDString == charUuid.toString() }?.let {
+		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
 			manager?.updateValue(data.toData(), it, null)
 		}
 	}

@@ -32,6 +32,7 @@ import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocolExtensions
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
 import ch.ubique.heidi.util.extensions.toCbor
+import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -191,11 +192,13 @@ class ProximityVerifier<T> private constructor(
 	}
 
 	fun disconnect() {
+		Logger.debug("disconnect() was called")
 		transportProtocol.disconnect()
 		verifierStateMutable.update { ProximityVerifierState.Disconnected }
 	}
 
 	fun reset() {
+		Logger.debug("reset() was called")
 		disconnect()
 		verifierStateMutable.update { ProximityVerifierState.Initial }
 	}
@@ -214,11 +217,14 @@ class ProximityVerifier<T> private constructor(
 		scope.launch(Dispatchers.IO) {
 			when (protocol) {
 				ProximityProtocol.MDL -> {
+					Logger.debug("Processing message of size ${message.size}")
 					val sessionData = MdlSessionData.fromCbor(message) ?: run {
+						Logger.debug("Unable to create MdlSessionData")
 						disconnect()
 						return@launch
 					}
 					if(sessionData.status != null) {
+						Logger.debug("processMessageReceived status is null, disconnecting, sessionData: $sessionData")
 						verifierStateMutable.update {
 							ProximityVerifierState.Disconnected
 						}
