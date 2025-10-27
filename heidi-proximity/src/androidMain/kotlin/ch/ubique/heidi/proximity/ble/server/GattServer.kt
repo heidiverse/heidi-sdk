@@ -32,7 +32,6 @@ import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
 import ch.ubique.heidi.util.log.Logger
-import java.io.ByteArrayOutputStream
 import java.util.ArrayDeque
 import java.util.Arrays
 import java.util.Queue
@@ -63,7 +62,7 @@ internal class GattServer(
 	private var currentConnection: BluetoothDevice? = null
 	private var negotiatedMtu = 0
 
-	private val incomingMessages = mutableMapOf<UUID, ByteArrayOutputStream>().withDefault { ByteArrayOutputStream() }
+    private val chunkAccumulator = ChunkAccumulator<UUID>()
 	private val readQueues = mutableMapOf<UUID, Queue<ByteArray>>().withDefault { ArrayDeque() }
 	private val writingQueues = mutableMapOf<UUID, Queue<ByteArray>>().withDefault { ArrayDeque() }
 
@@ -197,17 +196,19 @@ internal class GattServer(
 	override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
 		// We assume that we only have one connection at a time
 		when (newState) {
-			BluetoothProfile.STATE_CONNECTED -> {
-				currentConnection = device
-				requireServer().connect(currentConnection, false)
-				reportPeerConnected()
-			}
-			BluetoothProfile.STATE_DISCONNECTED -> {
-				currentConnection = null
-				reportPeerDisconnected()
-			}
-		}
-	}
+            BluetoothProfile.STATE_CONNECTED -> {
+                currentConnection = device
+                chunkAccumulator.clear()
+                requireServer().connect(currentConnection, false)
+                reportPeerConnected()
+            }
+            BluetoothProfile.STATE_DISCONNECTED -> {
+                currentConnection = null
+                chunkAccumulator.clear()
+                reportPeerDisconnected()
+            }
+        }
+    }
 
 	override fun onCharacteristicReadRequest(
 		device: BluetoothDevice,
@@ -259,29 +260,23 @@ internal class GattServer(
 			return
 		}
 
-		val charUuid = characteristic.uuid
-		val result = when (value.firstOrNull()?.toInt()) {
-			0x00 -> {
-				// First byte indicates that this is the last chunk of the message
-				incomingMessages.getOrPut(charUuid) { ByteArrayOutputStream() }.write(value, 1, value.size - 1)
-				val entireMessage = incomingMessages.getValue(charUuid).toByteArray()
-				incomingMessages.getValue(charUuid).reset()
+        val charUuid = characteristic.uuid
+        val result = when (val chunkResult = chunkAccumulator.consume(charUuid, value)) {
+            is ChunkProcessingResult.Complete -> {
+                requireListener().onCharacteristicWriteRequest(
+                    BleGattCharacteristic(characteristic, chunkResult.payload)
+                )
+            }
+            ChunkProcessingResult.Waiting -> GattRequestResult(isSuccessful = true)
+            is ChunkProcessingResult.Single -> {
+                requireListener().onCharacteristicWriteRequest(
+                    BleGattCharacteristic(characteristic, chunkResult.payload)
+                )
+            }
+        }
 
-				requireListener().onCharacteristicWriteRequest(BleGattCharacteristic(characteristic, entireMessage))
-			}
-			0x01 -> {
-				// First byte indicates that more chunks are coming
-				incomingMessages.getOrPut(charUuid) { ByteArrayOutputStream() }.write(value, 1, value.size - 1)
-				GattRequestResult(isSuccessful = true)
-			}
-			else -> {
-				// Unknown if this message is chunked or not, so just send it in the callback
-				requireListener().onCharacteristicWriteRequest(BleGattCharacteristic(characteristic, value))
-			}
-		}
-
-		if (responseNeeded) {
-			sendResponse(
+        if (responseNeeded) {
+            sendResponse(
 				device,
 				requestId,
 				if (result.isSuccessful) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_FAILURE,

@@ -29,11 +29,13 @@ import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.ble.gatt.BleGattService
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.MdlCentralClientModeTransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.MdlPeripheralServerModeTransportProtocol
+import ch.ubique.heidi.proximity.ble.server.ChunkAccumulator
+import ch.ubique.heidi.proximity.ble.server.ChunkProcessingResult
 import ch.ubique.heidi.util.log.Logger
-import java.io.ByteArrayOutputStream
 import java.lang.reflect.InvocationTargetException
 import java.util.ArrayDeque
-import java.util.Queue
 import java.util.UUID
 import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
@@ -63,22 +65,22 @@ internal class GattClient(
     private var gatt: BluetoothGatt? = null
     private var negotiatedMtu = 0
 
-    private val incomingMessages = mutableMapOf<UUID, ByteArrayOutputStream>().withDefault { ByteArrayOutputStream() }
-    private val writingQueues = mutableMapOf<UUID, Queue<ByteArray>>().withDefault { ArrayDeque() }
+    private val chunkAccumulator = ChunkAccumulator<UUID>()
+    private val writeQueues = WriteQueueManager()
 
-    private var mCharacteristicValueSize = 0
+    private var cachedCharacteristicValueSize = 0
     override val characteristicValueSize: Int
         get() {
-            if (mCharacteristicValueSize > 0) {
-                return mCharacteristicValueSize
+            if (cachedCharacteristicValueSize > 0) {
+                return cachedCharacteristicValueSize
             }
             var mtuSize = negotiatedMtu
             if (mtuSize == 0) {
                 Logger(TAG).warn("MTU not negotiated, defaulting to 23. Performance will suffer.")
                 mtuSize = 23
             }
-            mCharacteristicValueSize = BleTransportProtocol.bleCalculateAttributeValueSize(mtuSize)
-            return mCharacteristicValueSize
+            cachedCharacteristicValueSize = BleTransportProtocol.bleCalculateAttributeValueSize(mtuSize)
+            return cachedCharacteristicValueSize
         }
 
     private var scanner: BluetoothLeScanner? = null
@@ -180,25 +182,26 @@ internal class GattClient(
     }
 
     override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
-        // Only initiate the write if no other write was outstanding.
-        val queueNeedsDraining = writingQueues.getValue(charUuid.toJavaUuid()).size == 0
+        val targetUuid = charUuid.toJavaUuid()
+        val shouldDrain = writeQueues.wasEmpty(targetUuid)
 
         chunkMessage(data) { chunk ->
-            writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(chunk)
+            writeQueues.enqueue(targetUuid, chunk)
         }
 
-        if (queueNeedsDraining) {
-            drainWritingQueue(charUuid.toJavaUuid())
+        if (shouldDrain) {
+            drainWritingQueue(targetUuid)
         }
     }
+
     override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
-        // Only initiate the write if no other write was outstanding.
-        val queueNeedsDraining = writingQueues.getValue(charUuid.toJavaUuid()).size == 0
+        val targetUuid = charUuid.toJavaUuid()
+        val shouldDrain = writeQueues.wasEmpty(targetUuid)
 
-        writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(data)
+        writeQueues.enqueue(targetUuid, data)
 
-        if (queueNeedsDraining) {
-            drainWritingQueue(charUuid.toJavaUuid())
+        if (shouldDrain) {
+            drainWritingQueue(targetUuid)
         }
     }
 
@@ -232,13 +235,8 @@ internal class GattClient(
             return
         }
 
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requireGatt().writeDescriptor(descriptor, data)
-        } else {
-            descriptor.setValue(data)
-            requireGatt().writeDescriptor(descriptor)
-        }
-	}
+        requireGatt().writeDescriptorCompat(descriptor, data)
+    }
 
     override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
         when (newState) {
@@ -248,6 +246,9 @@ internal class GattClient(
                         clearCache(gatt)
                     }
 
+                    mtuRequested = false
+                    cachedCharacteristicValueSize = 0
+
                     gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                     gatt.discoverServices()
                 } catch (e: SecurityException) {
@@ -255,60 +256,97 @@ internal class GattClient(
                 }
             }
             BluetoothProfile.STATE_DISCONNECTED -> {
+                chunkAccumulator.clear()
+                writeQueues.clear()
+                cccdCoordinator.reset()
+                mtuRequested = false
+                cachedCharacteristicValueSize = 0
                 reportPeerDisconnected()
             }
         }
     }
 
-    override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-        if (status == BluetoothGatt.GATT_SUCCESS) {
-            val isServiceDiscovered = gatt.services.any { it.uuid == serviceUuid }
-            if (!isServiceDiscovered) {
-                reportError(Error("Service $serviceUuid not discovered"))
-                return
-            }
+    private val cccdCoordinator = CccdCoordinator { gatt -> requestMtuSafely(gatt) }
+    private var mtuRequested = false
 
-            characteristics = requireListener().onServicesDiscovered(gatt.services.map { BleGattService(it) })
-            characteristics.forEach { characteristic ->
-                gatt.setCharacteristicNotification(characteristic.characteristic, characteristic.supportsNotifications)
+    // Start by bumping MTU, callback in onMtuChanged()...
+    //
+    // Which MTU should we choose? On Android the maximum MTU size is said to be 517.
+    //
+    // Also 18013-5 section 8.3.3.1.1.6 Data retrieval says to write attributes to
+    // Client2Server and Server2Client characteristics of a size which 3 less the
+    // MTU size. If we chose an MTU of 517 then the attribute we'd write would be
+    // 514 bytes long.
+    //
+    // Also note that Bluetooth Core specification Part F section 3.2.9 Long attribute
+    // values says "The maximum length of an attribute value shall be 512 octets." ... so
+    // with an MTU of 517 we'd blow through that limit. An MTU limited to 515 bytes
+    // will work though.
+    //
+    // ... so we request 515 bytes for the MTU. We might not get such a big MTU, the way
+    // it works is that the requestMtu() call will trigger a negotiation between the client (us)
+    // and the server (the remote device).
+    //
+    // We'll get notified in BluetoothGattCallback.onMtuChanged() below.
+    //
+    // The server will also be notified about the new MTU - if it's running Android
+    // it'll be via BluetoothGattServerCallback.onMtuChanged(), see GattServer.java
+    // for that in our implementation.
+    private fun requestMtuSafely(gatt: BluetoothGatt, size: Int = 515) {
+        if (mtuRequested) return
+        try {
+            if (!gatt.requestMtu(size)) {
+                reportError(Error("Error requesting MTU"))
+            } else {
+                mtuRequested = true
             }
-
-            // Start by bumping MTU, callback in onMtuChanged()...
-            //
-            // Which MTU should we choose? On Android the maximum MTU size is said to be 517.
-            //
-            // Also 18013-5 section 8.3.3.1.1.6 Data retrieval says to write attributes to
-            // Client2Server and Server2Client characteristics of a size which 3 less the
-            // MTU size. If we chose an MTU of 517 then the attribute we'd write would be
-            // 514 bytes long.
-            //
-            // Also note that Bluetooth Core specification Part F section 3.2.9 Long attribute
-            // values says "The maximum length of an attribute value shall be 512 octets." ... so
-            // with an MTU of 517 we'd blow through that limit. An MTU limited to 515 bytes
-            // will work though.
-            //
-            // ... so we request 515 bytes for the MTU. We might not get such a big MTU, the way
-            // it works is that the requestMtu() call will trigger a negotiation between the client (us)
-            // and the server (the remote device).
-            //
-            // We'll get notified in BluetoothGattCallback.onMtuChanged() below.
-            //
-            // The server will also be notified about the new MTU - if it's running Android
-            // it'll be via BluetoothGattServerCallback.onMtuChanged(), see GattServer.java
-            // for that in our implementation.
-            try {
-                // Once the services are discovered, request a specific MTU size
-                if (!gatt.requestMtu(515)) {
-                    reportError(Error("Error requesting MTU"))
-                    return
-                }
-            } catch (e: SecurityException) {
-                reportError(e)
-                return
-            }
-            this.gatt = gatt
+        } catch (e: SecurityException) {
+            reportError(e)
         }
     }
+
+
+    override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+        if (status != BluetoothGatt.GATT_SUCCESS) return
+        val service = gatt.services.any { it.uuid == serviceUuid }
+        if (!service) { reportError(Error("Service $serviceUuid not discovered")); return }
+
+        characteristics = requireListener().onServicesDiscovered(gatt.services.map { BleGattService(it) })
+
+        cccdCoordinator.reset()
+
+        characteristics.forEach { c ->
+            val characteristic = c.characteristic
+            val supportsNotify = (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0
+            val supportsIndicate = (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
+            val shouldEnable = c.supportsNotifications && (supportsNotify || supportsIndicate)
+
+            gatt.setCharacteristicNotification(characteristic, shouldEnable)
+
+            val cccd = characteristic.getDescriptor(
+                MdlPeripheralServerModeTransportProtocol.characteristicConfigurationUuid.toJavaUuid()
+            )
+
+            if (cccd != null && shouldEnable) {
+                val value = if (supportsIndicate) {
+                    BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                } else {
+                    BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                }
+                cccdCoordinator.enqueue(cccd, value)
+            }
+        }
+
+        if (cccdCoordinator.hasPendingDescriptors()) {
+            cccdCoordinator.deferMtuUntilComplete()
+            cccdCoordinator.flush(gatt)
+        } else {
+            requestMtuSafely(gatt)
+        }
+
+        this.gatt = gatt
+    }
+
 
     override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
         if (status != BluetoothGatt.GATT_SUCCESS) {
@@ -338,26 +376,19 @@ internal class GattClient(
         value: ByteArray,
         status: Int
     ) {
-        val charUuid = characteristic.uuid
-        when (value.firstOrNull()?.toInt()) {
-            0x00 -> {
-                // First byte indicates that this is the last chunk of the message
-                incomingMessages.getOrPut(charUuid) { ByteArrayOutputStream() }.write(value, 1, value.size - 1)
-                val entireMessage = incomingMessages.getValue(charUuid).toByteArray()
-                incomingMessages.getValue(charUuid).reset()
-
-                requireListener().onCharacteristicRead(BleGattCharacteristic(characteristic, entireMessage))
+        when (val result = chunkAccumulator.consume(characteristic.uuid, value)) {
+            is ChunkProcessingResult.Complete -> {
+                requireListener().onCharacteristicRead(
+                    BleGattCharacteristic(characteristic, result.payload)
+                )
             }
-            0x01 -> {
-                // First byte indicates that more chunks are coming
-                incomingMessages.getOrPut(charUuid) { ByteArrayOutputStream() }.write(value, 1, value.size - 1)
-
-                // Trigger a read of the next chunk
+            ChunkProcessingResult.Waiting -> {
                 gatt.readCharacteristic(characteristic)
             }
-            else -> {
-                // Unknown if this message is chunked or not, so just send it in the callback
-                requireListener().onCharacteristicRead(BleGattCharacteristic(characteristic, value))
+            is ChunkProcessingResult.Single -> {
+                requireListener().onCharacteristicRead(
+                    BleGattCharacteristic(characteristic, result.payload)
+                )
             }
         }
     }
@@ -369,8 +400,7 @@ internal class GattClient(
     ) {
         // If the characteristic write was completed, check if this characteristic has more chunks in the writing queue or else notify the listener about a successful write
         val charUuid = characteristic.uuid
-        val isWritingQueueEmpty = writingQueues.getValue(charUuid).isEmpty()
-        if (isWritingQueueEmpty) {
+        if (writeQueues.isEmpty(charUuid)) {
             requireListener().onCharacteristicWrite(BleGattCharacteristic(characteristic))
         } else {
             drainWritingQueue(characteristic.uuid)
@@ -391,24 +421,18 @@ internal class GattClient(
         characteristic: BluetoothGattCharacteristic,
         value: ByteArray
     ) {
-        val charUuid = characteristic.uuid
-        when (value.firstOrNull()?.toInt()){
-            0x00 -> {
-                // First byte indicates that this is the last chunk of the message
-                incomingMessages.getOrPut(charUuid) { ByteArrayOutputStream() } .write(value, 1, value.size - 1)
-                val entireMessage = incomingMessages.getValue(charUuid).toByteArray()
-                incomingMessages.getValue(charUuid).reset()
-
-                requireListener().onCharacteristicChanged(BleGattCharacteristic(characteristic, entireMessage))
+        when (val result = chunkAccumulator.consume(characteristic.uuid, value)) {
+            is ChunkProcessingResult.Complete -> {
+                requireListener().onCharacteristicChanged(
+                    BleGattCharacteristic(characteristic, result.payload)
+                )
             }
-            0x01 -> {
-                // First byte indicates that more chunks are coming
-                incomingMessages.getOrPut(charUuid) { ByteArrayOutputStream() }.write(value, 1, value.size - 1)
+            ChunkProcessingResult.Waiting -> Unit
+            is ChunkProcessingResult.Single -> {
+                requireListener().onCharacteristicChanged(
+                    BleGattCharacteristic(characteristic, result.payload)
+                )
             }
-             else -> {
-                 // Unknown if this message is chunked or not, so just send it in the callback
-                 requireListener().onCharacteristicChanged(BleGattCharacteristic(characteristic, value))
-             }
         }
     }
 
@@ -421,12 +445,9 @@ internal class GattClient(
         requireListener().onDescriptorRead(descriptor)
     }
 
-    override fun onDescriptorWrite(
-        gatt: BluetoothGatt,
-        descriptor: BluetoothGattDescriptor,
-        status: Int
-    ) {
+    override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
         requireListener().onDescriptorWrite(descriptor)
+        cccdCoordinator.onDescriptorWriteComplete(gatt)
     }
 
     private fun reportPeerConnecting() {
@@ -492,27 +513,12 @@ internal class GattClient(
         }
     }
 
-//    private fun chunkMessage(data: ByteArray, emitChunk: (ByteArray) -> Unit) {
-//        // Also need room for the leading 0x00 or 0x01.
-//        val maxDataSize = characteristicValueSize - 1
-//        var offset = 0
-//        do {
-//            val moreDataComing = offset + maxDataSize < data.size
-//            var size = data.size - offset
-//            if (size > maxDataSize) {
-//                size = maxDataSize
-//            }
-//            val chunk = ByteArray(size + 1)
-//            chunk[0] = if (moreDataComing) 0x01.toByte() else 0x00.toByte()
-//            System.arraycopy(data, offset, chunk, 1, size)
-//            emitChunk(chunk)
-//            offset += size
-//        } while (offset < data.size)
-//    }
+    private fun findCharacteristic(charUuid: UUID): BluetoothGattCharacteristic? {
+        return characteristics.singleOrNull { it.uuid?.toJavaUuid() == charUuid }?.characteristic
+    }
 
-    @Suppress("DEPRECATION")
     private fun drainWritingQueue(charUuid: UUID) {
-        val chunk = writingQueues.getValue(charUuid).poll() ?: return
+        val chunk = writeQueues.poll(charUuid) ?: return
 
         if (chunk.size == 1 && chunk.single() == TransportProtocol.SHUTDOWN_MESSAGE.single()) {
             Logger(TAG).debug("Chunk is length 0, shutting down GattClient in 1000ms")
@@ -532,31 +538,135 @@ internal class GattClient(
             } catch (e: SecurityException) {
                 Logger(TAG).error("Caught SecurityException while shutting down", e)
             } finally {
-            	gatt = null
+                gatt = null
+                chunkAccumulator.clear()
+                writeQueues.clear()
+                cccdCoordinator.reset()
+                mtuRequested = false
+                cachedCharacteristicValueSize = 0
             }
         } else {
-            val characteristic = characteristics.singleOrNull { it.uuid?.toJavaUuid() == charUuid }?.characteristic
+            val characteristic = findCharacteristic(charUuid)
             if (characteristic == null) {
                 reportError(Error("No characteristic found for UUID $charUuid"))
                 return
             }
 
             try {
-                val success = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    val result = requireGatt().writeCharacteristic(characteristic, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-                    result == BluetoothStatusCodes.SUCCESS
-				} else {
-                    characteristic.setValue(chunk)
-                    requireGatt().writeCharacteristic(characteristic)
-				}
+                val success = requireGatt().writeCharacteristicCompat(characteristic, chunk)
 
-				if (!success) {
+                if (!success) {
                     reportError(Error("Error writing characteristic $charUuid"))
                     return
                 }
             } catch (e: SecurityException) {
                 reportError(e)
             }
+        }
+    }
+
+    private fun BluetoothGatt.writeDescriptorCompat(descriptor: BluetoothGattDescriptor, data: ByteArray) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            writeDescriptor(descriptor, data)
+        } else {
+            @Suppress("DEPRECATION")
+            run {
+                descriptor.setValue(data)
+                writeDescriptor(descriptor)
+            }
+        }
+    }
+
+    private fun BluetoothGatt.writeCharacteristicCompat(
+        characteristic: BluetoothGattCharacteristic,
+        data: ByteArray
+    ): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            writeCharacteristic(
+                characteristic,
+                data,
+                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            ) == BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            run {
+                characteristic.setValue(data)
+                writeCharacteristic(characteristic)
+            }
+        }
+    }
+
+    private class WriteQueueManager {
+        private val queues = mutableMapOf<UUID, ArrayDeque<ByteArray>>()
+
+        fun wasEmpty(uuid: UUID): Boolean = queues[uuid]?.isEmpty() ?: true
+
+        fun enqueue(uuid: UUID, data: ByteArray) {
+            queues.getOrPut(uuid) { ArrayDeque() }.addLast(data)
+        }
+
+        fun poll(uuid: UUID): ByteArray? {
+            val queue = queues[uuid] ?: return null
+            val result = if (queue.isEmpty()) null else queue.removeFirst()
+            if (queue.isEmpty()) {
+                queues.remove(uuid)
+            }
+            return result
+        }
+
+        fun isEmpty(uuid: UUID): Boolean = queues[uuid]?.isEmpty() ?: true
+
+        fun clear() {
+            queues.clear()
+        }
+    }
+
+    private data class PendingDescriptor(
+        val descriptor: BluetoothGattDescriptor,
+        val value: ByteArray
+    )
+
+    private inner class CccdCoordinator(
+        private val onAllDescriptorsWritten: (BluetoothGatt) -> Unit
+    ) {
+        private val queue = ArrayDeque<PendingDescriptor>()
+        private var inFlight = false
+        private var mtuDeferred = false
+
+        fun reset() {
+            queue.clear()
+            inFlight = false
+            mtuDeferred = false
+        }
+
+        fun enqueue(descriptor: BluetoothGattDescriptor, value: ByteArray) {
+            queue.addLast(PendingDescriptor(descriptor, value))
+        }
+
+        fun hasPendingDescriptors(): Boolean = queue.isNotEmpty()
+
+        fun deferMtuUntilComplete() {
+            mtuDeferred = true
+        }
+
+        fun flush(gatt: BluetoothGatt) {
+            if (inFlight) return
+            val next = if (queue.isEmpty()) null else queue.removeFirst()
+            if (next == null) {
+                if (mtuDeferred) {
+                    mtuDeferred = false
+                    onAllDescriptorsWritten(gatt)
+                }
+                return
+            }
+
+            inFlight = true
+            gatt.writeDescriptorCompat(next.descriptor, next.value)
+        }
+
+        fun onDescriptorWriteComplete(gatt: BluetoothGatt) {
+            inFlight = false
+            flush(gatt)
         }
     }
 }
