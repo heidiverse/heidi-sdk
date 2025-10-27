@@ -1,28 +1,9 @@
-/* Copyright 2024 Ubique Innovation AG
-
-Licensed to the Apache Software Foundation (ASF) under one
-or more contributor license agreements.  See the NOTICE file
-distributed with this work for additional information
-regarding copyright ownership.  The ASF licenses this file
-to you under the Apache License, Version 2.0 (the
-"License"); you may not use this file except in compliance
-with the License.  You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing,
-software distributed under the License is distributed on an
-"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-KIND, either express or implied.  See the License for the
-specific language governing permissions and limitations
-under the License.   
- */
 package ch.ubique.heidi.proximity.ble.server
 
-import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
-import ch.ubique.heidi.util.log.Logger
+import kotlinx.cinterop.ObjCSignatureOverride
 import platform.CoreBluetooth.CBATTRequest
-import platform.CoreBluetooth.CBManagerState
+import platform.CoreBluetooth.CBCentral
+import platform.CoreBluetooth.CBCharacteristic
 import platform.CoreBluetooth.CBPeripheralManager
 import platform.CoreBluetooth.CBPeripheralManagerDelegateProtocol
 import platform.CoreBluetooth.CBService
@@ -30,23 +11,67 @@ import platform.Foundation.NSError
 import platform.darwin.NSObject
 
 internal class GattServerDelegate(
-	private val listener: BleGattServerListener?,
-	private val isReady: (Boolean) -> Unit
+    private val handler: Handler
 ) : NSObject(), CBPeripheralManagerDelegateProtocol {
 
-	override fun peripheralManager(peripheral: CBPeripheralManager, didReceiveReadRequest: CBATTRequest) {
-		listener?.onCharacteristicReadRequest(BleGattCharacteristic(didReceiveReadRequest.characteristic))
-	}
+    internal interface Handler {
+        fun onStateUpdated(peripheral: CBPeripheralManager)
+        fun onRead(peripheral: CBPeripheralManager, request: CBATTRequest)
+        fun onWrite(peripheral: CBPeripheralManager, requests: List<*>)
+        fun onStartAdvertising(peripheral: CBPeripheralManager, error: NSError?)
+        fun onAddService(peripheral: CBPeripheralManager, service: CBService, error: NSError?)
+        fun onReadyToUpdateSubscribers(peripheral: CBPeripheralManager)
+        fun onSubscribe(peripheral: CBPeripheralManager, central: CBCentral, characteristic: CBCharacteristic)
+    }
 
-	override fun peripheralManager(peripheral: CBPeripheralManager, didReceiveWriteRequests: List<*>) {
-		didReceiveWriteRequests.forEach {
-			val request = it as CBATTRequest
-			listener?.onCharacteristicWriteRequest(BleGattCharacteristic(request.characteristic))
-		}
-	}
+    override fun peripheralManagerDidUpdateState(peripheral: CBPeripheralManager) {
+        handler.onStateUpdated(peripheral)
+    }
 
-	override fun peripheralManagerDidUpdateState(peripheral: CBPeripheralManager) {
-		Logger.debug("Peripheral Manager did update state ${peripheral.state} / ${peripheral.isAdvertising()} ")
-		isReady(peripheral.state == 5L)
-	}
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        didReceiveReadRequest: CBATTRequest
+    ) {
+        handler.onRead(peripheral, didReceiveReadRequest)
+    }
+
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        didReceiveWriteRequests: List<*>
+    ) {
+        handler.onWrite(peripheral, didReceiveWriteRequests)
+    }
+
+    override fun peripheralManagerDidStartAdvertising(
+        peripheral: CBPeripheralManager,
+        error: NSError?
+    ) {
+        handler.onStartAdvertising(peripheral, error)
+    }
+
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        didAddService: CBService,
+        error: NSError?
+    ) {
+        handler.onAddService(peripheral, didAddService, error)
+    }
+
+    override fun peripheralManagerIsReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
+        handler.onReadyToUpdateSubscribers(peripheral)
+    }
+
+    @ObjCSignatureOverride
+    override fun peripheralManager(
+        peripheral: CBPeripheralManager,
+        central: CBCentral,
+        didSubscribeToCharacteristic: CBCharacteristic
+    ) {
+        handler.onSubscribe(peripheral, central, didSubscribeToCharacteristic)
+    }
+
+    fun peripheralManagerIsReady(toUpdateSubscribers: CBPeripheralManager) {
+        handler.onReadyToUpdateSubscribers(toUpdateSubscribers)
+    }
 }
+
