@@ -34,6 +34,7 @@ import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.wallet.ProximityWallet
 import ch.ubique.heidi.proximity.wallet.ProximityWalletState
+import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.toCbor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -109,6 +110,9 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 				"vct" to "beta-id",
 				"firstName" to "Pascal",
 				"lastName" to "Tester",
+				"credentialNumber" to "0000008765293866749",
+				"photo" to "",
+				"dateOfBirth" to "19.06.1988",
 				"age_over_16" to true,
 				"age_over_18" to true,
 				"age_over_65" to false
@@ -116,6 +120,9 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 				disclosures = listOf(
 					listOf("firstName").toClaimsPointer()!!,
 					listOf("lastName").toClaimsPointer()!!,
+					listOf("credentialNumber").toClaimsPointer()!!,
+					listOf("photo").toClaimsPointer()!!,
+					listOf("dateOfBirth").toClaimsPointer()!!,
 					listOf("age_over_16").toClaimsPointer()!!,
 					listOf("age_over_18").toClaimsPointer()!!,
 					listOf("age_over_65").toClaimsPointer()!!,
