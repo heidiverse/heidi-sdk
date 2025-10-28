@@ -56,6 +56,7 @@ import org.koin.dsl.module
 import uniffi.heidi_dcql_rust.CredentialQuery
 import uniffi.heidi_dcql_rust.DcqlQuery
 import uniffi.heidi_dcql_rust.Meta
+import uniffi.heidi_util_rust.Value
 import java.security.SecureRandom
 import java.util.Base64
 import kotlin.uuid.ExperimentalUuidApi
@@ -246,12 +247,12 @@ class BluetoothViewModel(
 			// to already parse the token(s) here (in an early version we anyways only ever have one token) and load keys (did-logs etc.)
 			// and check status list. So the later `CheckVpTokenCallback` does not need to run async/suspending functions
 
-			val result = checkDcqlPresentation(dcqlQuery, dcqlPresentation, object: CheckVpTokenCallback {
-				override fun check(
-					credentialType: CredentialType,
-					vpToken: String,
-					queryId: String,
-				): Map<String, Any> {
+				val result = checkDcqlPresentation(dcqlQuery, dcqlPresentation, object: CheckVpTokenCallback {
+					override fun check(
+						credentialType: CredentialType,
+						vpToken: String,
+						queryId: String,
+					): Map<String, Value> {
 					//TODO: This should use credentialType to switch on the actual type and then use
 					// the corresponding format types to verify the credential.
 					// In a first version we only support SD-JWT, so we should make sure the classic SD-JWt properties

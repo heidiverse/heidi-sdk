@@ -19,10 +19,9 @@ under the License.
  */
 package ch.ubique.heidi.sample.verifier.data.dto
 
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
+import uniffi.heidi_util_rust.Value
 
-typealias VerificationDisclosureMap = Map<String, Map<String, Any>>
+typealias VerificationDisclosureMap = Map<String, Map<String, Value>>
 
 
 data class VerificationDisclosureDto(
