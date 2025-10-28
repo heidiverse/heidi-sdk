@@ -61,7 +61,7 @@ typealias DcqlPresentation = Map<String, String>
 fun interface CheckVpTokenCallback {
     // Makes Java aware that this function can throw exceptions
     @Throws(Exception::class)
-    fun check(credentialType: CredentialType, vpToken: String, queryId: String): Map<String, Any>
+    fun check(credentialType: CredentialType, vpToken: String, queryId: String): Map<String, Value>
 }
 
 open class DcqlVerificationException(message: String) : Exception(message)
@@ -278,8 +278,8 @@ private fun getCredentialType(vpToken: String, expectedFormat: String): Result<C
 private fun checkCredentialQuery(
     query: CredentialQuery,
     vpTokens: DcqlPresentation,
-    checkVpToken: (credentialType: CredentialType, vpToken: String, queryId: String) -> Map<String, Any>,
-): Result<Map<String, Any>> {
+    checkVpToken: (credentialType: CredentialType, vpToken: String, queryId: String) -> Map<String, Value>,
+): Result<Map<String, Value>> {
     val vpToken =
         vpTokens[query.id] ?: return Result.failure(CredentialQueryNotFoundException(query.id))
 
@@ -358,9 +358,9 @@ private fun checkCredentialSetQuery(
     query: CredentialSetQuery,
     credentialQueries: List<CredentialQuery>,
     vpTokens: DcqlPresentation,
-    checkVpToken: (credentialType: CredentialType, vpToken: String, queryId: String) -> Map<String, Any>,
-): Result<Map<String, Map<String, Any>>> {
-    if (!query.required) return Result.success(mapOf())
+    checkVpToken: (credentialType: CredentialType, vpToken: String, queryId: String) -> Map<String, Value>,
+): Result<Map<String, Map<String, Value>>> {
+    if (!query.required) return Result.success(emptyMap<String, Map<String, Value>>())
 
     // To satisfy a Credential Set Query, the Wallet MUST return presentations
     // of a set of Credentials that match to one of the options inside the
@@ -384,8 +384,8 @@ fun checkDcqlPresentation(
     query: DcqlQuery,
     vpTokens: DcqlPresentation,
     checkVpToken: CheckVpTokenCallback,
-): Result<Map<String, Map<String, Any>>> {
-    val credentialQueries = query.credentials ?: return Result.success(mapOf())
+): Result<Map<String, Map<String, Value>>> {
+    val credentialQueries = query.credentials ?: return Result.success(emptyMap<String, Map<String, Value>>())
     val credentialSetQueries = query.credentialSets
 
     // The Verifier requests presentations of Credentials to be returned satisfying
