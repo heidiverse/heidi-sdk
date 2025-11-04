@@ -32,8 +32,6 @@ import ch.ubique.heidi.proximity.ble.server.BleGattServerListener
 import ch.ubique.heidi.proximity.ble.server.GattRequestResult
 import ch.ubique.heidi.proximity.di.HeidiProximityKoinComponent
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
-import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpCharacteristicsFactory
-import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
 import ch.ubique.heidi.util.extensions.asBytes
 import ch.ubique.heidi.util.extensions.asOrderedObject
 import ch.ubique.heidi.util.extensions.get
@@ -69,8 +67,8 @@ internal class MdlCentralClientModeTransportProtocol(
 	private var gattClient: BleGattClient? = null
 	override var sessionTranscript: Value? = null
 
-	fun isSupported() : Boolean {
-		if(this.role == Role.VERIFIER) {
+	fun isSupported(): Boolean {
+		if (this.role == Role.VERIFIER) {
 			return gattFactory.isBleAdvSupported()
 		}
 		return true
@@ -81,18 +79,18 @@ internal class MdlCentralClientModeTransportProtocol(
 	* as they are part of the session transcript and also the peer public key.
 	* For the mDl reader we need the public key, which was presented in the QR-Code.
 	* */
-	override fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?) : SessionCipher {
+	override fun getSessionCipher(engagementBytes: ByteArray, eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?): SessionCipher {
 		sessionTranscript = listOf(24 to engagementBytes, 24 to eReaderKeyBytes, Value.Null).toCbor()
 		val sessionTranscriptBs = encodeCbor(sessionTranscript!!)
 		val sessionTranscriptBytes = encodeCbor(
 			(24 to sessionTranscriptBs).toCbor()
 		)
 		// Use the peerKey if we are the mdl reader
-		val coseKey = decodeCbor( peerCoseKey?: eReaderKeyBytes)
+		val coseKey = decodeCbor(peerCoseKey ?: eReaderKeyBytes)
 		val x = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes()!!
 		val y = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes()!!
 		val publicKey = byteArrayOf(0x04) + x + y
-		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes,publicKey)!!
+		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes, publicKey)!!
 	}
 
 	override suspend fun connect() {
@@ -198,7 +196,6 @@ internal class MdlCentralClientModeTransportProtocol(
 
 		override fun onPeerConnected() {
 			gattServer?.stopAdvertising()
-			reportConnected()
 		}
 
 		override fun onPeerDisconnected() {
