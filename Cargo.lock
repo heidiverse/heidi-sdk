@@ -2057,7 +2057,7 @@ dependencies = [
 [[package]]
 name = "dif-presentation-exchange"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/openid4vc.git?branch=presentation#3a34acb0dc1a75e74e5671060b04ab2c89fc4012"
+source = "git+https://github.com/heidiverse/openid4vc.git?branch=dev#36004f1342369ea3a7f11b518b5728160a4229f3"
 dependencies = [
  "getset",
  "jsonpath_lib",
@@ -3157,7 +3157,7 @@ dependencies = [
 [[package]]
 name = "heidi-jwt"
 version = "0.1.2"
-source = "git+https://github.com/UbiqueInnovation/heidi-jwt#a22d79f752c89e02a538b00924259d5db219850a"
+source = "git+https://github.com/heidiverse/heidi-jwt#6b5ba2c6ac6ad914a4458ab2b0f4587b680b78c4"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5144,7 +5144,7 @@ dependencies = [
 [[package]]
 name = "oid4vc"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/openid4vc.git?branch=presentation#3a34acb0dc1a75e74e5671060b04ab2c89fc4012"
+source = "git+https://github.com/heidiverse/openid4vc.git?branch=dev#36004f1342369ea3a7f11b518b5728160a4229f3"
 dependencies = [
  "dif-presentation-exchange",
  "oid4vc-core",
@@ -5156,7 +5156,7 @@ dependencies = [
 [[package]]
 name = "oid4vc-core"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/openid4vc.git?branch=presentation#3a34acb0dc1a75e74e5671060b04ab2c89fc4012"
+source = "git+https://github.com/heidiverse/openid4vc.git?branch=dev#36004f1342369ea3a7f11b518b5728160a4229f3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5180,7 +5180,7 @@ dependencies = [
 [[package]]
 name = "oid4vci"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/openid4vc.git?branch=presentation#3a34acb0dc1a75e74e5671060b04ab2c89fc4012"
+source = "git+https://github.com/heidiverse/openid4vc.git?branch=dev#36004f1342369ea3a7f11b518b5728160a4229f3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5210,7 +5210,7 @@ dependencies = [
 [[package]]
 name = "oid4vp"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/openid4vc.git?branch=presentation#3a34acb0dc1a75e74e5671060b04ab2c89fc4012"
+source = "git+https://github.com/heidiverse/openid4vc.git?branch=dev#36004f1342369ea3a7f11b518b5728160a4229f3"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7554,7 +7554,7 @@ dependencies = [
 [[package]]
 name = "siopv2"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/openid4vc.git?branch=presentation#3a34acb0dc1a75e74e5671060b04ab2c89fc4012"
+source = "git+https://github.com/heidiverse/openid4vc.git?branch=dev#36004f1342369ea3a7f11b518b5728160a4229f3"
 dependencies = [
  "anyhow",
  "async-trait",

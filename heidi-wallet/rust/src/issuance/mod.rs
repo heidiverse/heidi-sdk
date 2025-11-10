@@ -49,9 +49,9 @@ mod issuance {
                 AuthorizationRequestReference, CredentialOffer, CredentialOfferParameters,
                 InputMode, PreAuthorizedCode,
             },
-            credential_request::CredentialProofs::{NoProof, Proof, Proofs},
+            credential_request::CredentialProofs::{NoProof, Proofs},
             credential_response::CredentialResponseType,
-            proof::{KeyAttestationMetadata, KeyProofType, KeyProofsType, ProofType},
+            proof::{KeyAttestationMetadata, KeyProofsType, ProofType},
             token_response::{StringOrInt, TokenResponse},
             wallet::{
                 content_encryption::{base64_encode_bytes, ContentDecryptor, RsaOAEP256},
@@ -2001,9 +2001,7 @@ mod issuance {
                     let proof = if key_type == KeyType::None {
                         NoProof
                     } else {
-                        Proof(Some(KeyProofType::Attestation {
-                            attestation: key_attestation,
-                        }))
+                        Proofs(KeyProofsType::Attestation(vec![key_attestation]))
                     };
 
                     wallet
