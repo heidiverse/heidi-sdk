@@ -149,17 +149,25 @@ class PresentationProcessKt private constructor(
     private var documentRequest: DocumentRequest? = null,
     private var sessionTranscript: Value? = null,
     private var dcqlMismatchInfo: DcqlMismatchInfo? = null,
-    private var bbsPresentTwo: Boolean = false
+    private var bbsPresentTwo: Boolean = false,
+    private var useLegacyVpToken: Boolean = false,
 ) {
     companion object {
         suspend fun initialize(
             blob: String,
             client: HttpClient,
             signingProvider: SigningProvider,
-            origin: String? = null
+            origin: String? = null,
+            useLegacyVpToken: Boolean = false,
         ): PresentationProcessKt {
             val result = parsePresentationOffer(blob)
-            return PresentationProcessKt(client, signingProvider, result, origin = origin)
+            return PresentationProcessKt(
+                client,
+                signingProvider,
+                result,
+                origin = origin,
+                useLegacyVpToken = useLegacyVpToken
+            )
         }
 
         fun initializeProximity(
@@ -791,7 +799,16 @@ class PresentationProcessKt private constructor(
                             ?: return PresentationWorkflow.Error("Invalid Credential Type")
                         val innerObject = combinedVpToken.asObject()?.toMutableMap()
                             ?: return PresentationWorkflow.Error("VP Token has wrong format")
-                        innerObject.put(rep.key, Value.String(theToken))
+
+                        val tokenValue = if (useLegacyVpToken) {
+                            // OpenID4VP Draft 24
+                            Value.String(theToken)
+                        } else {
+                            // OpenID4VP 1.0
+                            Value.Array(listOf(Value.String(theToken)))
+                        }
+
+                        innerObject.put(rep.key, tokenValue)
                         combinedVpToken = Value.Object(innerObject)
                     } else {
                         val presentableCredential: PresentableCredential =

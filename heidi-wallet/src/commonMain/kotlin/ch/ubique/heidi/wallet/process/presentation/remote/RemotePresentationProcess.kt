@@ -101,9 +101,10 @@ class RemotePresentationProcess(
 		isDCApi: Boolean = false,
 		selectedId: String? = null,
 		origin: String? = null,
+		useLegacyVpToken: Boolean = false,
 	): RemotePresentationProcessStep {
 		return try {
-			presentationProcess = PresentationProcessKt.initialize(qrCodeData, client, signingProvider, origin = origin)
+			presentationProcess = PresentationProcessKt.initialize(qrCodeData, client, signingProvider, origin = origin, useLegacyVpToken = useLegacyVpToken)
 			initializeMetadata(qrCodeData, origin, presentationProcess.authRequest!!, presentationProcess.data?.originalJwt).getOrThrow()
 			this.presentationScope = presentationScope
 			this.authSession = authSession
