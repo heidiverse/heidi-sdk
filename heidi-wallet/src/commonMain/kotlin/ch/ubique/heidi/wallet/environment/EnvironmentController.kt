@@ -28,10 +28,24 @@ object EnvironmentController {
 		EnvironmentController.environment = environment
 	}
 
-	// TODO: make configurable from wallet
 	fun getHsmBackendUrl() = when (environment) {
 		EnvironmentType.DEV -> "https://sprind-eudi-hsm-connector-ws-dev.ubique.ch/v1"
 		EnvironmentType.PROD -> "https://sprind-eudi-hsm-connector-ws-prod.ubique.ch/v1"
+	}
+
+	fun getHeidiUrl() = when (environment) {
+		EnvironmentType.DEV -> "https://heidi-dev.ubique.ch"
+		EnvironmentType.PROD -> "https://heidi.ubique.ch"
+	}
+
+	fun getHeidiBackupUrl() = when (environment) {
+		EnvironmentType.DEV -> "https://sprind-eudi-backup-ws-dev.ubique.ch"
+		EnvironmentType.PROD -> "https://sprind-eudi-backup-ws-prod.ubique.ch"
+	}
+
+	fun getIssuerBackendUrl() = when (environment) {
+		EnvironmentType.DEV -> "https://ssi-issuer-backend-ws-dev.ubique.ch"
+		EnvironmentType.PROD -> "https://ssi-issuer-backend-ws-prod.ubique.ch"
 	}
 
 }
