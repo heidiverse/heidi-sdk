@@ -1214,169 +1214,42 @@ mod issuance {
             token_endpoint_auth_methods_supported: Option<Vec<String>>,
         ) -> Result<AuthorizationStep, ApiError> {
             let cred_offer = resolve_credential_offer(offer, &self.client).await?;
+            self.initialize_issuance_with_credential_offer(
+                cred_offer,
+                code_challenge_methods_supported,
+                first_party_usage,
+                pushed_authorization_request_endpoint,
+                authorization_endpoint,
+                authorization_challenge_endpoint,
+                with_hsm_wallet_attestation,
+                token_endpoint_auth_methods_supported,
+            )
+            .await
+        }
 
-            // let credential_issuer_url = cred_offer.credential_issuer.clone();
-            let credential_issuer_url = Url::parse(&cred_offer.credential_issuer).map_err(|e| {
-                ApiError::Generic(GenericError::Inner(crate::error::InnerError::Anyhow(
-                    anyhow!(e),
-                )))
-            })?;
-            let credential_issuer_metadata = self
-                .metadata_fetcher
-                .get_credential_issuer_metadata(credential_issuer_url.clone())
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-            {
-                let mut cred_meta = self.credential_issuer_metadata.lock()?;
-                *cred_meta = Some(credential_issuer_metadata.clone());
-            }
-
-            // Select all supported credential configurations and as a byproduct determine necessary "scopes" for authorization
-            let mut scopes = HashSet::new();
-            let mut chosen_cred_config_ids = Vec::new();
-            for id in cred_offer.credential_configuration_ids.iter() {
-                if let Some(config) = credential_issuer_metadata
-                    .credential_configurations_supported
-                    .get(id)
-                {
-                    if !is_supported_credential_configuration(config) {
-                        continue;
-                    }
-                    chosen_cred_config_ids.push(id);
-                    if let Some(scope) = &config.scope {
-                        scopes.insert(scope.clone());
-                    }
-                }
-            }
-            {
-                let mut ccf = lock!(self.chosen_cred_config_ids => |_e| {
-                    Err(anyhow!("poison").into())
-                });
-                *ccf = chosen_cred_config_ids.into_iter().cloned().collect();
-            }
-            let scope: String = scopes.into_iter().collect::<Vec<_>>().join(" ");
-
-            if let Some(pre_authorized_code) = cred_offer
-                .grants
-                .as_ref()
-                .and_then(|grants| grants.pre_authorized_code.clone())
-            {
-                let mut pre_code = self.pre_authorized_code.lock()?;
-
-                *pre_code = Some(pre_authorized_code.clone());
-                if let Some(tx_code) = pre_authorized_code.tx_code {
-                    let numeric = !tx_code
-                        .input_mode
-                        .is_some_and(|input_mode| input_mode == InputMode::Text);
-                    return Ok(AuthorizationStep::EnterTransactionCode {
-                        numeric,
-                        length: tx_code.length,
-                        description: tx_code.description,
-                    });
-                }
-                return Ok(AuthorizationStep::None);
-            }
-
-            let code_challenge_method =
-                get_supported_code_challenge_method(code_challenge_methods_supported)?;
-            let code_verifier = generate_code_verifier();
-            let code_challenge = generate_code_challenge(&code_verifier, &code_challenge_method);
-            let state = generate_code_verifier();
-            {
-                let mut auth_state = self.auth_state.lock()?;
-                *auth_state = Some(AuthState {
-                    state: state.clone(),
-                    code_verifier,
-                });
-            }
-            let grant_authorization_code_issuer_state = cred_offer.grants.as_ref().and_then(|g| {
-                g.authorization_code
-                    .as_ref()
-                    .and_then(|a| a.issuer_state.as_ref())
-            });
-
-            if first_party_usage {
-                return self
-                    .handle_first_party(
-                        authorization_challenge_endpoint,
-                        code_challenge,
-                        code_challenge_method,
-                        state,
-                        scope,
-                        grant_authorization_code_issuer_state,
-                        None,
-                    )
-                    .await;
-            }
-
-            if let Some(par_url) = pushed_authorization_request_endpoint
-                .as_ref()
-                .and_then(|url| Url::parse(url).ok())
-            {
-                let client_attestation = self
-                    .get_optional_client_attestation(
-                        with_hsm_wallet_attestation
-                            .map(|hsm| Arc::new(HsmSupportObject::with_hsm(hsm))),
-                        token_endpoint_auth_methods_supported,
-                    )
-                    .await?;
-                let par = PushedAuthorizationRequest {
-                    response_type: RESPONSE_TYPE_CODE.to_string(),
-                    client_id: self.oidc_settings.client_id.clone(),
-                    redirect_uri: Some(self.oidc_settings.redirect_url.clone()),
-                    scope: Some(scope.clone()),
-                    state: Some(state.clone()),
-                    code_challenge: Some(code_challenge.clone()),
-                    code_challenge_method: Some(code_challenge_method.clone()),
-                    issuer_state: grant_authorization_code_issuer_state.cloned(),
-                };
-
-                let result = self
-                    .metadata_fetcher
-                    .push_authorization_request(par_url.clone(), par, client_attestation)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("failed to push authorization requewst: {e}"))?;
-
-                {
-                    let mut arf = self.authorization_request_reference.lock()?;
-                    *arf = Some(result.clone());
-                }
-
-                let mut endpoint = authorization_endpoint
-                    .as_ref()
-                    .and_then(|url| Url::parse(url).ok())
-                    .ok_or(ApiError::from(anyhow::anyhow!("no authorization endpoint")))?
-                    .clone();
-                let mut query_parameters = endpoint.query_pairs_mut();
-                query_parameters.append_pair("client_id", &self.oidc_settings.client_id);
-                query_parameters.append_pair("request_uri", result.request_uri.as_str());
-                Ok(AuthorizationStep::BrowseUrl {
-                    url: query_parameters.finish().to_string(),
-                    auth_session: None,
-                })
-            } else {
-                // Return URL for auth without PAR
-                let mut endpoint = authorization_endpoint
-                    .as_ref()
-                    .and_then(|url| Url::parse(url).ok())
-                    .ok_or(ApiError::from(anyhow::anyhow!("no authorization endpoint")))?
-                    .clone();
-                let mut query_parameters = endpoint.query_pairs_mut();
-                query_parameters.append_pair("response_type", RESPONSE_TYPE_CODE);
-                query_parameters.append_pair("client_id", &self.oidc_settings.client_id);
-                query_parameters.append_pair("redirect_uri", &self.oidc_settings.redirect_url);
-                query_parameters.append_pair("scope", &scope);
-                query_parameters.append_pair("state", &state);
-                query_parameters.append_pair("code_challenge", &code_challenge);
-                query_parameters.append_pair("code_challenge_method", &code_challenge_method);
-                if let Some(issuer_state) = grant_authorization_code_issuer_state {
-                    query_parameters.append_pair("issuer_state", issuer_state);
-                }
-                Ok(AuthorizationStep::BrowseUrl {
-                    url: query_parameters.finish().to_string(),
-                    auth_session: None,
-                })
-            }
+        pub async fn initialize_issuance_with_credential_offer_json(
+            self: Arc<Self>,
+            cred_offer: String,
+            code_challenge_methods_supported: Option<Vec<String>>,
+            first_party_usage: bool,
+            pushed_authorization_request_endpoint: Option<String>,
+            authorization_endpoint: Option<String>,
+            authorization_challenge_endpoint: Option<String>,
+            with_hsm_wallet_attestation: Option<Arc<Hsm>>,
+            token_endpoint_auth_methods_supported: Option<Vec<String>>,
+        ) -> Result<AuthorizationStep, ApiError> {
+            let cred_offer: CredentialOfferParameters = serde_json::from_str(&cred_offer)?;
+            self.initialize_issuance_with_credential_offer(
+                cred_offer,
+                code_challenge_methods_supported,
+                first_party_usage,
+                pushed_authorization_request_endpoint,
+                authorization_endpoint,
+                authorization_challenge_endpoint,
+                with_hsm_wallet_attestation,
+                token_endpoint_auth_methods_supported,
+            )
+            .await
         }
 
         /// Continues the authorization_challenge
@@ -1610,6 +1483,181 @@ mod issuance {
     }
 
     impl OID4VciIssuance {
+        async fn initialize_issuance_with_credential_offer(
+            self: Arc<Self>,
+            cred_offer: CredentialOfferParameters,
+            code_challenge_methods_supported: Option<Vec<String>>,
+            first_party_usage: bool,
+            pushed_authorization_request_endpoint: Option<String>,
+            authorization_endpoint: Option<String>,
+            authorization_challenge_endpoint: Option<String>,
+            with_hsm_wallet_attestation: Option<Arc<Hsm>>,
+            token_endpoint_auth_methods_supported: Option<Vec<String>>,
+        ) -> Result<AuthorizationStep, ApiError> {
+            // let credential_issuer_url = cred_offer.credential_issuer.clone();
+            let credential_issuer_url = Url::parse(&cred_offer.credential_issuer).map_err(|e| {
+                ApiError::Generic(GenericError::Inner(crate::error::InnerError::Anyhow(
+                    anyhow!(e),
+                )))
+            })?;
+            let credential_issuer_metadata = self
+                .metadata_fetcher
+                .get_credential_issuer_metadata(credential_issuer_url.clone())
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+            {
+                let mut cred_meta = self.credential_issuer_metadata.lock()?;
+                *cred_meta = Some(credential_issuer_metadata.clone());
+            }
+
+            // Select all supported credential configurations and as a byproduct determine necessary "scopes" for authorization
+            let mut scopes = HashSet::new();
+            let mut chosen_cred_config_ids = Vec::new();
+            for id in cred_offer.credential_configuration_ids.iter() {
+                if let Some(config) = credential_issuer_metadata
+                    .credential_configurations_supported
+                    .get(id)
+                {
+                    if !is_supported_credential_configuration(config) {
+                        continue;
+                    }
+                    chosen_cred_config_ids.push(id);
+                    if let Some(scope) = &config.scope {
+                        scopes.insert(scope.clone());
+                    }
+                }
+            }
+            {
+                let mut ccf = lock!(self.chosen_cred_config_ids => |_e| {
+                    Err(anyhow!("poison").into())
+                });
+                *ccf = chosen_cred_config_ids.into_iter().cloned().collect();
+            }
+            let scope: String = scopes.into_iter().collect::<Vec<_>>().join(" ");
+
+            if let Some(pre_authorized_code) = cred_offer
+                .grants
+                .as_ref()
+                .and_then(|grants| grants.pre_authorized_code.clone())
+            {
+                let mut pre_code = self.pre_authorized_code.lock()?;
+
+                *pre_code = Some(pre_authorized_code.clone());
+                if let Some(tx_code) = pre_authorized_code.tx_code {
+                    let numeric = !tx_code
+                        .input_mode
+                        .is_some_and(|input_mode| input_mode == InputMode::Text);
+                    return Ok(AuthorizationStep::EnterTransactionCode {
+                        numeric,
+                        length: tx_code.length,
+                        description: tx_code.description,
+                    });
+                }
+                return Ok(AuthorizationStep::None);
+            }
+
+            let code_challenge_method =
+                get_supported_code_challenge_method(code_challenge_methods_supported)?;
+            let code_verifier = generate_code_verifier();
+            let code_challenge = generate_code_challenge(&code_verifier, &code_challenge_method);
+            let state = generate_code_verifier();
+            {
+                let mut auth_state = self.auth_state.lock()?;
+                *auth_state = Some(AuthState {
+                    state: state.clone(),
+                    code_verifier,
+                });
+            }
+            let grant_authorization_code_issuer_state = cred_offer.grants.as_ref().and_then(|g| {
+                g.authorization_code
+                    .as_ref()
+                    .and_then(|a| a.issuer_state.as_ref())
+            });
+
+            if first_party_usage {
+                return self
+                    .handle_first_party(
+                        authorization_challenge_endpoint,
+                        code_challenge,
+                        code_challenge_method,
+                        state,
+                        scope,
+                        grant_authorization_code_issuer_state,
+                        None,
+                    )
+                    .await;
+            }
+
+            if let Some(par_url) = pushed_authorization_request_endpoint
+                .as_ref()
+                .and_then(|url| Url::parse(url).ok())
+            {
+                let client_attestation = self
+                    .get_optional_client_attestation(
+                        with_hsm_wallet_attestation
+                            .map(|hsm| Arc::new(HsmSupportObject::with_hsm(hsm))),
+                        token_endpoint_auth_methods_supported,
+                    )
+                    .await?;
+                let par = PushedAuthorizationRequest {
+                    response_type: RESPONSE_TYPE_CODE.to_string(),
+                    client_id: self.oidc_settings.client_id.clone(),
+                    redirect_uri: Some(self.oidc_settings.redirect_url.clone()),
+                    scope: Some(scope.clone()),
+                    state: Some(state.clone()),
+                    code_challenge: Some(code_challenge.clone()),
+                    code_challenge_method: Some(code_challenge_method.clone()),
+                    issuer_state: grant_authorization_code_issuer_state.cloned(),
+                };
+
+                let result = self
+                    .metadata_fetcher
+                    .push_authorization_request(par_url.clone(), par, client_attestation)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("failed to push authorization requewst: {e}"))?;
+
+                {
+                    let mut arf = self.authorization_request_reference.lock()?;
+                    *arf = Some(result.clone());
+                }
+
+                let mut endpoint = authorization_endpoint
+                    .as_ref()
+                    .and_then(|url| Url::parse(url).ok())
+                    .ok_or(ApiError::from(anyhow::anyhow!("no authorization endpoint")))?
+                    .clone();
+                let mut query_parameters = endpoint.query_pairs_mut();
+                query_parameters.append_pair("client_id", &self.oidc_settings.client_id);
+                query_parameters.append_pair("request_uri", result.request_uri.as_str());
+                Ok(AuthorizationStep::BrowseUrl {
+                    url: query_parameters.finish().to_string(),
+                    auth_session: None,
+                })
+            } else {
+                // Return URL for auth without PAR
+                let mut endpoint = authorization_endpoint
+                    .as_ref()
+                    .and_then(|url| Url::parse(url).ok())
+                    .ok_or(ApiError::from(anyhow::anyhow!("no authorization endpoint")))?
+                    .clone();
+                let mut query_parameters = endpoint.query_pairs_mut();
+                query_parameters.append_pair("response_type", RESPONSE_TYPE_CODE);
+                query_parameters.append_pair("client_id", &self.oidc_settings.client_id);
+                query_parameters.append_pair("redirect_uri", &self.oidc_settings.redirect_url);
+                query_parameters.append_pair("scope", &scope);
+                query_parameters.append_pair("state", &state);
+                query_parameters.append_pair("code_challenge", &code_challenge);
+                query_parameters.append_pair("code_challenge_method", &code_challenge_method);
+                if let Some(issuer_state) = grant_authorization_code_issuer_state {
+                    query_parameters.append_pair("issuer_state", issuer_state);
+                }
+                Ok(AuthorizationStep::BrowseUrl {
+                    url: query_parameters.finish().to_string(),
+                    auth_session: None,
+                })
+            }
+        }
+
         async fn handle_first_party(
             self: &Arc<Self>,
             authorization_challenge_endpoint: Option<String>,
