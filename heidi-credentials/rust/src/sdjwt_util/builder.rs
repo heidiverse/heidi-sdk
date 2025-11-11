@@ -83,6 +83,7 @@ impl BuilderImpl {
             &format!("Disclosures: {:?}", current),
         );
 
+        let ptr_len = ptr.len();
         let mut it = ptr.into_iter().peekable();
         while let Some(p) = it.next() {
             let index = match p {
@@ -119,6 +120,18 @@ impl BuilderImpl {
                         "Expected leaf node at end of path: {ptr_str}, found: {node:?}"
                     )))
                 }
+            }
+        }
+
+        // There was something in the path, but we didn't return it yet
+        if ptr_len > 0 {
+            let disclosures = current
+                .values()
+                .flat_map(|node| node.get_disclosures())
+                .collect::<Vec<_>>();
+
+            if !disclosures.is_empty() {
+                return Ok(disclosures.iter().map(|d| d.enc.to_string()).collect());
             }
         }
 
