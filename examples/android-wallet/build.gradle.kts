@@ -20,6 +20,7 @@ android {
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 	}
+	flavorDimensions += "version"
 
 	buildTypes {
 		release {

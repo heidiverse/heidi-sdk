@@ -5,10 +5,6 @@ plugins {
 	alias(libs.plugins.kotlin.serialization)
 	alias(libs.plugins.compose.compiler)
 
-	alias(libs.plugins.ubique.alpaka)
-	alias(libs.plugins.ubique.preset)
-	alias(libs.plugins.ubique.signing)
-
 	alias(libs.plugins.ksp)
 	alias(libs.plugins.ktorfit)
 }
@@ -28,10 +24,8 @@ android {
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-		buildConfigField("String", "BASE_URL", "\"https://oid4vp-verifier-ws-prod.ubique.ch/\"")
-
-		alpakaUploadKey = System.getenv("ALPAKA_UPLOAD_KEY") ?: ""
 	}
+	flavorDimensions += "version"
 
 	buildTypes {
 		release {
