@@ -19,11 +19,6 @@ plugins {
 	// iOS specific plugins
 	alias(libs.plugins.skie) apply false
 
-	// Ubique plugins
-	alias(libs.plugins.ubique.alpaka) apply false
-	alias(libs.plugins.ubique.preset) apply false
-	alias(libs.plugins.ubique.signing) apply false
-
 	// Rust plugins
 	alias(libs.plugins.uniffi.plugin) apply false
 
