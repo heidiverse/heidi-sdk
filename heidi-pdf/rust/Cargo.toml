@@ -1,0 +1,29 @@
+[package]
+name = "heidi-pdf-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "heidi_pdf_rust"
+
+[dependencies]
+uniffi.workspace = true
+typst = "0.14.0"
+typst-assets = {version = "0.14.0", features = ["fonts"]}
+typst-pdf = "0.14.0"
+ureq = "3.1.2"
+fontdb = "0.16.2"
+# Fetching and unzipping packages
+zune-inflate = { version = "0.2", default-features = false, features = [
+    "gzip",
+    "std",
+] }
+# utils
+time = "0.3"
+ttf-parser = "0.25.1"
+tar = "0.4"
+
+[features]
+default = ["uniffi"]
+uniffi = []
