@@ -96,28 +96,6 @@ compose.resources {
 
 mavenPublishing {
 	coordinates(project.group.toString(), property("ARTIFACT_ID").toString(), project.version.toString())
-}
-
-publishing {
-	repositories {
-		maven {
-			val ubiqueMavenUrl = System.getenv("UB_ARTIFACTORY_URL_ANDROID")
-				?: System.getenv("ARTIFACTORY_URL_ANDROID")
-				?: extra["ubiqueMavenUrl"] as? String
-				?: ""
-			val ubiqueMavenUser = System.getenv("UB_ARTIFACTORY_USER")
-				?: System.getenv("ARTIFACTORY_USER_NAME")
-				?: extra["ubiqueMavenUser"] as? String
-				?: ""
-			val ubiqueMavenPass = System.getenv("UB_ARTIFACTORY_PASSWORD")
-				?: System.getenv("ARTIFACTORY_API_KEY")
-				?: extra["ubiqueMavenPass"] as? String
-				?: ""
-			url = uri(ubiqueMavenUrl)
-			credentials {
-				username = ubiqueMavenUser
-				password = ubiqueMavenPass
-			}
-		}
-	}
+	publishToMavenCentral(true)
+	signAllPublications()
 }

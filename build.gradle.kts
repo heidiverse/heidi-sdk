@@ -32,7 +32,7 @@ plugins {
 }
 
 allprojects {
-	group = "ch.ubique.heidi"
+	group = "ch.heidi-universe"
 	version = getProjectVersion()
 }
 
