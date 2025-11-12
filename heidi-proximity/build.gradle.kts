@@ -3,6 +3,7 @@ plugins {
 	alias(libs.plugins.android.library)
 	alias(libs.plugins.skie)
 	alias(libs.plugins.vanniktech.publish)
+	alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
