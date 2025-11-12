@@ -29,7 +29,7 @@ use typst::{
     ecow::eco_format,
     foundations::{Bytes, Datetime},
     syntax::{package::PackageSpec, FileId, Source, VirtualPath},
-    text::{Font, FontBook},
+    text::{Font, FontBook, FontInfo},
     utils::LazyHash,
     Library, LibraryExt,
 };
@@ -81,7 +81,7 @@ pub struct TypstWrapperWorld {
 impl TypstWrapperWorld {
     pub fn new(root: &str, source: &str, additional_files: HashMap<String, Vec<u8>>) -> Self {
         let root = PathBuf::from(root);
-        let fonts = fonts();
+        let (font_book, fonts) = load_fonts();
         let mut files = HashMap::new();
         for (name, content) in additional_files {
             files.insert(
@@ -92,7 +92,7 @@ impl TypstWrapperWorld {
 
         Self {
             library: LazyHash::new(Library::default()),
-            book: LazyHash::new(FontBook::from_fonts(&fonts)),
+            book: LazyHash::new(font_book),
             root,
             fonts,
             source: Source::detached(source),
@@ -279,6 +279,42 @@ fn fonts() -> Vec<Font> {
         .into_iter()
         .flatten()
         .collect()
+}
+
+pub fn load_fonts() -> (FontBook, Vec<Font>) {
+    let mut fonts = fonts();
+
+    let mut db = fontdb::Database::new();
+    db.load_system_fonts();
+
+    let mut book = FontBook::from_fonts(&fonts);
+    for font_face in db.faces() {
+        let info = db
+            .with_face_data(font_face.id, FontInfo::new)
+            .expect("database must contain this font");
+
+        let path = match &font_face.source {
+            fontdb::Source::File(path) | fontdb::Source::SharedFile(path, _) => path,
+            // We never add binary sources to the database, so there
+            // shouln't be any.
+            fontdb::Source::Binary(_) => continue,
+        };
+        let font_data = std::fs::read(path).unwrap();
+        if let Some(font) = Font::new(typst::foundations::Bytes::new(font_data), font_face.index) {
+            fonts.push(font);
+            book.push(info.unwrap());
+        } else {
+            println!("{:?} not found", path);
+        }
+    }
+    for data in typst_assets::fonts() {
+        let buffer = typst::foundations::Bytes::new(data);
+        for (_, font) in Font::iter(buffer).enumerate() {
+            book.push(font.info().clone());
+            fonts.push(font);
+        }
+    }
+    (book, fonts)
 }
 
 fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
