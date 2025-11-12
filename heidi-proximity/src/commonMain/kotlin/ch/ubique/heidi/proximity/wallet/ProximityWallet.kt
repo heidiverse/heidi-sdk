@@ -250,15 +250,21 @@ class ProximityWallet private constructor(
 							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
 							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
 							//TODO: handle multiple requests and such
-							//TODO: we should correctly unpack the request (dcapi object)
 							//TODO: we should choose which protocols we support and wish (e.g .signed not signed)
 							val dcRequest = Json.decodeFromString<JsonObject>(result.decodeToString())
-							// We for now just pick the first request
-//							val data = dcRequest["requests"]!!.jsonArray[0].jsonObject["data"]!!.jsonObject["request"]?.jsonPrimitive?.content!!
-							// Update our state to openid4vp document selection (and set the origin to the session transcript hash)
-							walletStateMutable.update {
-								ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(result.decodeToString(), origin = origin))
-							}
+							// we just use the first request
+							runCatching {  dcRequest["requests"]!!.jsonArray.getOrNull(0)!!.jsonObject["data"]!!.jsonObject["request"]!!.jsonPrimitive.content }
+								.onFailure { error ->
+									walletStateMutable.update {
+										ProximityWalletState.Error(error)
+									}
+								}
+								.onSuccess { result ->
+									// Update our state to openid4vp document selection (and set the origin to the session transcript hash)
+									walletStateMutable.update {
+										ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(result, origin = origin))
+									}
+								}
 						} else {
 							val request = decodeCbor(result)
 							val docRequests = request.get("docRequests").asArray()!!.map {

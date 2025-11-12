@@ -31,6 +31,7 @@ import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocolExtensions
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
+import ch.ubique.heidi.util.extensions.json
 import ch.ubique.heidi.util.extensions.toCbor
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.*
@@ -122,7 +123,14 @@ class ProximityVerifier<T> private constructor(
 					if(protocol == ProximityProtocol.MDL) {
 						sessionCipher = (transportProtocol as MdlTransportProtocolExtensions).getSessionCipher((engagementBuilder as MdlEngagement).originalData, encodeCbor(readerKey.toCbor()), engagementBuilder.coseKey)
 						scope.launch {
-							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
+							// The session transcript is needed to derive origin
+							val sessionTranscript = (transportProtocol as MdlTransportProtocolExtensions).sessionTranscript ?: run {
+								verifierStateMutable.update {
+									ProximityVerifierState.Error(Throwable("failed to get session transcript"))
+								}
+								return@launch
+							}
+							val sessionTranscriptBytes = encodeCbor (sessionTranscript)
 							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
 							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
 							var documentRequest = documentRequester.createDocumentRequest(origin)
@@ -131,10 +139,30 @@ class ProximityVerifier<T> private constructor(
 									isDcApi = false
 								}
 								is DocumentRequest.OpenId4Vp -> {
-									val data = documentRequest.asDcRequest()
-									val encryptedData = sessionCipher!!.encrypt(data.encodeToByteArray())
-									var readerKeyTagged = (24 to encodeCbor(readerKey!!.toCbor())).toCbor()
-									var sessionEstablishment = MdlSessionEstablishment(readerKeyTagged, encryptedData!!, true)
+									// convert our custom class to the DC-API object
+									val dcRequest = documentRequest.asDcRequest()
+									val serializedDcRequest = json.encodeToString(dcRequest)
+									val currentCipher = sessionCipher ?: run {
+										verifierStateMutable.update {
+											ProximityVerifierState.Error(Throwable("no session cipher"))
+										}
+										return@launch
+									}
+									readerKey ?: run {
+										verifierStateMutable.update {
+											ProximityVerifierState.Error(Throwable("reader key is null"))
+										}
+										return@launch
+									}
+									val encryptedData = currentCipher.encrypt(serializedDcRequest.encodeToByteArray()) ?: run {
+										verifierStateMutable.update {
+											ProximityVerifierState.Error(Throwable("failed to encrypt data"))
+										}
+										return@launch
+									}
+									var readerKeyTagged = (24 to encodeCbor(readerKey.toCbor())).toCbor()
+									// In the session establishment data package, we need to transmit the other part of the key (ours)
+									var sessionEstablishment = MdlSessionEstablishment(readerKeyTagged, encryptedData, true)
 									transportProtocol.sendMessage(sessionEstablishment.asCbor())
 									verifierStateMutable.update {
 										ProximityVerifierState.AwaitingDocuments
@@ -233,9 +261,6 @@ class ProximityVerifier<T> private constructor(
 					}
 					val data = sessionCipher?.decrypt(sessionData.data!!)!!
 					if(isDcApi){
-						//TODO: we need to unpack the dcapi object here. So check what is the newest
-						// model.
-
 						// data should be the dcql response
 						val response = documentRequester.verifySubmittedDocuments(data)
 						verifierStateMutable.update {
@@ -243,6 +268,9 @@ class ProximityVerifier<T> private constructor(
 						}
 					} else {
 						// handle mdl device response
+						verifierStateMutable.update {
+							ProximityVerifierState.Error(Error("mdl not yet implemented"))
+						}
 					}
 				}
 				ProximityProtocol.OPENID4VP -> {

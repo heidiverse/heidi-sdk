@@ -19,6 +19,17 @@ under the License.
  */
 package ch.ubique.heidi.proximity.documents
 
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class DcRequests(val requests : List<DcRequest>) {
+	@Serializable
+	data class DcRequest(val protocol: String, val data : DcData) {
+		@Serializable
+		data class DcData(val request : String)
+	}
+}
+
 sealed interface DocumentRequest {
 
 	data class OpenId4Vp(
@@ -27,8 +38,11 @@ sealed interface DocumentRequest {
 		val origin: String? = null
 //		val presentationDefinition: String,
 	) : DocumentRequest {
-		fun asDcRequest() : String {
-			return this.parJwt
+		fun asDcRequest() : DcRequests {
+			// The PAR request is a signed jwt, so we use the v1-signed protocol
+			// https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#appendix-A.1-4.2
+			val dcRequests = DcRequests(listOf(DcRequests.DcRequest(protocol = "openid4vp-v1-signed", data = DcRequests.DcRequest.DcData(parJwt))))
+			return dcRequests
 		}
 	}
 	data class Mdl (
