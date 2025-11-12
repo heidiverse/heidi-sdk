@@ -28,8 +28,8 @@ reqwest = { version = "0.11", default-features = false, features = [
     "rustls-tls",
     "cookies",
 ] }
-heidi-jwt = { git = "https://github.com/UbiqueInnovation/heidi-jwt"}
-oid4vc = { version = "0.1.0", git = "https://github.com/UbiqueInnovation/openid4vc.git", branch = "presentation" }
+heidi-jwt = { git = "https://github.com/heidiverse/heidi-jwt" }
+oid4vc = { version = "0.1.0", git = "https://github.com/heidiverse/openid4vc.git", branch = "dev" }
 # oid4vc = { version = "0.1.0", path = "../../../openid4vc" , optional = true }
 openidconnect-federation = { git = "https://github.com/UbiqueInnovation/openidconnect-federation.git", branch = "main" }
 # openidconnect-federation = { path = "../openidconnect-federation" }

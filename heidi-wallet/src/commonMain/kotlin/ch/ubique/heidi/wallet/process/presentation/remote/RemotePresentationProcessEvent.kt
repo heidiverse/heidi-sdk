@@ -31,7 +31,8 @@ sealed interface RemotePresentationProcessEvent : ProcessEvent {
 		val authSession: String? = null,
 		val isDCApi: Boolean = false,
 		val selectedId : String? = null,
-		val origin: String? = null
+		val origin: String? = null,
+		val useLegacyVpToken: Boolean = false,
 	) : RemotePresentationProcessEvent
 
 	data class PinEntered(

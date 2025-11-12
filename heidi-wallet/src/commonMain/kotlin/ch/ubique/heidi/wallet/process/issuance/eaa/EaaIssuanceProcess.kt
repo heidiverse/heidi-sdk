@@ -250,8 +250,10 @@ open class EaaIssuanceProcess(
 
     suspend fun continueWithEaaIssuance(): EaaIssuanceProcessStep {
         return try {
-            val authorizationStep = issuance.initializeIssuance(
-                credentialOfferString,
+            val credentialOfferJson = json.encodeToString(credentialOffer)
+            // Use the already parsed credential offer to avoid fetching it twice
+            val authorizationStep = issuance.initializeIssuanceWithCredentialOfferJson(
+                credentialOfferJson,
                 authorizationServerMetadata.codeChallengeMethodsSupported,
                 authorizationServerMetadata.authorizationChallengeEndpoint != null,
                 authorizationServerMetadata.pushedAuthorizationRequestEndpoint,

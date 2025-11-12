@@ -110,7 +110,8 @@ class RemotePresentationProcessHandler(
 					inputEvent.authSession,
 					inputEvent.isDCApi,
 					inputEvent.selectedId,
-					inputEvent.origin
+					inputEvent.origin,
+					inputEvent.useLegacyVpToken,
 				)
 			}
 

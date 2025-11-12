@@ -206,4 +206,42 @@ class SdJwtTests {
         val result = SdJwt.parse(jwt)
         println("$result")
     }
+
+    @Test
+    fun testNestedDisclosuresPresentation() {
+        val keys = SoftwareKeyPair()
+        val pubKeyJwt = Json.decodeFromString<Value>(keys.jwkString())
+        val issuer = TestSigner(SoftwareKeyPair())
+
+        val claims = Value.Object(mapOf(
+            "place_of_birth" to Value.Object(mapOf(
+                "country" to Value.String("Switzerland"),
+                "locality" to Value.String("Zürich")
+            ))
+        ))
+
+        val disclosures = listOf<ClaimsPointer>(
+            listOf("place_of_birth").toClaimsPointer()!!,
+            listOf("place_of_birth", "country").toClaimsPointer()!!,
+            listOf("place_of_birth", "locality").toClaimsPointer()!!
+        )
+
+        val sdJwt = SdJwt.create(
+            claims = claims,
+            disclosures = disclosures,
+            keyId = "issuer-key-id",
+            key = issuer,
+            pubKeyJwk = pubKeyJwt)!!
+
+        val presentation = sdJwt.presentation()
+        presentation.addDisclosure(listOf(
+            PointerPart.String("place_of_birth")))
+        val vpToken = presentation.build(TestSigner(keys))
+
+        val parsed = SdJwt.parse(vpToken)
+        val disclosedClaims = parsed.innerJwt.claims
+        assertEquals(claims["place_of_birth"]["country"], disclosedClaims["place_of_birth"]["country"])
+        assertEquals(claims["place_of_birth"]["locality"], disclosedClaims["place_of_birth"]["locality"])
+    }
+
 }
