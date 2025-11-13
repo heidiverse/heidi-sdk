@@ -47,6 +47,7 @@ internal class GattClient (
 	internal val incomingMessages: MutableMap<Uuid, okio.Buffer> = mutableMapOf()
 
 	internal var connectedPeripheral: CBPeripheral? = null
+	private val pendingWrites = ArrayDeque<PendingWrite>()
 
 	override val characteristicValueSize: Int
 		get() = connectedPeripheral?.maximumWriteValueLengthForType(1)?.toInt() ?: 23
@@ -89,6 +90,7 @@ internal class GattClient (
 		}
 
 		connectedPeripheral = null
+		pendingWrites.clear()
 	}
 
 	override fun readCharacteristic(charUuid: Uuid) {
@@ -101,23 +103,26 @@ internal class GattClient (
 	}
 
 	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
+		Logger("GattClient").debug("write chunked: $charUuid (${data.size})")
 		connectedPeripheral?.let { peripheral ->
 			peripheralCharacteristics[peripheral]
-				?.find { it.uuid == charUuid}
+				?.find { it.uuid == charUuid }
 				?.let { char ->
-					chunkMessage(data) {
-						peripheral.writeValue(it.toData(), char.characteristic, CBCharacteristicWriteWithoutResponse) }
+					chunkMessage(data) { chunk ->
+						enqueueWrite(char.characteristic, chunk)
+					}
 				}
 		}
 	}
+
 	override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
-		Logger("GattClient").debug("write non chunked: $charUuid (${data.contentToString()})")
+		Logger("GattClient").debug("write non chunked: $charUuid (${data.size})")
 		connectedPeripheral?.let { peripheral ->
 			peripheralCharacteristics[peripheral]
 				?.find { it.uuid == charUuid }
 				?.let {
-					Logger("GattClient").debug("Writing to char")
-					peripheral.writeValue(data.toData(), it.characteristic, CBCharacteristicWriteWithoutResponse)
+					Logger("GattClient").debug("queueing non chunked write")
+					enqueueWrite(it.characteristic, data)
 				}
 		}
 	}
@@ -153,4 +158,44 @@ internal class GattClient (
 				}
 		}
 	}
+
+	internal fun notifyReadyToSend(peripheral: CBPeripheral) {
+		if (peripheral != connectedPeripheral) {
+			return
+		}
+		Logger("GattClient").debug("peripheralIsReadyToSendWriteWithoutResponse -> flushing ${pendingWrites.size} chunks")
+		flushPendingWrites()
+	}
+
+	internal fun onPeripheralDisconnected(peripheral: CBPeripheral) {
+		if (peripheral != connectedPeripheral) {
+			return
+		}
+		Logger("GattClient").debug("Peripheral disconnected -> clearing ${pendingWrites.size} queued writes")
+		pendingWrites.clear()
+		connectedPeripheral = null
+		incomingMessages.clear()
+	}
+
+	private fun enqueueWrite(characteristic: CBCharacteristic, payload: ByteArray) {
+		pendingWrites.addLast(PendingWrite(characteristic, payload))
+		flushPendingWrites()
+	}
+
+	private fun flushPendingWrites() {
+		val peripheral = connectedPeripheral ?: return
+		while (pendingWrites.isNotEmpty()) {
+			if (!peripheral.canSendWriteWithoutResponse()) {
+				Logger("GattClient").debug("Waiting for peripheral readiness; queued chunks=${pendingWrites.size}")
+				return
+			}
+			val next = pendingWrites.removeFirst()
+			peripheral.writeValue(next.payload.toData(), next.characteristic, CBCharacteristicWriteWithoutResponse)
+		}
+	}
+
+	private data class PendingWrite(
+		val characteristic: CBCharacteristic,
+		val payload: ByteArray
+	)
 }

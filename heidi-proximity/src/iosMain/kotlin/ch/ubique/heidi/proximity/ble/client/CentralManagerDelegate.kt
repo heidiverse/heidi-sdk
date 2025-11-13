@@ -60,6 +60,7 @@ internal class CentralManagerDelegate(
 		error: NSError?
 	) {
 		Logger.debug("Disconnected from peripheral: ${didDisconnectPeripheral.identifier}")
+		gattClient.onPeripheralDisconnected(didDisconnectPeripheral)
 	}
 
 	override fun centralManagerDidUpdateState(central: CBCentralManager) {

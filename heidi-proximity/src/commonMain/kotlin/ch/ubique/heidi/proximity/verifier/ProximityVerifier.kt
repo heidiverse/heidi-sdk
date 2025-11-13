@@ -251,15 +251,30 @@ class ProximityVerifier<T> private constructor(
 						disconnect()
 						return@launch
 					}
-					if(sessionData.status != null) {
-						Logger.debug("processMessageReceived status is null, disconnecting, sessionData: $sessionData")
-						verifierStateMutable.update {
-							ProximityVerifierState.Disconnected
-						}
+					if (sessionData.status != null) {
+						Logger.debug("processMessageReceived status=${sessionData.status}, disconnecting, sessionData=$sessionData")
+						verifierStateMutable.update { ProximityVerifierState.Disconnected }
 						disconnect()
 						return@launch
 					}
-					val data = sessionCipher?.decrypt(sessionData.data!!)!!
+					val encryptedPayload = sessionData.data ?: run {
+						Logger.debug("processMessageReceived data is null, disconnecting")
+						verifierStateMutable.update { ProximityVerifierState.Error(Error("Received empty session data")) }
+						disconnect()
+						return@launch
+					}
+					val currentCipher = sessionCipher ?: run {
+						Logger.debug("processMessageReceived sessionCipher is null, disconnecting")
+						verifierStateMutable.update { ProximityVerifierState.Error(Error("Missing session cipher")) }
+						disconnect()
+						return@launch
+					}
+					val data = currentCipher.decrypt(encryptedPayload) ?: run {
+						Logger.debug("processMessageReceived unable to decrypt payload of size ${encryptedPayload.size}")
+						verifierStateMutable.update { ProximityVerifierState.Error(Error("Failed to decrypt session data")) }
+						disconnect()
+						return@launch
+					}
 					if(isDcApi){
 						// data should be the dcql response
 						val response = documentRequester.verifySubmittedDocuments(data)

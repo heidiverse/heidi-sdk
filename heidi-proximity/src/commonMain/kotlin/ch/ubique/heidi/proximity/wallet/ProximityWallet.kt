@@ -42,6 +42,7 @@ import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
+import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -294,17 +295,34 @@ class ProximityWallet private constructor(
 						}
 					} else {
 						val sessionData = MdlSessionData.fromCbor(message) ?: run {
+							Logger.debug("Wallet failed to decode MdlSessionData from message of size ${message.size}")
 							disconnect()
 							return@launch
 						}
-						if(sessionData.status != null) {
-							walletStateMutable.update {
-								ProximityWalletState.Disconnected
-							}
+						if (sessionData.status != null) {
+							Logger.debug("Wallet received terminal status=${sessionData.status}, disconnecting")
+							walletStateMutable.update { ProximityWalletState.Disconnected }
 							disconnect()
 							return@launch
 						}
-						val data = sessionCipher?.decrypt(sessionData.data!!)!!
+						val encryptedPayload = sessionData.data ?: run {
+							Logger.debug("Wallet received session data without payload, disconnecting")
+							walletStateMutable.update { ProximityWalletState.Error(Error("Received empty session data")) }
+							disconnect()
+							return@launch
+						}
+						val currentCipher = sessionCipher ?: run {
+							Logger.debug("Wallet missing session cipher while processing message, disconnecting")
+							walletStateMutable.update { ProximityWalletState.Error(Error("Missing session cipher")) }
+							disconnect()
+							return@launch
+						}
+						val data = currentCipher.decrypt(encryptedPayload) ?: run {
+							Logger.debug("Wallet failed to decrypt payload of size ${encryptedPayload.size}")
+							walletStateMutable.update { ProximityWalletState.Error(Error("Failed to decrypt session data")) }
+							disconnect()
+							return@launch
+						}
 
 						if(isDcApi) {
 							isDcApi = true
