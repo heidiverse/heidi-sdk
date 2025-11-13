@@ -1133,66 +1133,17 @@ mod issuance {
             offer: &str,
         ) -> Result<CredentialOfferAuthType, ApiError> {
             let cred_offer = resolve_credential_offer(offer, &self.client).await?;
-
-            if let Some(pre_authorized_code) = cred_offer
-                .grants
-                .as_ref()
-                .and_then(|grants| grants.pre_authorized_code.clone())
-            {
-                let mut pre_code = self
-                    .pre_authorized_code
-                    .lock()
-                    .map_err(|_| ApiError::from(anyhow::anyhow!("lock error")))?;
-
-                *pre_code = Some(pre_authorized_code.clone());
-
-                if let Some(tx_code) = pre_authorized_code.tx_code {
-                    let numeric = !tx_code
-                        .input_mode
-                        .is_some_and(|input_mode| input_mode == InputMode::Text);
-                    return Ok(CredentialOfferAuthType::TransactionCode {
-                        numeric,
-                        length: tx_code.length,
-                        description: tx_code.description,
-                    });
-                } else {
-                    return Ok(CredentialOfferAuthType::PreAuthorized);
-                }
-            }
-
-            let credential_issuer_url = Url::parse(&cred_offer.credential_issuer.clone())
-                .map_err(|e| anyhow::anyhow!(e))?;
-            let credential_issuer_metadata = self
-                .metadata_fetcher
-                .get_credential_issuer_metadata(credential_issuer_url.clone())
+            self.get_credential_offer_auth_type_with_credential_offer(cred_offer)
                 .await
-                .map_err(|e| anyhow::anyhow!(e))?;
+        }
 
-            {
-                let mut cred_meta = self
-                    .credential_issuer_metadata
-                    .lock()
-                    .map_err(|_| ApiError::from(anyhow::anyhow!("lock error")))?;
-                *cred_meta = Some(credential_issuer_metadata.clone());
-            }
-
-            let auth_server = get_authorization_server(
-                &credential_issuer_metadata.authorization_servers,
-                &cred_offer,
-            )
-            .map_err(|_| ApiError::from(anyhow::anyhow!("server selection error")))?;
-
-            let auth_metadata = self
-                .metadata_fetcher
-                .get_authorization_server_metadata(auth_server.to_owned())
+        pub async fn get_credential_offer_auth_type_with_credential_offer_json(
+            self: Arc<Self>,
+            cred_offer: String,
+        ) -> Result<CredentialOfferAuthType, ApiError> {
+            let cred_offer: CredentialOfferParameters = serde_json::from_str(&cred_offer)?;
+            self.get_credential_offer_auth_type_with_credential_offer(cred_offer)
                 .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-
-            if auth_metadata.authorization_challenge_endpoint.is_some() {
-                return Ok(CredentialOfferAuthType::Presentation);
-            }
-
-            Ok(CredentialOfferAuthType::Authorization)
         }
 
         // Initialize the issuance process and return information about the necessary authorization
@@ -1483,6 +1434,71 @@ mod issuance {
     }
 
     impl OID4VciIssuance {
+        pub async fn get_credential_offer_auth_type_with_credential_offer(
+            self: Arc<Self>,
+            cred_offer: CredentialOfferParameters,
+        ) -> Result<CredentialOfferAuthType, ApiError> {
+            if let Some(pre_authorized_code) = cred_offer
+                .grants
+                .as_ref()
+                .and_then(|grants| grants.pre_authorized_code.clone())
+            {
+                let mut pre_code = self
+                    .pre_authorized_code
+                    .lock()
+                    .map_err(|_| ApiError::from(anyhow::anyhow!("lock error")))?;
+
+                *pre_code = Some(pre_authorized_code.clone());
+
+                if let Some(tx_code) = pre_authorized_code.tx_code {
+                    let numeric = !tx_code
+                        .input_mode
+                        .is_some_and(|input_mode| input_mode == InputMode::Text);
+                    return Ok(CredentialOfferAuthType::TransactionCode {
+                        numeric,
+                        length: tx_code.length,
+                        description: tx_code.description,
+                    });
+                } else {
+                    return Ok(CredentialOfferAuthType::PreAuthorized);
+                }
+            }
+
+            let credential_issuer_url = Url::parse(&cred_offer.credential_issuer.clone())
+                .map_err(|e| anyhow::anyhow!(e))?;
+            let credential_issuer_metadata = self
+                .metadata_fetcher
+                .get_credential_issuer_metadata(credential_issuer_url.clone())
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+
+            {
+                let mut cred_meta = self
+                    .credential_issuer_metadata
+                    .lock()
+                    .map_err(|_| ApiError::from(anyhow::anyhow!("lock error")))?;
+                *cred_meta = Some(credential_issuer_metadata.clone());
+            }
+
+            let auth_server = get_authorization_server(
+                &credential_issuer_metadata.authorization_servers,
+                &cred_offer,
+            )
+            .map_err(|_| ApiError::from(anyhow::anyhow!("server selection error")))?;
+
+            let auth_metadata = self
+                .metadata_fetcher
+                .get_authorization_server_metadata(auth_server.to_owned())
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+
+            if auth_metadata.authorization_challenge_endpoint.is_some() {
+                return Ok(CredentialOfferAuthType::Presentation);
+            }
+
+            Ok(CredentialOfferAuthType::Authorization)
+        }
+
         async fn initialize_issuance_with_credential_offer(
             self: Arc<Self>,
             cred_offer: CredentialOfferParameters,

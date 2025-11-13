@@ -223,7 +223,8 @@ open class EaaIssuanceProcess(
             val walletBackend = WalletBackend(EnvironmentController.getHsmBackendUrl())
             issuance = Oid4VciIssuance.initIssuance(oidcSettings, walletBackend, signer)
 
-            val authType = issuance.getCredentialOfferAuthType(credentialOfferString)
+            val credOfferJson = json.encodeToString(credentialOffer)
+            val authType = issuance.getCredentialOfferAuthTypeWithCredentialOfferJson(credOfferJson)
             when (authType) {
                 is CredentialOfferAuthType.PreAuthorized -> {
                     continueWithEaaIssuance()
