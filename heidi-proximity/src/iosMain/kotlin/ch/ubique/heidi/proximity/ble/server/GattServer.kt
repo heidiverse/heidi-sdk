@@ -21,11 +21,11 @@ package ch.ubique.heidi.proximity.ble.server
 
 import ch.ubique.heidi.proximity.ble.client.toByteArray
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCentralClientModeTransportProtocol
 import ch.ubique.heidi.util.extensions.toData
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlin.collections.ArrayDeque
 import platform.CoreBluetooth.CBAdvertisementDataServiceUUIDsKey
 import platform.CoreBluetooth.CBATTErrorSuccess
 import platform.CoreBluetooth.CBATTErrorUnlikelyError
@@ -48,8 +48,10 @@ internal class GattServer (
     private var service: CBMutableService? = null
     private var manager: CBPeripheralManager? = null
     private var isReady: Boolean = false
+    private var canUpdateSubscribers = true
 
     private val chunkAccumulator = ChunkAccumulator<String>()
+    private val pendingWrites = ArrayDeque<PendingWrite>()
 
     private val delegate = GattServerDelegate(this)
 
@@ -97,22 +99,23 @@ internal class GattServer (
     override fun stop() {
         manager?.stopAdvertising()
         chunkAccumulator.clear()
+        pendingWrites.clear()
     }
 
 	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
-		Logger.debug("GattServer: trying to write to: $charUuid")
+		Logger.debug("GattServer: trying to write to: $charUuid, mtu: $characteristicValueSize")
 		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
 			chunkMessage(data) { chunked ->
-				Logger.debug("GattServer: sending chunk ${chunked.size} bytes to characteristic ${it.toString()}")
-				val result = manager?.updateValue(chunked.toData(), it, null)
-				Logger.debug("GattServer: sending returned $result")
+				pendingWrites.addLast(PendingWrite(it, chunked))
 			}
+			flushPendingWrites()
 		}
 	}
 
     override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
         service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
-            manager?.updateValue(data.toData(), it, null)
+            pendingWrites.addLast(PendingWrite(it, data))
+            flushPendingWrites()
         }
     }
 
@@ -124,6 +127,11 @@ internal class GattServer (
         isReady = peripheral.state == 5L
         if (!isReady) {
             chunkAccumulator.clear()
+            pendingWrites.clear()
+            canUpdateSubscribers = false
+        } else {
+            canUpdateSubscribers = true
+            flushPendingWrites()
         }
     }
 
@@ -172,6 +180,8 @@ internal class GattServer (
 
     override fun onReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
         Logger.debug("Peripheral Manager peripheralManagerIsReadyToUpdateSubscribers")
+        canUpdateSubscribers = true
+        flushPendingWrites()
     }
 
     override fun onSubscribe(
@@ -181,4 +191,29 @@ internal class GattServer (
     ) {
         Logger.debug("Peripheral Manager did didSubscribeToCharacteristic: ${characteristic.UUID.UUIDString}")
     }
+
+    private fun flushPendingWrites() {
+        val currentManager = manager ?: return
+        if (!canUpdateSubscribers && pendingWrites.isNotEmpty()) {
+            Logger.debug("GattServer: waiting for peripheralManagerIsReadyToUpdateSubscribers, queued chunks: ${pendingWrites.size}")
+            return
+        }
+        while (pendingWrites.isNotEmpty()) {
+            val next = pendingWrites.first()
+            Logger.debug("GattServer: sending chunk ${next.payload.size} bytes to characteristic ${next.characteristic}")
+            val success = currentManager.updateValue(next.payload.toData(), next.characteristic, null)
+            Logger.debug("GattServer: sending returned $success")
+            if (success == true) {
+                pendingWrites.removeFirst()
+            } else {
+                canUpdateSubscribers = false
+                break
+            }
+        }
+    }
+
+    private data class PendingWrite(
+        val characteristic: CBMutableCharacteristic,
+        val payload: ByteArray
+    )
 }
