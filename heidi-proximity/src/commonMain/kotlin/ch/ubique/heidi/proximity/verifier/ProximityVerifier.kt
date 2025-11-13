@@ -34,6 +34,7 @@ import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
 import ch.ubique.heidi.util.extensions.json
 import ch.ubique.heidi.util.extensions.toCbor
 import ch.ubique.heidi.util.log.Logger
+import ch.ubique.heidi.proximity.util.logPayloadDebug
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -246,6 +247,7 @@ class ProximityVerifier<T> private constructor(
 			when (protocol) {
 				ProximityProtocol.MDL -> {
 					Logger.debug("Processing message of size ${message.size}")
+					logPayloadDebug("Verifier received MDL payload", message)
 					val sessionData = MdlSessionData.fromCbor(message) ?: run {
 						Logger.debug("Unable to create MdlSessionData")
 						disconnect()

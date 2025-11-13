@@ -28,6 +28,7 @@ import platform.CoreBluetooth.CBDescriptor
 import platform.posix.memcpy
 import kotlin.uuid.Uuid
 
+@Suppress("UNCHECKED_CAST")
 @OptIn(ExperimentalForeignApi::class)
 internal actual class BleGattCharacteristic(val characteristic: CBCharacteristic, private val internalValue: ByteArray? = null) {
 

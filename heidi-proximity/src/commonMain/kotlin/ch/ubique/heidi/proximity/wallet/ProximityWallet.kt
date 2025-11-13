@@ -42,6 +42,7 @@ import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
+import ch.ubique.heidi.proximity.util.logPayloadDebug
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -213,8 +214,9 @@ class ProximityWallet private constructor(
 		}
 		walletStateMutable.update { ProximityWalletState.SubmittingDocuments }
 		val encryptedData = sessionCipher!!.encrypt(data)!!
-
-		transportProtocol.sendMessage(encodeCbor(mapOf("data" to encryptedData).toCbor()))
+		val payload = encodeCbor(mapOf("data" to encryptedData).toCbor())
+		logPayloadDebug("Wallet sending MDL payload", payload)
+		transportProtocol.sendMessage(payload)
 
 		walletStateMutable.update { ProximityWalletState.PresentationCompleted }
 		return true

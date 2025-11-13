@@ -2887,6 +2887,20 @@ dependencies = [
 
 [[package]]
 name = "fontdb"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0299020c3ef3f60f526a4f64ab4a3d4ce116b1acbf24cdd22da0068e5d81dc3"
+dependencies = [
+ "fontconfig-parser",
+ "log",
+ "memmap2 0.9.9",
+ "slotmap",
+ "tinyvec",
+ "ttf-parser 0.20.0",
+]
+
+[[package]]
+name = "fontdb"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "457e789b3d1202543297a350643cf459f836cade38934e7a4cf6a39e7cde2905"
@@ -2896,7 +2910,7 @@ dependencies = [
  "memmap2 0.9.9",
  "slotmap",
  "tinyvec",
- "ttf-parser",
+ "ttf-parser 0.25.1",
 ]
 
 [[package]]
@@ -3567,9 +3581,10 @@ dependencies = [
 name = "heidi-pdf-rust"
 version = "0.1.0"
 dependencies = [
+ "fontdb 0.16.2",
  "tar",
  "time",
- "ttf-parser",
+ "ttf-parser 0.25.1",
  "typst",
  "typst-assets",
  "typst-pdf",
@@ -4996,7 +5011,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d3eec075c9507dfdbfb4b9bc3b2aeac074ed422b61bcfd93517616d6b3d19c3"
 dependencies = [
  "flate2",
- "fontdb",
+ "fontdb 0.23.0",
  "krilla",
  "png 0.17.16",
  "resvg",
@@ -7811,7 +7826,7 @@ dependencies = [
  "core_maths",
  "log",
  "smallvec",
- "ttf-parser",
+ "ttf-parser 0.25.1",
  "unicode-bidi-mirroring",
  "unicode-ccc",
  "unicode-properties",
@@ -9440,6 +9455,12 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "ttf-parser"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17f77d76d837a7830fe1d4f12b7b4ba4192c1888001c7164257e4bc6d21d96b4"
+
+[[package]]
+name = "ttf-parser"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
@@ -9570,7 +9591,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "rustybuzz",
  "smallvec",
- "ttf-parser",
+ "ttf-parser 0.25.1",
  "typst-assets",
  "typst-library",
  "typst-macros",
@@ -9599,7 +9620,7 @@ dependencies = [
  "csv",
  "ecow",
  "flate2",
- "fontdb",
+ "fontdb 0.23.0",
  "glidesort",
  "hayagriva",
  "hayro-syntax",
@@ -9631,7 +9652,7 @@ dependencies = [
  "syntect",
  "time",
  "toml 0.8.23",
- "ttf-parser",
+ "ttf-parser 0.25.1",
  "two-face",
  "typed-arena",
  "typst-assets",
@@ -9719,7 +9740,7 @@ dependencies = [
  "hayro-svg",
  "image",
  "rustc-hash 2.1.1",
- "ttf-parser",
+ "ttf-parser 0.25.1",
  "typst-assets",
  "typst-library",
  "typst-macros",
@@ -10158,7 +10179,7 @@ dependencies = [
  "base64 0.22.1",
  "data-url",
  "flate2",
- "fontdb",
+ "fontdb 0.23.0",
  "imagesize 0.13.0",
  "kurbo 0.11.3",
  "log",

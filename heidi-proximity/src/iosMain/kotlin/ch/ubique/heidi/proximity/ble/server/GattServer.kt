@@ -113,6 +113,7 @@ internal class GattServer (
 	}
 
     override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
+		Logger.debug("GattServer: trying to write non chunked to: $charUuid, mtu: $characteristicValueSize")
         service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
             pendingWrites.addLast(PendingWrite(it, data))
             flushPendingWrites()
@@ -136,13 +137,13 @@ internal class GattServer (
     }
 
     override fun onRead(peripheral: CBPeripheralManager, request: CBATTRequest) {
-        Logger.debug("Peripheral Manager didReceiveReadRequest")
+//        Logger.debug("Peripheral Manager didReceiveReadRequest")
         val characteristic = request.characteristic ?: return
         listener?.onCharacteristicReadRequest(BleGattCharacteristic(characteristic))
     }
 
     override fun onWrite(peripheral: CBPeripheralManager, requests: List<*>) {
-        Logger.debug("Peripheral Manager didReceiveWriteRequests $requests")
+//        Logger.debug("Peripheral Manager didReceiveWriteRequests $requests")
 
         requests.forEach { anyReq ->
             val request = anyReq as? CBATTRequest ?: return@forEach
@@ -195,14 +196,14 @@ internal class GattServer (
     private fun flushPendingWrites() {
         val currentManager = manager ?: return
         if (!canUpdateSubscribers && pendingWrites.isNotEmpty()) {
-            Logger.debug("GattServer: waiting for peripheralManagerIsReadyToUpdateSubscribers, queued chunks: ${pendingWrites.size}")
+//            Logger.debug("GattServer: waiting for peripheralManagerIsReadyToUpdateSubscribers, queued chunks: ${pendingWrites.size}")
             return
         }
         while (pendingWrites.isNotEmpty()) {
             val next = pendingWrites.first()
-            Logger.debug("GattServer: sending chunk ${next.payload.size} bytes to characteristic ${next.characteristic}")
+//            Logger.debug("GattServer: sending chunk ${next.payload.size} bytes to characteristic ${next.characteristic}")
             val success = currentManager.updateValue(next.payload.toData(), next.characteristic, null)
-            Logger.debug("GattServer: sending returned $success")
+//            Logger.debug("GattServer: sending returned $success")
             if (success == true) {
                 pendingWrites.removeFirst()
             } else {

@@ -121,7 +121,7 @@ internal class GattClient (
 			peripheralCharacteristics[peripheral]
 				?.find { it.uuid == charUuid }
 				?.let {
-					Logger("GattClient").debug("queueing non chunked write")
+//					Logger("GattClient").debug("queueing non chunked write")
 					enqueueWrite(it.characteristic, data)
 				}
 		}
@@ -163,7 +163,7 @@ internal class GattClient (
 		if (peripheral != connectedPeripheral) {
 			return
 		}
-		Logger("GattClient").debug("peripheralIsReadyToSendWriteWithoutResponse -> flushing ${pendingWrites.size} chunks")
+//		Logger("GattClient").debug("peripheralIsReadyToSendWriteWithoutResponse -> flushing ${pendingWrites.size} chunks")
 		flushPendingWrites()
 	}
 
@@ -171,7 +171,7 @@ internal class GattClient (
 		if (peripheral != connectedPeripheral) {
 			return
 		}
-		Logger("GattClient").debug("Peripheral disconnected -> clearing ${pendingWrites.size} queued writes")
+//		Logger("GattClient").debug("Peripheral disconnected -> clearing ${pendingWrites.size} queued writes")
 		pendingWrites.clear()
 		connectedPeripheral = null
 		incomingMessages.clear()
@@ -186,7 +186,7 @@ internal class GattClient (
 		val peripheral = connectedPeripheral ?: return
 		while (pendingWrites.isNotEmpty()) {
 			if (!peripheral.canSendWriteWithoutResponse()) {
-				Logger("GattClient").debug("Waiting for peripheral readiness; queued chunks=${pendingWrites.size}")
+//				Logger("GattClient").debug("Waiting for peripheral readiness; queued chunks=${pendingWrites.size}")
 				return
 			}
 			val next = pendingWrites.removeFirst()
