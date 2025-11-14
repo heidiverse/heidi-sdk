@@ -265,6 +265,17 @@ class ProximityVerifier<T> private constructor(
 						disconnect()
 						return@launch
 					}
+					sessionData.shaSum?.let { expectedSha ->
+						val actualSha = sha256Rs(encryptedPayload)
+						if (!expectedSha.contentEquals(actualSha)) {
+							Logger.debug(
+								"processMessageReceived sha mismatch expected=${base64UrlEncode(expectedSha)} actual=${base64UrlEncode(actualSha)}, disconnecting"
+							)
+							verifierStateMutable.update { ProximityVerifierState.Error(Error("MDL payload hash mismatch")) }
+							disconnect()
+							return@launch
+						}
+					}
 					val currentCipher = sessionCipher ?: run {
 						Logger.debug("processMessageReceived sessionCipher is null, disconnecting")
 						verifierStateMutable.update { ProximityVerifierState.Error(Error("Missing session cipher")) }

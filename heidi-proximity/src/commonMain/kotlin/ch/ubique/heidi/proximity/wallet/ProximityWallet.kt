@@ -214,7 +214,13 @@ class ProximityWallet private constructor(
 		}
 		walletStateMutable.update { ProximityWalletState.SubmittingDocuments }
 		val encryptedData = sessionCipher!!.encrypt(data)!!
-		val payload = encodeCbor(mapOf("data" to encryptedData).toCbor())
+		val payloadShaSum = sha256Rs(encryptedData)
+		val payload = encodeCbor(
+			mapOf(
+				"data" to encryptedData,
+				"shaSum" to payloadShaSum,
+			).toCbor()
+		)
 		logPayloadDebug("Wallet sending MDL payload", payload)
 		transportProtocol.sendMessage(payload)
 
@@ -312,6 +318,17 @@ class ProximityWallet private constructor(
 							walletStateMutable.update { ProximityWalletState.Error(Error("Received empty session data")) }
 							disconnect()
 							return@launch
+						}
+						sessionData.shaSum?.let { expectedSha ->
+							val actualSha = sha256Rs(encryptedPayload)
+							if (!expectedSha.contentEquals(actualSha)) {
+								Logger.debug(
+									"Wallet received session data sha mismatch expected=${base64UrlEncode(expectedSha)} actual=${base64UrlEncode(actualSha)}"
+								)
+								walletStateMutable.update { ProximityWalletState.Error(Error("MDL payload hash mismatch")) }
+								disconnect()
+								return@launch
+							}
 						}
 						val currentCipher = sessionCipher ?: run {
 							Logger.debug("Wallet missing session cipher while processing message, disconnecting")
