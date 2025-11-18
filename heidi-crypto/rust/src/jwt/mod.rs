@@ -30,7 +30,7 @@ use heidi_jwt::{
         ec_verifier_from_sec1, verifier::DefaultVerifier, verifier_for_der, verifier_for_jwk, Jwt,
         JwtVerifier,
     },
-    JwsHeader,
+    Jwk, JwsHeader,
 };
 use heidi_util_rust::{log_error, log_warn, value::Value};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -132,6 +132,23 @@ pub fn validate_jwt_with_pub_key(jwt: &str, pub_key: crate::crypto::x509::X509Pu
             };
             verifier
         }
+    };
+    // Perform full validation with signature check.
+    jwt.verify_signature_with_verifier(verifier.as_ref())
+        .is_ok()
+}
+
+#[uniffi::export]
+pub fn validate_jwt_with_jwk(jwt: &str, jwk: Value) -> bool {
+    let Ok(jwt) = Jwt::<serde_json::Value>::from_str(jwt) else {
+        return false;
+    };
+    let Some(jwk) = jwk.transform::<Jwk>() else {
+        return false;
+    };
+
+    let Some(verifier) = verifier_for_jwk(jwk) else {
+        return false;
     };
     // Perform full validation with signature check.
     jwt.verify_signature_with_verifier(verifier.as_ref())
