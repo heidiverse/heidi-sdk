@@ -262,6 +262,88 @@ pub fn validate_jwt_with_did(jwt: &str, did: &Value) -> bool {
     validate_jwt_with_did_document(jwt, doc, true)
 }
 
+// Specifically for SD-JWTs and KB-JWTs
+pub struct SdJwtVerifier;
+
+impl<T: Serialize + DeserializeOwned> JwtVerifier<T> for SdJwtVerifier {
+    fn verify_header(&self, jwt: &Jwt<T>) -> Result<(), heidi_jwt::models::errors::JwtError> {
+        self.assert_type(jwt, "dc+sd-jwt")
+    }
+
+    fn verify_body(&self, _jwt: &Jwt<T>) -> Result<(), heidi_jwt::models::errors::JwtError> {
+        Ok(())
+    }
+}
+
+pub struct KbJwtVerifier;
+
+impl<T: Serialize + DeserializeOwned> JwtVerifier<T> for KbJwtVerifier {
+    fn verify_header(&self, jwt: &Jwt<T>) -> Result<(), heidi_jwt::models::errors::JwtError> {
+        self.assert_type(jwt, "kb+jwt")
+    }
+
+    fn verify_body(&self, _jwt: &Jwt<T>) -> Result<(), heidi_jwt::models::errors::JwtError> {
+        Ok(())
+    }
+}
+
+#[uniffi::export]
+pub fn validate_sd_jwt_with_did_document(
+    sd_jwt_original_jwt: &str,
+    doc: DidVerificationDocument,
+) -> bool {
+    let Ok(jwt) = Jwt::<serde_json::Value>::from_str(sd_jwt_original_jwt) else {
+        log_error!("VALIDATER", "could not parse jwt");
+        return false;
+    };
+    let header = match jwt.header() {
+        Ok(header) => header,
+        Err(_) => return false,
+    };
+    let Some(kid) = header.claim("kid").and_then(|a| a.as_str()) else {
+        log_error!("VALIDATER", "no kid");
+        return false;
+    };
+    log_warn!("VALIDATER", &format!("kid: {}", kid));
+
+    let Some(key) = doc.verification_method.iter().find(|vm| vm.id == kid) else {
+        log_error!("VALIDATER", "no matching key found");
+        return false;
+    };
+
+    let Some(jwk) = key.public_key_jwk.transform() else {
+        log_error!("VALIDATER", "failed to transform to jwk");
+        return false;
+    };
+    let Some(verifier) = verifier_for_jwk(jwk) else {
+        log_error!("VALIDATER", "could not parse jwk into key");
+        return false;
+    };
+
+    jwt.payload_with_verifier(verifier.as_ref(), &SdJwtVerifier)
+        .is_ok()
+}
+
+#[uniffi::export]
+pub fn validate_kb_jwt_with_jwk(kb_jwt: &str, jwk: Value) -> bool {
+    let Ok(jwt) = Jwt::<serde_json::Value>::from_str(kb_jwt) else {
+        log_error!("VALIDATER", "could not parse jwt");
+        return false;
+    };
+    let Some(jwk) = jwk.transform::<Jwk>() else {
+        log_error!("VALIDATER", "failed to transform to jwk");
+        return false;
+    };
+
+    let Some(verifier) = verifier_for_jwk(jwk) else {
+        log_error!("VALIDATER", "could not parse jwk into key");
+        return false;
+    };
+    // Perform full validation with signature check.
+    jwt.payload_with_verifier(verifier.as_ref(), &KbJwtVerifier)
+        .is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
