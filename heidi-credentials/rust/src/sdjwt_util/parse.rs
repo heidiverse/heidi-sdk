@@ -72,6 +72,7 @@ pub struct ParsedSdJwt {
     pub disclosure_tree: DisclosureTree,
     pub original_jwt: String,
     pub original_sdjwt: String,
+    pub keybinding_jwt: Option<String>,
     pub num_disclosures: usize,
 }
 
@@ -284,9 +285,15 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
         .ok_or(SdJwtDecodeError::InvalidJwt)?;
 
     // Remove the key binding JWT
-    let disclosures = match disclosures_and_kb_jwt.rsplit_once("~") {
-        Some((disclosures, _kb_jwt)) => disclosures,
-        None => "",
+    let (disclosures, kb_jwt) = match disclosures_and_kb_jwt.rsplit_once("~") {
+        Some((disclosures, kb_jwt)) => (disclosures, kb_jwt),
+        None => ("", ""),
+    };
+
+    let kb_jwt = if kb_jwt.trim().is_empty() {
+        None
+    } else {
+        Some(kb_jwt.to_string())
     };
 
     let disclosures = disclosures
@@ -354,6 +361,7 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
         disclosure_tree,
         original_jwt: jwt.to_string(),
         original_sdjwt: payload.to_string(),
+        keybinding_jwt: kb_jwt,
         num_disclosures,
     })
 }
