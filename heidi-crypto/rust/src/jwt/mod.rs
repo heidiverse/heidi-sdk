@@ -263,11 +263,19 @@ pub fn validate_jwt_with_did(jwt: &str, did: &Value) -> bool {
 }
 
 // Specifically for SD-JWTs and KB-JWTs
-pub struct SdJwtVerifier;
+pub struct SdJwtVerifier {
+    r#type: String,
+}
+
+impl SdJwtVerifier {
+    pub fn new_unchecked(r#type: String) -> Self {
+        Self { r#type }
+    }
+}
 
 impl<T: Serialize + DeserializeOwned> JwtVerifier<T> for SdJwtVerifier {
     fn verify_header(&self, jwt: &Jwt<T>) -> Result<(), heidi_jwt::models::errors::JwtError> {
-        self.assert_type(jwt, "dc+sd-jwt")
+        self.assert_type(jwt, &self.r#type)
     }
 
     fn verify_body(&self, _jwt: &Jwt<T>) -> Result<(), heidi_jwt::models::errors::JwtError> {
@@ -287,10 +295,16 @@ impl<T: Serialize + DeserializeOwned> JwtVerifier<T> for KbJwtVerifier {
     }
 }
 
+/// Validates the JWT part of the SD-JWT using the provided DID Document.
+///
+/// The `vc_type` parameter specifies the expected type of the SD-JWT. You should generally pass
+/// "dc+sd-jwt" for the 1.0 version of the spec, and "vc+sd-jwt" for the draft versions. Only pass
+/// other values if you know what you are doing.
 #[uniffi::export]
 pub fn validate_sd_jwt_with_did_document(
     sd_jwt_original_jwt: &str,
     doc: DidVerificationDocument,
+    vc_type: &str,
 ) -> bool {
     let Ok(jwt) = Jwt::<serde_json::Value>::from_str(sd_jwt_original_jwt) else {
         log_error!("VALIDATER", "could not parse jwt");
@@ -320,8 +334,15 @@ pub fn validate_sd_jwt_with_did_document(
         return false;
     };
 
-    jwt.payload_with_verifier(verifier.as_ref(), &SdJwtVerifier)
-        .is_ok()
+    if let Err(e) = jwt.payload_with_verifier(
+        verifier.as_ref(),
+        &SdJwtVerifier::new_unchecked(vc_type.to_string()),
+    ) {
+        log_error!("VALIDATER", &format!("validation failed: {e}"));
+        return false;
+    }
+
+    true
 }
 
 #[uniffi::export]
