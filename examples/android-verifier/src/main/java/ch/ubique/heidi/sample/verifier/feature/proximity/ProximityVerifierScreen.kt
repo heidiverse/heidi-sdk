@@ -224,6 +224,18 @@ fun ProximityVerifierScreen(
 							}
 						}
 					}
+					is ProximityVerifierState.Terminated -> {
+						Column(
+							modifier = Modifier.align(Alignment.Center),
+							horizontalAlignment = Alignment.CenterHorizontally
+						) {
+							Text("Session terminated (${state.reason})")
+							Spacer(Modifier.height(8.dp))
+							Button(onClick = onRestartClicked) {
+								Text("Restart Verification")
+							}
+						}
+					}
 					is ProximityVerifierState.Error -> {
 						Text(state.throwable.stackTraceToString())
 					}

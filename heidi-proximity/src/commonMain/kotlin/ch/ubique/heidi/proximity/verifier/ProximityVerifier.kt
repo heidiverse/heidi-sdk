@@ -176,7 +176,9 @@ class ProximityVerifier<T> private constructor(
 				}
 
 				override fun onDisconnected() {
-					verifierStateMutable.update { ProximityVerifierState.Disconnected }
+					verifierStateMutable.update { current ->
+						if (current is ProximityVerifierState.Terminated) current else ProximityVerifierState.Disconnected
+					}
 				}
 
 				override fun onMessageReceived() {
@@ -223,7 +225,9 @@ class ProximityVerifier<T> private constructor(
 	fun disconnect() {
 		Logger.debug("disconnect() was called")
 		transportProtocol.disconnect()
-		verifierStateMutable.update { ProximityVerifierState.Disconnected }
+		if (verifierStateMutable.value !is ProximityVerifierState.Terminated) {
+			verifierStateMutable.update { ProximityVerifierState.Disconnected }
+		}
 	}
 
 	fun reset() {
@@ -254,8 +258,9 @@ class ProximityVerifier<T> private constructor(
 						return@launch
 					}
 					if (sessionData.status != null) {
-						Logger.debug("processMessageReceived status=${sessionData.status}, disconnecting, sessionData=$sessionData")
-						verifierStateMutable.update { ProximityVerifierState.Disconnected }
+						val reason = TerminationReason.fromCode(sessionData.status)
+						Logger.debug("processMessageReceived status=${sessionData.status} reson: $reason, disconnecting, sessionData=$sessionData")
+						verifierStateMutable.update { ProximityVerifierState.Terminated(reason) }
 						disconnect()
 						return@launch
 					}
