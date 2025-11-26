@@ -120,15 +120,15 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 	}
 
-	override fun sendMessage(data: ByteArray) {
+	override fun sendMessage(data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)?) {
 		val charUuid = when (role) {
 			Role.WALLET -> characteristicClient2ServerUuid
 			Role.VERIFIER -> characteristicServer2ClientUuid
 		}
 
 		when {
-			gattServer != null -> gattServer?.writeCharacteristic(charUuid, data)
-			gattClient != null -> gattClient?.writeCharacteristic(charUuid, data)
+			gattServer != null -> gattServer?.writeCharacteristic(charUuid, data, onProgress)
+			gattClient != null -> gattClient?.writeCharacteristic(charUuid, data, onProgress)
 			else -> throw IllegalStateException("No Gatt Server or Gatt Client available")
 		}
 	}

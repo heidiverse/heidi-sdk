@@ -102,27 +102,38 @@ internal class GattClient (
 		}
 	}
 
-	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
+	override fun writeCharacteristic(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
 		Logger("GattClient").debug("write chunked: $charUuid (${data.size})")
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 		connectedPeripheral?.let { peripheral ->
 			peripheralCharacteristics[peripheral]
 				?.find { it.uuid == charUuid }
 				?.let { char ->
 					chunkMessage(data) { chunk ->
-						enqueueWrite(char.characteristic, chunk)
+						val payloadSize = (chunk.size - 1).coerceAtLeast(0)
+						enqueueWrite(char.characteristic, chunk, progress, payloadSize)
 					}
 				}
 		}
 	}
 
-	override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
+	override fun writeCharacteristicNonChunked(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
 		Logger("GattClient").debug("write non chunked: $charUuid (${data.size})")
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 		connectedPeripheral?.let { peripheral ->
 			peripheralCharacteristics[peripheral]
 				?.find { it.uuid == charUuid }
 				?.let {
 //					Logger("GattClient").debug("queueing non chunked write")
-					enqueueWrite(it.characteristic, data)
+					enqueueWrite(it.characteristic, data, progress, data.size)
 				}
 		}
 	}
@@ -177,8 +188,13 @@ internal class GattClient (
 		incomingMessages.clear()
 	}
 
-	private fun enqueueWrite(characteristic: CBCharacteristic, payload: ByteArray) {
-		pendingWrites.addLast(PendingWrite(characteristic, payload))
+	private fun enqueueWrite(
+		characteristic: CBCharacteristic,
+		payload: ByteArray,
+		progress: WriteProgress? = null,
+		payloadSize: Int = payload.size
+	) {
+		pendingWrites.addLast(PendingWrite(characteristic, payload, progress, payloadSize))
 		flushPendingWrites()
 	}
 
@@ -191,11 +207,30 @@ internal class GattClient (
 			}
 			val next = pendingWrites.removeFirst()
 			peripheral.writeValue(next.payload.toData(), next.characteristic, CBCharacteristicWriteWithoutResponse)
+			next.progress?.advance(next.payloadSize)
 		}
 	}
 
 	private data class PendingWrite(
 		val characteristic: CBCharacteristic,
-		val payload: ByteArray
+		val payload: ByteArray,
+		val progress: WriteProgress? = null,
+		val payloadSize: Int = payload.size,
 	)
+
+	private class WriteProgress(
+		private val total: Int,
+		private val onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
+		private var sent: Int = 0
+
+		fun advance(by: Int) {
+			if (total <= 0) {
+				onProgress?.invoke(1, 1)
+				return
+			}
+			sent = (sent + by).coerceAtMost(total)
+			onProgress?.invoke(sent, total)
+		}
+	}
 }

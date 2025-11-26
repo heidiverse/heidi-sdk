@@ -64,7 +64,7 @@ internal class GattServer(
 
     private val chunkAccumulator = ChunkAccumulator<UUID>()
 	private val readQueues = mutableMapOf<UUID, Queue<ByteArray>>().withDefault { ArrayDeque() }
-	private val writingQueues = mutableMapOf<UUID, Queue<ByteArray>>().withDefault { ArrayDeque() }
+	private val writingQueues = mutableMapOf<UUID, Queue<PendingWrite>>().withDefault { ArrayDeque() }
 
 	private var characteristicValueSizeMemoized = 0
 	override val characteristicValueSize: Int
@@ -167,13 +167,21 @@ internal class GattServer(
 		}
 	}
 
-	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
+	override fun writeCharacteristic(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
 		// Only initiate the write if no other write was outstanding for the same characteristic
 		val queueNeedsDraining = writingQueues.getValue(charUuid.toJavaUuid()).size == 0
 
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 
 		chunkMessage(data) { chunk ->
-			writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(chunk)
+			val payloadSize = (chunk.size - 1).coerceAtLeast(0)
+			writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(
+				PendingWrite(chunk, progress, payloadSize)
+			)
 		}
 
 		if (queueNeedsDraining) {
@@ -181,12 +189,19 @@ internal class GattServer(
 		}
 	}
 
-	override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
+	override fun writeCharacteristicNonChunked(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
 		// Only initiate the write if no other write was outstanding for the same characteristic
 		val queueNeedsDraining = writingQueues.getValue(charUuid.toJavaUuid()).size == 0
 
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 
-		writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(data)
+		writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(
+			PendingWrite(data, progress, data.size)
+		)
 
 		if (queueNeedsDraining) {
 			drainWritingQueue(charUuid.toJavaUuid())
@@ -390,7 +405,7 @@ internal class GattServer(
 	private fun drainWritingQueue(charUuid: UUID) {
 		val chunk = writingQueues.getValue(charUuid).poll() ?: return
 
-		if (chunk.size == 1 && chunk.single() == TransportProtocol.SHUTDOWN_MESSAGE.single()) {
+		if (chunk.isShutdownMessage()) {
 			Logger(TAG).debug("Chunk is length 0, shutting down GattServer in 1000ms")
 			// TODO: On some devices we lose messages already sent if we don't have a delay like
 			//  this. Need to properly investigate if this is a problem in our stack or the
@@ -422,10 +437,10 @@ internal class GattServer(
 
 			try {
 				val success = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-					val result = requireServer().notifyCharacteristicChanged(connection, characteristic, false, chunk)
+					val result = requireServer().notifyCharacteristicChanged(connection, characteristic, false, chunk.payload)
 					result == BluetoothStatusCodes.SUCCESS
 				} else {
-					characteristic.value = chunk
+					characteristic.value = chunk.payload
 					requireServer().notifyCharacteristicChanged(connection, characteristic, false)
 				}
 
@@ -433,9 +448,36 @@ internal class GattServer(
 					reportError(Error("Error calling notifyCharacteristicsChanged on characteristic $charUuid"))
 					return
 				}
+				chunk.progress?.advance(chunk.payloadSize)
 			} catch (e: SecurityException) {
 				reportError(e)
 			}
+		}
+	}
+
+	private data class PendingWrite(
+		val payload: ByteArray,
+		val progress: WriteProgress? = null,
+		val payloadSize: Int = payload.size
+	) {
+		fun isShutdownMessage(): Boolean {
+			return payload.size == 1 && payload.single() == TransportProtocol.SHUTDOWN_MESSAGE.single()
+		}
+	}
+
+	private class WriteProgress(
+		private val total: Int,
+		private val onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
+		private var sent: Int = 0
+
+		fun advance(by: Int) {
+			if (total <= 0) {
+				onProgress?.invoke(1, 1)
+				return
+			}
+			sent = (sent + by).coerceAtMost(total)
+			onProgress?.invoke(sent, total)
 		}
 	}
 }

@@ -162,7 +162,9 @@ class ProximityWallet private constructor(
 				}
 
 				override fun onDisconnected() {
-					walletStateMutable.update { ProximityWalletState.Disconnected }
+					if (!markSubmissionCompleted()) {
+						walletStateMutable.update { ProximityWalletState.Disconnected }
+					}
 				}
 
 				override fun onMessageReceived() {
@@ -176,8 +178,10 @@ class ProximityWallet private constructor(
 
 				override fun onTransportSpecificSessionTermination() {
 					disconnect()
-					walletStateMutable.update {
-						ProximityWalletState.Disconnected
+					if (!markSubmissionCompleted()) {
+						walletStateMutable.update {
+							ProximityWalletState.Disconnected
+						}
 					}
 				}
 
@@ -212,7 +216,7 @@ class ProximityWallet private constructor(
 		if (walletState.value !is ProximityWalletState.RequestingDocuments) {
 			return false
 		}
-		walletStateMutable.update { ProximityWalletState.SubmittingDocuments }
+		walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = 0.0) }
 		val encryptedData = sessionCipher!!.encrypt(data)!!
 		val payloadShaSum = sha256Rs(encryptedData)
 		val payload = encodeCbor(
@@ -222,15 +226,24 @@ class ProximityWallet private constructor(
 			).toCbor()
 		)
 		logPayloadDebug("Wallet sending MDL payload", payload)
-		transportProtocol.sendMessage(payload)
+		transportProtocol.sendMessage(payload) { sent, total ->
+			val progress = if (total > 0) sent.toDouble() / total.toDouble() else null
+			walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = progress) }
+			if (progress != null && progress >= 1.0) {
+				markSubmissionCompleted()
+			}
+		}
+		// Fallback completion in case progress callbacks do not hit exactly 1.0
+		markSubmissionCompleted()
 
-		walletStateMutable.update { ProximityWalletState.PresentationCompleted }
 		return true
 	}
 
 	fun disconnect() {
 		transportProtocol.disconnect()
-		walletStateMutable.update { ProximityWalletState.Disconnected }
+		if (!markSubmissionCompleted()) {
+			walletStateMutable.update { ProximityWalletState.Disconnected }
+		}
 	}
 
 	private fun processMessageReceived(message: ByteArray) {
@@ -309,7 +322,9 @@ class ProximityWallet private constructor(
 						}
 						if (sessionData.status != null) {
 							Logger.debug("Wallet received terminal status=${sessionData.status}, disconnecting")
-							walletStateMutable.update { ProximityWalletState.Disconnected }
+							if (!markSubmissionCompleted()) {
+								walletStateMutable.update { ProximityWalletState.Disconnected }
+							}
 							disconnect()
 							return@launch
 						}
@@ -403,4 +418,12 @@ class ProximityWallet private constructor(
 		}
 	}
 
+	private fun markSubmissionCompleted(): Boolean {
+		return if (walletStateMutable.value is ProximityWalletState.SubmittingDocuments) {
+			walletStateMutable.update { ProximityWalletState.PresentationCompleted }
+			true
+		} else {
+			false
+		}
+	}
 }

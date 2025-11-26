@@ -35,8 +35,8 @@ internal interface BleGattServer {
 
 	fun stop()
 
-	fun writeCharacteristic(charUuid: Uuid, data: ByteArray)
-	fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray)
+	fun writeCharacteristic(charUuid: Uuid, data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
+	fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
 
 	val characteristicValueSize : Int
 	fun chunkMessage(data: ByteArray, emitChunk: (ByteArray) -> Unit) {

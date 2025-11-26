@@ -91,12 +91,12 @@ internal class MdlTransportProtocol(
         }
     }
 
-    override fun sendMessage(data: ByteArray) {
+    override fun sendMessage(data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)?) {
         if(centralClientModeTransportProtocol?.isConnected == true) {
-            centralClientModeTransportProtocol?.sendMessage(data)
+            centralClientModeTransportProtocol?.sendMessage(data, onProgress)
         }
         if(peripheralServerModeTransportProtocol?.isConnected == true) {
-            peripheralServerModeTransportProtocol?.sendMessage(data)
+            peripheralServerModeTransportProtocol?.sendMessage(data, onProgress)
         }
     }
 

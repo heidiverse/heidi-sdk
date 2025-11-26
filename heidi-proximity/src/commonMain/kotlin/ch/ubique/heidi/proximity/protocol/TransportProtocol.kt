@@ -52,7 +52,7 @@ abstract class TransportProtocol(
 
 	abstract fun disconnect()
 
-	abstract fun sendMessage(data: ByteArray)
+	abstract fun sendMessage(data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
 
 	abstract fun sendTransportSpecificTerminationMessage()
 

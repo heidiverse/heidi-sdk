@@ -102,20 +102,31 @@ internal class GattServer (
         pendingWrites.clear()
     }
 
-	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
+	override fun writeCharacteristic(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
 		Logger.debug("GattServer: trying to write to: $charUuid, mtu: $characteristicValueSize")
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
 			chunkMessage(data) { chunked ->
-				pendingWrites.addLast(PendingWrite(it, chunked))
+				val payloadSize = (chunked.size - 1).coerceAtLeast(0)
+				pendingWrites.addLast(PendingWrite(it, chunked, progress, payloadSize))
 			}
 			flushPendingWrites()
 		}
 	}
 
-    override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
+    override fun writeCharacteristicNonChunked(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
 		Logger.debug("GattServer: trying to write non chunked to: $charUuid, mtu: $characteristicValueSize")
+        val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
         service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
-            pendingWrites.addLast(PendingWrite(it, data))
+            pendingWrites.addLast(PendingWrite(it, data, progress, data.size))
             flushPendingWrites()
         }
     }
@@ -206,6 +217,7 @@ internal class GattServer (
 //            Logger.debug("GattServer: sending returned $success")
             if (success == true) {
                 pendingWrites.removeFirst()
+                next.progress?.advance(next.payloadSize)
             } else {
                 canUpdateSubscribers = false
                 break
@@ -215,6 +227,24 @@ internal class GattServer (
 
     private data class PendingWrite(
         val characteristic: CBMutableCharacteristic,
-        val payload: ByteArray
+        val payload: ByteArray,
+        val progress: WriteProgress? = null,
+        val payloadSize: Int = payload.size,
     )
+
+    private class WriteProgress(
+        private val total: Int,
+        private val onProgress: ((sent: Int, total: Int) -> Unit)?
+    ) {
+        private var sent: Int = 0
+
+        fun advance(by: Int) {
+            if (total <= 0) {
+                onProgress?.invoke(1, 1)
+                return
+            }
+            sent = (sent + by).coerceAtMost(total)
+            onProgress?.invoke(sent, total)
+        }
+    }
 }

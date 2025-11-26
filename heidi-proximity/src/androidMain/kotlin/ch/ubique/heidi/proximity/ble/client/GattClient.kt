@@ -181,12 +181,18 @@ internal class GattClient(
         }
     }
 
-    override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
+    override fun writeCharacteristic(
+        charUuid: Uuid,
+        data: ByteArray,
+        onProgress: ((sent: Int, total: Int) -> Unit)?
+    ) {
         val targetUuid = charUuid.toJavaUuid()
         val shouldDrain = writeQueues.wasEmpty(targetUuid)
 
+        val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
         chunkMessage(data) { chunk ->
-            writeQueues.enqueue(targetUuid, chunk)
+            val payloadSize = (chunk.size - 1).coerceAtLeast(0)
+            writeQueues.enqueue(targetUuid, PendingWrite(chunk, progress, payloadSize))
         }
 
         if (shouldDrain) {
@@ -194,11 +200,16 @@ internal class GattClient(
         }
     }
 
-    override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
+    override fun writeCharacteristicNonChunked(
+        charUuid: Uuid,
+        data: ByteArray,
+        onProgress: ((sent: Int, total: Int) -> Unit)?
+    ) {
         val targetUuid = charUuid.toJavaUuid()
         val shouldDrain = writeQueues.wasEmpty(targetUuid)
 
-        writeQueues.enqueue(targetUuid, data)
+        val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
+        writeQueues.enqueue(targetUuid, PendingWrite(data, progress, data.size))
 
         if (shouldDrain) {
             drainWritingQueue(targetUuid)
@@ -520,7 +531,7 @@ internal class GattClient(
     private fun drainWritingQueue(charUuid: UUID) {
         val chunk = writeQueues.poll(charUuid) ?: return
 
-        if (chunk.size == 1 && chunk.single() == TransportProtocol.SHUTDOWN_MESSAGE.single()) {
+        if (chunk.isShutdownMessage()) {
             Logger(TAG).debug("Chunk is length 0, shutting down GattClient in 1000ms")
             // TODO: On some devices we lose messages already sent if we don't have a delay like
             //  this. Need to properly investigate if this is a problem in our stack or the
@@ -553,12 +564,13 @@ internal class GattClient(
             }
 
             try {
-                val success = requireGatt().writeCharacteristicCompat(characteristic, chunk)
+                val success = requireGatt().writeCharacteristicCompat(characteristic, chunk.payload)
 
                 if (!success) {
                     reportError(Error("Error writing characteristic $charUuid"))
                     return
                 }
+                chunk.progress?.advance(chunk.payloadSize)
             } catch (e: SecurityException) {
                 reportError(e)
             }
@@ -597,15 +609,15 @@ internal class GattClient(
     }
 
     private class WriteQueueManager {
-        private val queues = mutableMapOf<UUID, ArrayDeque<ByteArray>>()
+        private val queues = mutableMapOf<UUID, ArrayDeque<PendingWrite>>()
 
         fun wasEmpty(uuid: UUID): Boolean = queues[uuid]?.isEmpty() ?: true
 
-        fun enqueue(uuid: UUID, data: ByteArray) {
+        fun enqueue(uuid: UUID, data: PendingWrite) {
             queues.getOrPut(uuid) { ArrayDeque() }.addLast(data)
         }
 
-        fun poll(uuid: UUID): ByteArray? {
+        fun poll(uuid: UUID): PendingWrite? {
             val queue = queues[uuid] ?: return null
             val result = if (queue.isEmpty()) null else queue.removeFirst()
             if (queue.isEmpty()) {
@@ -618,6 +630,32 @@ internal class GattClient(
 
         fun clear() {
             queues.clear()
+        }
+    }
+
+    private data class PendingWrite(
+        val payload: ByteArray,
+        val progress: WriteProgress? = null,
+        val payloadSize: Int = payload.size
+    ) {
+        fun isShutdownMessage(): Boolean {
+            return payload.size == 1 && payload.single() == TransportProtocol.SHUTDOWN_MESSAGE.single()
+        }
+    }
+
+    private class WriteProgress(
+        private val total: Int,
+        private val onProgress: ((sent: Int, total: Int) -> Unit)?
+    ) {
+        private var sent: Int = 0
+
+        fun advance(by: Int) {
+            if (total <= 0) {
+                onProgress?.invoke(1, 1)
+                return
+            }
+            sent = (sent + by).coerceAtMost(total)
+            onProgress?.invoke(sent, total)
         }
     }
 
