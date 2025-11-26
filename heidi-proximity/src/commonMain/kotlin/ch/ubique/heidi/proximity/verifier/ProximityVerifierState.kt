@@ -56,8 +56,8 @@ sealed interface ProximityVerifierState {
 // Status codes follow ISO-18013-5 / Table 8 SessionData.status values.
 enum class TerminationReason(val code: Long) {
     GENERAL_ERROR(10),
-    READER_AUTHENTICATION_ERROR(2),
-    REQUEST_REJECTED(3),
+    READER_AUTHENTICATION_ERROR(20),
+    REQUEST_REJECTED(21),
     UNKNOWN(-1);
 
 	companion object {
