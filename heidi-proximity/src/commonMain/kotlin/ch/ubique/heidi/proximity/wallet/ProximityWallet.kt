@@ -42,6 +42,7 @@ import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
+import ch.ubique.heidi.proximity.verifier.TerminationReason
 import ch.ubique.heidi.proximity.util.logPayloadDebug
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -235,6 +236,29 @@ class ProximityWallet private constructor(
 		}
 		// Fallback completion in case progress callbacks do not hit exactly 1.0
 		markSubmissionCompleted()
+
+		return true
+	}
+
+	fun declinePresentation(): Boolean {
+		if (sessionCipher == null) {
+			disconnect()
+			return false
+		}
+
+		// Build SessionData with null payload and status=user declined
+		val sessionData = encodeCbor(
+			mapOf(
+				"data" to Value.Null,
+				"status" to TerminationReason.REQUEST_REJECTED.code,
+			).toCbor()
+		)
+
+		// Transport layer handles fragmentation; payload is already CBOR encoded
+		transportProtocol.sendMessage(sessionData, null)
+
+		walletStateMutable.update { ProximityWalletState.Disconnected }
+		transportProtocol.disconnect()
 
 		return true
 	}
