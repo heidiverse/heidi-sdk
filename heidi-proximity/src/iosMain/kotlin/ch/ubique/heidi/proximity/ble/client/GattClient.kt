@@ -22,14 +22,19 @@ package ch.ubique.heidi.proximity.ble.client
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.util.extensions.toData
 import ch.ubique.heidi.util.log.Logger
+import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import platform.CoreBluetooth.*
 import platform.Foundation.NSError
 import platform.Foundation.NSNumber
+import platform.darwin.DISPATCH_QUEUE_SERIAL
 import platform.darwin.NSObject
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_queue_create
 import kotlin.uuid.Uuid
 
+@OptIn(ExperimentalForeignApi::class)
 internal class GattClient (
 	internal val serviceUuid: Uuid
 ): BleGattClient {
@@ -48,6 +53,7 @@ internal class GattClient (
 
 	internal var connectedPeripheral: CBPeripheral? = null
 	private val pendingWrites = ArrayDeque<PendingWrite>()
+	private val writeQueue = dispatch_queue_create("ch.ubique.heidi.proximity.GattClient.writeQueue", null)
 
 	override val characteristicValueSize: Int
 		get() = connectedPeripheral?.maximumWriteValueLengthForType(1)?.toInt() ?: 23
@@ -174,16 +180,19 @@ internal class GattClient (
 		if (peripheral != connectedPeripheral) {
 			return
 		}
-//		Logger("GattClient").debug("peripheralIsReadyToSendWriteWithoutResponse -> flushing ${pendingWrites.size} chunks")
-		flushPendingWrites()
+		// serialize on writeQueue to avoid concurrent deque mutations
+		dispatch_async(writeQueue) {
+			flushPendingWritesLocked()
+		}
 	}
 
 	internal fun onPeripheralDisconnected(peripheral: CBPeripheral) {
 		if (peripheral != connectedPeripheral) {
 			return
 		}
-//		Logger("GattClient").debug("Peripheral disconnected -> clearing ${pendingWrites.size} queued writes")
-		pendingWrites.clear()
+		dispatch_async(writeQueue) {
+			pendingWrites.clear()
+		}
 		connectedPeripheral = null
 		incomingMessages.clear()
 	}
@@ -194,18 +203,26 @@ internal class GattClient (
 		progress: WriteProgress? = null,
 		payloadSize: Int = payload.size
 	) {
-		pendingWrites.addLast(PendingWrite(characteristic, payload, progress, payloadSize))
-		flushPendingWrites()
+		dispatch_async(writeQueue) {
+			pendingWrites.addLast(PendingWrite(characteristic, payload, progress, payloadSize))
+			flushPendingWritesLocked()
+		}
 	}
 
 	private fun flushPendingWrites() {
+		dispatch_async(writeQueue) {
+			flushPendingWritesLocked()
+		}
+	}
+
+	private fun flushPendingWritesLocked() {
 		val peripheral = connectedPeripheral ?: return
 		while (pendingWrites.isNotEmpty()) {
+			val next = pendingWrites.first()
 			if (!peripheral.canSendWriteWithoutResponse()) {
-//				Logger("GattClient").debug("Waiting for peripheral readiness; queued chunks=${pendingWrites.size}")
 				return
 			}
-			val next = pendingWrites.removeFirst()
+			pendingWrites.removeFirst()
 			peripheral.writeValue(next.payload.toData(), next.characteristic, CBCharacteristicWriteWithoutResponse)
 			next.progress?.advance(next.payloadSize)
 		}
