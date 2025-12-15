@@ -2713,6 +2713,7 @@ mod issuance {
 
             let num_credentials_per_type = 20;
             let expected_num_types = 2;
+            let is_for_pre_authorized_code = false;
             let credentials = issuance
                 .clone()
                 .finalize_issuance(
