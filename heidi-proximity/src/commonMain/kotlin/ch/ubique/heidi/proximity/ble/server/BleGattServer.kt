@@ -35,8 +35,8 @@ internal interface BleGattServer {
 
 	fun stop()
 
-	fun writeCharacteristic(charUuid: Uuid, data: ByteArray)
-	fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray)
+	fun writeCharacteristic(charUuid: Uuid, data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
+	fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
 
 	val characteristicValueSize : Int
 	fun chunkMessage(data: ByteArray, emitChunk: (ByteArray) -> Unit) {
@@ -55,5 +55,62 @@ internal interface BleGattServer {
 			emitChunk(chunk)
 			offset += size
 		} while (offset < data.size)
+	}
+}
+
+internal sealed interface ChunkProcessingResult {
+	data class Complete(val payload: ByteArray) : ChunkProcessingResult
+	data class Single(val payload: ByteArray) : ChunkProcessingResult
+	object Waiting : ChunkProcessingResult
+}
+
+internal class ChunkAccumulator<K> {
+	private val buffers = mutableMapOf<K, ChunkBuffer>()
+
+	fun consume(key: K, packet: ByteArray): ChunkProcessingResult {
+		if (packet.size == 1 && key !in buffers) {
+			return ChunkProcessingResult.Single(packet)
+		}
+		val header = packet.firstOrNull()?.toInt() ?: return ChunkProcessingResult.Single(packet)
+		return when (header) {
+			0x00 -> {
+				val payload = if (packet.size > 1) packet.copyOfRange(1, packet.size) else ByteArray(0)
+				val buffer = buffers.getOrPut(key) { ChunkBuffer() }
+				buffer.append(payload)
+				val complete = buffer.takeAll()
+				buffers.remove(key)
+				ChunkProcessingResult.Complete(complete)
+			}
+			0x01 -> {
+				val payload = if (packet.size > 1) packet.copyOfRange(1, packet.size) else ByteArray(0)
+				buffers.getOrPut(key) { ChunkBuffer() }.append(payload)
+				ChunkProcessingResult.Waiting
+			}
+			else -> ChunkProcessingResult.Single(packet)
+		}
+	}
+
+	fun clear(key: K) {
+		buffers.remove(key)
+	}
+
+	fun clear() {
+		buffers.clear()
+	}
+
+	private class ChunkBuffer {
+		private val data = mutableListOf<Byte>()
+
+		fun append(bytes: ByteArray) {
+			if (bytes.isEmpty()) return
+			bytes.forEach { data.add(it) }
+		}
+
+		fun takeAll(): ByteArray {
+			val result = ByteArray(data.size)
+			data.forEachIndexed { index, byte -> result[index] = byte }
+			data.clear()
+			return result
+		}
 	}
 }

@@ -28,15 +28,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.proximity.verifier.ProximityVerifierState
+import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreen
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreenCallbacks
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
 
 @Composable
 fun BluetoothScreen(
-	state: State<BluetoothState>,
+	state: State<ProximityVerifierState>,
 	log: State<List<String>>,
+	proofTemplate: State<ProofTemplate>,
+	onProofTemplateChanged: (ProofTemplate) -> Unit,
 	onStartServer: (role: TransportProtocol.Role) -> Unit,
 	onStartClient: (role: TransportProtocol.Role) -> Unit,
+	qrScannerViewModel: QrScannerViewModel,
+	scannerCallbacks: QrScannerScreenCallbacks,
 	sendMessage: (String) -> Unit,
 	onStopClicked: () -> Unit,
+	onResetClicked: () -> Unit,
 ) {
 	Scaffold { innerPadding ->
 		Column(
@@ -45,74 +55,131 @@ fun BluetoothScreen(
 				.padding(horizontal = 16.dp, vertical = 12.dp)
 		) {
 			val bluetoothState = state.value
-
-			var role by remember { mutableStateOf(TransportProtocol.Role.WALLET) }
-			Row(
-				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.spacedBy(4.dp),
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				Row(verticalAlignment = Alignment.CenterVertically) {
-					RadioButton(
-						selected = role == TransportProtocol.Role.WALLET,
-						onClick = { role = TransportProtocol.Role.WALLET },
-					)
-					Text("Act as wallet")
-				}
-				Row(verticalAlignment = Alignment.CenterVertically) {
-					RadioButton(
-						selected = role == TransportProtocol.Role.VERIFIER,
-						onClick = { role = TransportProtocol.Role.VERIFIER },
-					)
-					Text("Act as verifier")
-				}
-			}
+			var expanded by remember { mutableStateOf(false) }
 
 			Row(
 				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.spacedBy(4.dp),
+				horizontalArrangement = Arrangement.spacedBy(8.dp),
 				verticalAlignment = Alignment.CenterVertically,
 			) {
-				Button(
-					onClick = { onStartServer.invoke(role) },
-					modifier = Modifier.weight(1f),
-					enabled = bluetoothState is BluetoothState.Idle,
-					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-				) {
-					Text("Peripheral Server Mode", maxLines = 1)
-				}
-				Button(
-					onClick = { onStartClient.invoke(role) },
-					modifier = Modifier.weight(1f),
-					enabled = bluetoothState is BluetoothState.Idle,
-					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-				) {
-					Text("Central Client Mode", maxLines = 1)
+				Text("Proof Template:", modifier = Modifier.weight(1f))
+				Box {
+					Button(
+						onClick = { expanded = true },
+						contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+					) {
+						Text(
+							when (proofTemplate.value) {
+								ProofTemplate.IDENTITY_CARD_CHECK -> "ID Check"
+								ProofTemplate.AGE_OVER_16 -> "Age 16+"
+								ProofTemplate.AGE_OVER_18 -> "Age 18+"
+								ProofTemplate.AGE_OVER_65 -> "Age 65+"
+							},
+							maxLines = 1
+						)
+					}
+					DropdownMenu(
+						expanded = expanded,
+						onDismissRequest = { expanded = false }
+					) {
+						DropdownMenuItem(
+							text = { Text("Identity Card Check (First Name)") },
+							onClick = {
+								onProofTemplateChanged(ProofTemplate.IDENTITY_CARD_CHECK)
+								expanded = false
+							}
+						)
+						DropdownMenuItem(
+							text = { Text("Age Over 16") },
+							onClick = {
+								onProofTemplateChanged(ProofTemplate.AGE_OVER_16)
+								expanded = false
+							}
+						)
+						DropdownMenuItem(
+							text = { Text("Age Over 18") },
+							onClick = {
+								onProofTemplateChanged(ProofTemplate.AGE_OVER_18)
+								expanded = false
+							}
+						)
+						DropdownMenuItem(
+							text = { Text("Age Over 65") },
+							onClick = {
+								onProofTemplateChanged(ProofTemplate.AGE_OVER_65)
+								expanded = false
+							}
+						)
+					}
 				}
 			}
 
-			Row(
-				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.SpaceAround,
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				Button(
-					onClick = onStopClicked,
-					modifier = Modifier.fillMaxWidth(0.5f),
-					enabled = bluetoothState !is BluetoothState.Idle,
-					contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-				) {
-					Text("Stop", maxLines = 1)
+			if (bluetoothState !is ProximityVerifierState.VerificationResult<*>) {
+				Text("State: $bluetoothState")
+				Spacer(Modifier.height(8.dp))
+			}
+
+			if (bluetoothState is ProximityVerifierState.Initial) {
+				QrScannerScreen(
+					qrScannerViewModel,
+					scannerCallbacks,
+				)
+			}
+
+			if (bluetoothState is ProximityVerifierState.VerificationResult<*>) {
+				val result = bluetoothState.result
+				if (result is ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult) {
+					Card(
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(vertical = 8.dp)
+					) {
+						Column(
+							modifier = Modifier
+								.padding(16.dp)
+								.verticalScroll(rememberScrollState())
+						) {
+							Text(
+								"Verification Result",
+								style = MaterialTheme.typography.titleMedium,
+								modifier = Modifier.padding(bottom = 8.dp)
+							)
+							Text(
+								"Status: ${if (result.isVerificationSuccessful) "Success" else "Failed"}",
+								style = MaterialTheme.typography.bodyLarge,
+								color = if (result.isVerificationSuccessful) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+								modifier = Modifier.padding(bottom = 8.dp)
+							)
+
+							result.disclosures?.let { disclosures ->
+								Text(
+									"Disclosures:",
+									style = MaterialTheme.typography.titleSmall,
+									modifier = Modifier.padding(bottom = 4.dp, top = 8.dp)
+								)
+								disclosures.forEach { (credentialId, claims) ->
+									Text(
+										"Credential: $credentialId",
+										style = MaterialTheme.typography.bodyMedium,
+										modifier = Modifier.padding(vertical = 4.dp)
+									)
+									claims.forEach { (key, value) ->
+										if (key != "_sd") {
+											Text(
+												"  • $key: $value",
+												style = MaterialTheme.typography.bodySmall,
+												modifier = Modifier.padding(all = 8.dp)
+											)
+										}
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 
-			Spacer(Modifier.height(8.dp))
-
-			Text("State: $bluetoothState")
-
-			Spacer(Modifier.height(8.dp))
-
-			if (bluetoothState is BluetoothState.Connected) {
+			if (bluetoothState is ProximityVerifierState.Connected) {
 				Row(
 					verticalAlignment = Alignment.CenterVertically,
 					horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -148,6 +215,17 @@ fun BluetoothScreen(
 					it.forEach { message ->
 						Text(message)
 					}
+				}
+			}
+
+			Spacer(Modifier.height(16.dp))
+
+			if (bluetoothState !is ProximityVerifierState.Initial) {
+				Button(
+					onClick = onResetClicked,
+					modifier = Modifier.fillMaxWidth(),
+				) {
+					Text("Reset")
 				}
 			}
 		}

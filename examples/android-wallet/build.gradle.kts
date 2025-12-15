@@ -20,6 +20,7 @@ android {
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 	}
+	flavorDimensions += "version"
 
 	buildTypes {
 		release {
@@ -57,12 +58,14 @@ android {
 dependencies {
 	implementation(project(":heidi-wallet"))
 	implementation(project(":heidi-proximity"))
+	implementation(project(":heidi-crypto"))
 
 	implementation(libs.androidx.coreKtx)
 	implementation(libs.androidx.appcompat)
 	implementation(libs.androidx.lifecycle.runtimeKtx)
 	implementation(libs.androidx.activity.compose)
 
+	implementation(libs.kotlin.serialization)
 	implementation(libs.kotlin.coroutines)
 	implementation(libs.koin.android)
 

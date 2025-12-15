@@ -37,8 +37,8 @@ internal interface BleGattClient {
 
 	fun readCharacteristic(charUuid: Uuid)
 
-	fun writeCharacteristic(charUuid: Uuid, data: ByteArray)
-	fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray)
+	fun writeCharacteristic(charUuid: Uuid, data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
+	fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
 
 	fun readDescriptor(charUuid: Uuid, descriptorUuid: Uuid)
 

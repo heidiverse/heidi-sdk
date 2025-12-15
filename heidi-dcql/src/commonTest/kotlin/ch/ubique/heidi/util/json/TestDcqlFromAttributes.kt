@@ -21,6 +21,9 @@ under the License.
 package ch.ubique.heidi.util.json
 
 import ch.ubique.heidi.dcql.*
+import uniffi.heidi_dcql_rust.CredentialQuery
+import uniffi.heidi_dcql_rust.DcqlQuery
+import uniffi.heidi_dcql_rust.Meta
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -48,6 +51,8 @@ class TestDcqlFromAttributes {
             }
             """.trimIndent()
 		)
+
+
 
 		val result = sdJwtDcqlClaimsFromAttributes(input1)
 		val claims = query.credentials?.get(0)?.claims

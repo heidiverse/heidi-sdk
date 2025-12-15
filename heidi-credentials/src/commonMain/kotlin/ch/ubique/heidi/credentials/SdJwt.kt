@@ -196,7 +196,7 @@ class SdJwt(val innerJwt: SdJwtRust) : ClaimGetter {
         }
         fun create(claims: Value, disclosures: List<ClaimsPointer>, keyId: String, key: SignatureCreator, pubKeyJwk: Value?) : SdJwt? {
             val header = Header(alg = key.alg(), kid = keyId)
-            if (claims !is Value.Object) {
+            if (!claims.isObject()) {
                 return null
             }
             val keyClaims = claims.asObject()!!.toMutableMap()

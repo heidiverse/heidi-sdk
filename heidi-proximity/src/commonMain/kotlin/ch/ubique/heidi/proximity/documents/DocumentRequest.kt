@@ -19,13 +19,32 @@ under the License.
  */
 package ch.ubique.heidi.proximity.documents
 
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class DcRequests(val requests : List<DcRequest>) {
+	@Serializable
+	data class DcRequest(val protocol: String, val data : DcData) {
+		@Serializable
+		data class DcData(val request : String)
+	}
+}
+
 sealed interface DocumentRequest {
 
 	data class OpenId4Vp(
 		// TODO For now we just send the entire JWT we receive from the /par endpoint. In the end we want to send the presentation definition and verifier trust statements
 		val parJwt: String,
+		val origin: String? = null
 //		val presentationDefinition: String,
-	) : DocumentRequest
+	) : DocumentRequest {
+		fun asDcRequest() : DcRequests {
+			// The PAR request is a signed jwt, so we use the v1-signed protocol
+			// https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#appendix-A.1-4.2
+			val dcRequests = DcRequests(listOf(DcRequests.DcRequest(protocol = "openid4vp-v1-signed", data = DcRequests.DcRequest.DcData(parJwt))))
+			return dcRequests
+		}
+	}
 	data class Mdl (
 			val documents: List<MdlDocument>
 			) : DocumentRequest

@@ -252,7 +252,7 @@ class TestDcql {
         assertEquals(parsedVpToken.innerJwt.claims[listOf("unv", "subjects", 1, "title").toClaimsPointer()!!].size, 0)
 
         val pres = mapOf<String, String>(results.id to vpToken)
-        assertTrue(checkDcqlPresentation(query, pres, { _, _, _ -> mapOf<String, String>() }).isSuccess)
+        assertTrue(checkDcqlPresentation(query, pres, { _, _, _ -> emptyMap<String, Value>() }).isSuccess)
     }
     @Test
     fun testRolesParentRoles() {
@@ -308,7 +308,7 @@ class TestDcql {
         assertEquals(parsedVpToken.innerJwt.claims[parentRoleNamePointer][0].asString()!!, "Role2")
 
         val pres = mapOf<String, String>(credentialQuery.id to vpToken)
-        assertTrue(checkDcqlPresentation(rolesParentRolesQuery, pres, { _, _, _ -> mapOf<String, String>() }).isSuccess)
+        assertTrue(checkDcqlPresentation(rolesParentRolesQuery, pres, { _, _, _ -> emptyMap<String, Value>() }).isSuccess)
 
         assertTrue(checkDcqlPresentation(
             rolesParentRolesQuery2,
@@ -317,7 +317,7 @@ class TestDcql {
             ).getVpToken(credentialQuery, "123", null, null, "123", TestSigner(
                 SoftwareKeyPair.fromJwkString(privateKeyKeyBinding)
             )).getOrThrow()),
-            { _, _, _ -> mapOf<String, String>() }
+            { _, _, _ -> emptyMap<String, Value>() }
         ).isSuccess)
         assertTrue(checkDcqlPresentation(
             rolesParentRolesQuery2,
@@ -326,7 +326,7 @@ class TestDcql {
             ).getVpToken(credentialQuery, "123", null, null,"123", TestSigner(
                 SoftwareKeyPair.fromJwkString(privateKeyKeyBinding)
             )).getOrThrow()),
-            { _, _, _ -> mapOf<String, String>() }
+            { _, _, _ -> emptyMap<String, Value>() }
         ).isSuccess)
     }
     @Test

@@ -48,7 +48,7 @@ import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
 @Composable
 fun ProximityVerifierScreen(
 	proofTemplate: State<ProofTemplate>,
-	proximityState: State<ProximityVerifierState<VerificationDisclosureResult>>,
+	proximityState: State<ProximityVerifierState>,
 	onProofTemplateChanged: (ProofTemplate) -> Unit,
 	onStartVerificationClicked: () -> Unit,
 	onRestartClicked: () -> Unit,
@@ -166,7 +166,7 @@ fun ProximityVerifierScreen(
 							Text("Awaiting documents from wallet")
 						}
 					}
-					is ProximityVerifierState.VerificationResult -> {
+					is ProximityVerifierState.VerificationResult<*> -> {
 						Column(
 							horizontalAlignment = Alignment.CenterHorizontally,
 							modifier = Modifier
@@ -174,36 +174,36 @@ fun ProximityVerifierScreen(
 								.fillMaxHeight()
 								.padding(horizontal = 16.dp, vertical = 32.dp),
 						) {
-							val icon = if (state.result.isVerificationSuccessful) Icons.Default.Check else Icons.Default.Clear
-
-							Icon(
-								icon,
-								contentDescription = null,
-								tint = MaterialTheme.colorScheme.surface,
-								modifier = Modifier
-									.size(48.dp)
-									.background(if (state.result.isVerificationSuccessful) Color.Green else Color.Red, CircleShape)
-									.padding(4.dp),
-							)
-
-							Spacer(Modifier.height(12.dp))
-
-							state.result.disclosures?.let { disclosures ->
-								Column(
-									verticalArrangement = Arrangement.spacedBy(8.dp),
-									modifier = Modifier.verticalScroll(rememberScrollState())
-								) {
-									disclosures.forEach { (namespace, data) ->
-										Text(namespace, style = MaterialTheme.typography.headlineMedium)
-										data.forEach { (key, values) ->
-											Text(key, style = MaterialTheme.typography.bodySmall)
-											values.forEach { value ->
-												Text(value.toString(), style = MaterialTheme.typography.bodyMedium)
-											}
-										}
-									}
-								}
-							}
+//							val icon = if (state.result.isVerificationSuccessful) Icons.Default.Check else Icons.Default.Clear
+//
+//							Icon(
+//								icon,
+//								contentDescription = null,
+//								tint = MaterialTheme.colorScheme.surface,
+//								modifier = Modifier
+//									.size(48.dp)
+//									.background(if (state.result.isVerificationSuccessful) Color.Green else Color.Red, CircleShape)
+//									.padding(4.dp),
+//							)
+//
+//							Spacer(Modifier.height(12.dp))
+//
+//							state.result.disclosures?.let { disclosures ->
+//								Column(
+//									verticalArrangement = Arrangement.spacedBy(8.dp),
+//									modifier = Modifier.verticalScroll(rememberScrollState())
+//								) {
+//									disclosures.forEach { (namespace, data) ->
+//										Text(namespace, style = MaterialTheme.typography.headlineMedium)
+//										data.forEach { (key, values) ->
+//											Text(key, style = MaterialTheme.typography.bodySmall)
+//											values.forEach { value ->
+//												Text(value.toString(), style = MaterialTheme.typography.bodyMedium)
+//											}
+//										}
+//									}
+//								}
+//							}
 
 							Spacer(Modifier.height(12.dp))
 
@@ -218,6 +218,18 @@ fun ProximityVerifierScreen(
 							horizontalAlignment = Alignment.CenterHorizontally
 						) {
 							Text("Disconnected from wallet")
+							Spacer(Modifier.height(8.dp))
+							Button(onClick = onRestartClicked) {
+								Text("Restart Verification")
+							}
+						}
+					}
+					is ProximityVerifierState.Terminated -> {
+						Column(
+							modifier = Modifier.align(Alignment.Center),
+							horizontalAlignment = Alignment.CenterHorizontally
+						) {
+							Text("Session terminated (${state.reason})")
 							Spacer(Modifier.height(8.dp))
 							Button(onClick = onRestartClicked) {
 								Text("Restart Verification")

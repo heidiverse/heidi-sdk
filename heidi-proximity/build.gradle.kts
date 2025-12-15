@@ -3,6 +3,7 @@ plugins {
 	alias(libs.plugins.android.library)
 	alias(libs.plugins.skie)
 	alias(libs.plugins.vanniktech.publish)
+	alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -38,6 +39,7 @@ kotlin {
 			implementation(project(":heidi-crypto"))
 			implementation(libs.kotlin.coroutines)
 			implementation(libs.koin.core)
+			implementation(libs.kotlin.serialization)
 		}
 
 		commonTest.dependencies {
@@ -72,29 +74,7 @@ skie {
 }
 
 mavenPublishing {
-	coordinates(project.group.toString(), property("ARTIFACT_ID").toString(), project.version.toString())
-}
-
-publishing {
-	repositories {
-		maven {
-			val ubiqueMavenUrl = System.getenv("UB_ARTIFACTORY_URL_ANDROID")
-				?: System.getenv("ARTIFACTORY_URL_ANDROID")
-				?: extra["ubiqueMavenUrl"] as? String
-				?: ""
-			val ubiqueMavenUser = System.getenv("UB_ARTIFACTORY_USER")
-				?: System.getenv("ARTIFACTORY_USER_NAME")
-				?: extra["ubiqueMavenUser"] as? String
-				?: ""
-			val ubiqueMavenPass = System.getenv("UB_ARTIFACTORY_PASSWORD")
-				?: System.getenv("ARTIFACTORY_API_KEY")
-				?: extra["ubiqueMavenPass"] as? String
-				?: ""
-			url = uri(ubiqueMavenUrl)
-			credentials {
-				username = ubiqueMavenUser
-				password = ubiqueMavenPass
-			}
-		}
-	}
+	coordinates(artifactId= property("ARTIFACT_ID").toString(), version= project.version.toString())
+	publishToMavenCentral(true)
+	signAllPublications()
 }

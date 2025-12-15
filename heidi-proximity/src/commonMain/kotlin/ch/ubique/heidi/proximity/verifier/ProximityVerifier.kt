@@ -20,15 +20,32 @@ under the License.
 package ch.ubique.heidi.proximity.verifier
 
 import ch.ubique.heidi.proximity.ProximityProtocol
+import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
+import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionData
+import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionEstablishment
+import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocolExtensions
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
+import ch.ubique.heidi.util.extensions.json
+import ch.ubique.heidi.util.extensions.toCbor
+import ch.ubique.heidi.util.log.Logger
+import ch.ubique.heidi.proximity.util.logPayloadDebug
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import uniffi.heidi_crypto_rust.EphemeralKey
+import uniffi.heidi_crypto_rust.Role
+import uniffi.heidi_crypto_rust.SessionCipher
+import uniffi.heidi_crypto_rust.base64UrlEncode
+import uniffi.heidi_crypto_rust.sha256Rs
+import uniffi.heidi_util_rust.Value
+import uniffi.heidi_util_rust.encodeCbor
 import kotlin.uuid.Uuid
 
 /**
@@ -40,6 +57,9 @@ class ProximityVerifier<T> private constructor(
 	private val engagementBuilder: EngagementBuilder?,
 	private val transportProtocol: TransportProtocol,
 	private val documentRequester: DocumentRequester<T>,
+	private var sessionCipher: SessionCipher? = null,
+	private var isDcApi : Boolean = true,
+	private val readerKey: Value? = null
 ) {
 
 	companion object {
@@ -48,14 +68,30 @@ class ProximityVerifier<T> private constructor(
 			scope: CoroutineScope,
 			verifierName: String,
 			requester: DocumentRequester<T>,
+			qrcodeData: String? = null,
+			preferDcApi: Boolean = true
 		): ProximityVerifier<T> {
-			val publicKey = "myPublicKey" // TODO Generate ephemeral key pair
-
+			val publicKey = EphemeralKey(Role.SK_READER) // TODO Generate ephemeral key pair
 			return when (protocol) {
-				ProximityProtocol.MDL -> TODO("Not yet supported")
+				ProximityProtocol.MDL -> {
+					val deviceEngagement = MdlEngagement.fromQrCode(qrcodeData!!)
+					val coseKey = mapOf(
+						//ECDH
+						-1 to 1,
+						// EC
+						1 to 2,
+						//x
+						-2 to publicKey.publicKey().slice(1..<33).toByteArray(),
+						//y
+						-3 to publicKey.publicKey().slice(33..<65).toByteArray(),
+					).toCbor()
+					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid,  deviceEngagement?.peripheralServerUuid, publicKey)
+
+					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester, readerKey = coseKey, isDcApi = preferDcApi)
+				}
 				ProximityProtocol.OPENID4VP -> {
 					val serviceUuid = Uuid.random()
-					val engagementBuilder = OpenId4VpEngagementBuilder(verifierName, publicKey, serviceUuid)
+					val engagementBuilder = OpenId4VpEngagementBuilder(verifierName,  base64UrlEncode(publicKey.publicKey()), serviceUuid)
 					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.VERIFIER, serviceUuid, requester)
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester)
 				}
@@ -72,7 +108,7 @@ class ProximityVerifier<T> private constructor(
 		}
 	}
 
-	private val verifierStateMutable = MutableStateFlow<ProximityVerifierState<T>>(ProximityVerifierState.Initial)
+	private val verifierStateMutable = MutableStateFlow<ProximityVerifierState>(ProximityVerifierState.Initial)
 	val verifierState = verifierStateMutable.asStateFlow()
 
 	init {
@@ -84,10 +120,65 @@ class ProximityVerifier<T> private constructor(
 
 				override fun onConnected() {
 					verifierStateMutable.update { ProximityVerifierState.Connected }
+
+					if(protocol == ProximityProtocol.MDL) {
+						sessionCipher = (transportProtocol as MdlTransportProtocolExtensions).getSessionCipher((engagementBuilder as MdlEngagement).originalData, encodeCbor(readerKey.toCbor()), engagementBuilder.coseKey)
+						scope.launch {
+							// The session transcript is needed to derive origin
+							val sessionTranscript = (transportProtocol as MdlTransportProtocolExtensions).sessionTranscript ?: run {
+								verifierStateMutable.update {
+									ProximityVerifierState.Error(Throwable("failed to get session transcript"))
+								}
+								return@launch
+							}
+							val sessionTranscriptBytes = encodeCbor (sessionTranscript)
+							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
+							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
+							var documentRequest = documentRequester.createDocumentRequest(origin)
+							when(documentRequest) {
+								is DocumentRequest.Mdl -> {
+									isDcApi = false
+								}
+								is DocumentRequest.OpenId4Vp -> {
+									// convert our custom class to the DC-API object
+									val dcRequest = documentRequest.asDcRequest()
+									val serializedDcRequest = json.encodeToString(dcRequest)
+									val currentCipher = sessionCipher ?: run {
+										verifierStateMutable.update {
+											ProximityVerifierState.Error(Throwable("no session cipher"))
+										}
+										return@launch
+									}
+									readerKey ?: run {
+										verifierStateMutable.update {
+											ProximityVerifierState.Error(Throwable("reader key is null"))
+										}
+										return@launch
+									}
+									val encryptedData = currentCipher.encrypt(serializedDcRequest.encodeToByteArray()) ?: run {
+										verifierStateMutable.update {
+											ProximityVerifierState.Error(Throwable("failed to encrypt data"))
+										}
+										return@launch
+									}
+									var readerKeyTagged = (24 to encodeCbor(readerKey.toCbor())).toCbor()
+									// In the session establishment data package, we need to transmit the other part of the key (ours)
+									var sessionEstablishment = MdlSessionEstablishment(readerKeyTagged, encryptedData, true)
+									transportProtocol.sendMessage(sessionEstablishment.asCbor())
+									verifierStateMutable.update {
+										ProximityVerifierState.AwaitingDocuments
+									}
+								}
+							}
+
+						}
+					}
 				}
 
 				override fun onDisconnected() {
-					verifierStateMutable.update { ProximityVerifierState.Disconnected }
+					verifierStateMutable.update { current ->
+						if (current is ProximityVerifierState.Terminated) current else ProximityVerifierState.Disconnected
+					}
 				}
 
 				override fun onMessageReceived() {
@@ -100,7 +191,7 @@ class ProximityVerifier<T> private constructor(
 				}
 
 				override fun onTransportSpecificSessionTermination() {
-					TODO("Not yet implemented")
+
 				}
 
 				override fun onError(error: Throwable) {
@@ -132,19 +223,89 @@ class ProximityVerifier<T> private constructor(
 	}
 
 	fun disconnect() {
+		Logger.debug("disconnect() was called")
 		transportProtocol.disconnect()
-		verifierStateMutable.update { ProximityVerifierState.Disconnected }
+		if (verifierStateMutable.value !is ProximityVerifierState.Terminated) {
+			verifierStateMutable.update { ProximityVerifierState.Disconnected }
+		}
 	}
 
 	fun reset() {
+		Logger.debug("reset() was called")
 		disconnect()
 		verifierStateMutable.update { ProximityVerifierState.Initial }
+	}
+
+	fun connect() {
+		verifierStateMutable.update {
+			ProximityVerifierState.Connecting
+		}
+		scope.launch(Dispatchers.IO) {
+			transportProtocol.connect()
+		}
+
 	}
 
 	private fun processMessageReceived(message: ByteArray) {
 		scope.launch(Dispatchers.IO) {
 			when (protocol) {
-				ProximityProtocol.MDL -> TODO("Not yet supported")
+				ProximityProtocol.MDL -> {
+					Logger.debug("Processing message of size ${message.size}")
+					logPayloadDebug("Verifier received MDL payload", message)
+					val sessionData = MdlSessionData.fromCbor(message) ?: run {
+						Logger.debug("Unable to create MdlSessionData")
+						disconnect()
+						return@launch
+					}
+					if (sessionData.status != null) {
+						val reason = TerminationReason.fromCode(sessionData.status)
+						Logger.debug("processMessageReceived status=${sessionData.status} reson: $reason, disconnecting, sessionData=$sessionData")
+						verifierStateMutable.update { ProximityVerifierState.Terminated(reason) }
+						disconnect()
+						return@launch
+					}
+					val encryptedPayload = sessionData.data ?: run {
+						Logger.debug("processMessageReceived data is null, disconnecting")
+						verifierStateMutable.update { ProximityVerifierState.Error(Error("Received empty session data")) }
+						disconnect()
+						return@launch
+					}
+					sessionData.shaSum?.let { expectedSha ->
+						val actualSha = sha256Rs(encryptedPayload)
+						if (!expectedSha.contentEquals(actualSha)) {
+							Logger.debug(
+								"processMessageReceived sha mismatch expected=${base64UrlEncode(expectedSha)} actual=${base64UrlEncode(actualSha)}, disconnecting"
+							)
+							verifierStateMutable.update { ProximityVerifierState.Error(Error("MDL payload hash mismatch")) }
+							disconnect()
+							return@launch
+						}
+					}
+					val currentCipher = sessionCipher ?: run {
+						Logger.debug("processMessageReceived sessionCipher is null, disconnecting")
+						verifierStateMutable.update { ProximityVerifierState.Error(Error("Missing session cipher")) }
+						disconnect()
+						return@launch
+					}
+					val data = currentCipher.decrypt(encryptedPayload) ?: run {
+						Logger.debug("processMessageReceived unable to decrypt payload of size ${encryptedPayload.size}")
+						verifierStateMutable.update { ProximityVerifierState.Error(Error("Failed to decrypt session data")) }
+						disconnect()
+						return@launch
+					}
+					if(isDcApi){
+						// data should be the dcql response
+						val response = documentRequester.verifySubmittedDocuments(data)
+						verifierStateMutable.update {
+							ProximityVerifierState.VerificationResult(response)
+						}
+					} else {
+						// handle mdl device response
+						verifierStateMutable.update {
+							ProximityVerifierState.Error(Error("mdl not yet implemented"))
+						}
+					}
+				}
 				ProximityProtocol.OPENID4VP -> {
 					verifierStateMutable.update { current ->
 						when (current) {

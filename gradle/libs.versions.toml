@@ -91,8 +91,5 @@ ktorfit = { id = "de.jensklingenberg.ktorfit", version.ref = "ktorfit" }
 skie = { id = "co.touchlab.skie", version.ref = "skie" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 uniffi-plugin = { id = "ch.ubique.uniffi.plugin", version.ref = "uniffi-plugin" }
-ubique-alpaka = { id = "ch.ubique.gradle.alpaka", version.ref = "ubique-gradle-alpaka" }
-ubique-preset = { id = "ch.ubique.gradle.preset", version.ref = "ubique-gradle-preset" }
-ubique-signing = { id = "ch.ubique.gradle.signing", version.ref = "ubique-gradle-signing" }
 vanniktech-publish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktech-publish" }
 jetbrains-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

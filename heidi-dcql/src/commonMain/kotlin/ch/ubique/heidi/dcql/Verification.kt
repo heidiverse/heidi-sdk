@@ -61,7 +61,7 @@ typealias DcqlPresentation = Map<String, String>
 fun interface CheckVpTokenCallback {
     // Makes Java aware that this function can throw exceptions
     @Throws(Exception::class)
-    fun check(credentialType: CredentialType, vpToken: String, queryId: String): Map<String, Any>
+    fun check(credentialType: CredentialType, vpToken: String, queryId: String): Map<String, Value>
 }
 
 open class DcqlVerificationException(message: String) : Exception(message)
@@ -278,8 +278,8 @@ private fun getCredentialType(vpToken: String, expectedFormat: String): Result<C
 private fun checkCredentialQuery(
     query: CredentialQuery,
     vpTokens: DcqlPresentation,
-    checkVpToken: (credentialType: CredentialType, vpToken: String, queryId: String) -> Map<String, Any>,
-): Result<Map<String, Any>> {
+    checkVpToken: (credentialType: CredentialType, vpToken: String, queryId: String) -> Map<String, Value>,
+): Result<Map<String, Value>> {
     val vpToken =
         vpTokens[query.id] ?: return Result.failure(CredentialQueryNotFoundException(query.id))
 
@@ -288,7 +288,9 @@ private fun checkCredentialQuery(
 
     return when (credentialType) {
         CredentialType.SdJwt -> {
-            val result = checkVpToken(CredentialType.SdJwt, vpToken, query.id)
+            val result = runCatching {
+                checkVpToken(CredentialType.SdJwt, vpToken, query.id)
+            }.getOrElse { return Result.failure(it) }
             val sdJwt = SdJwt.parse(vpToken)
 
             query.meta?.let {
@@ -301,7 +303,9 @@ private fun checkCredentialQuery(
         }
 
         CredentialType.Mdoc -> {
-            val result = checkVpToken(CredentialType.Mdoc, vpToken, query.id)
+            val result = runCatching {
+                checkVpToken(CredentialType.Mdoc, vpToken, query.id)
+            }.getOrElse { return Result.failure(it) }
 
             val parsedCbor = decodeCbor(base64UrlDecode(vpToken))
             val issuerSigned =
@@ -321,7 +325,9 @@ private fun checkCredentialQuery(
         }
 
         CredentialType.BbsTermwise -> {
-            val result = checkVpToken(CredentialType.BbsTermwise, vpToken, query.id)
+            val result = runCatching {
+                checkVpToken(CredentialType.BbsTermwise, vpToken, query.id)
+            }.getOrElse { return Result.failure(it) }
             val bbs = BbsPresentation.parse(vpToken)
 
             query.meta?.let {
@@ -338,7 +344,9 @@ private fun checkCredentialQuery(
         }
 
         CredentialType.W3C_VCDM -> {
-            val result = checkVpToken(CredentialType.W3C_VCDM, vpToken, query.id)
+            val result = runCatching {
+                checkVpToken(CredentialType.W3C_VCDM, vpToken, query.id)
+            }.getOrElse { return Result.failure(it) }
             val w3c = W3C.parse(vpToken)
 
             query.meta?.let {
@@ -358,9 +366,9 @@ private fun checkCredentialSetQuery(
     query: CredentialSetQuery,
     credentialQueries: List<CredentialQuery>,
     vpTokens: DcqlPresentation,
-    checkVpToken: (credentialType: CredentialType, vpToken: String, queryId: String) -> Map<String, Any>,
-): Result<Map<String, Map<String, Any>>> {
-    if (!query.required) return Result.success(mapOf())
+    checkVpToken: (credentialType: CredentialType, vpToken: String, queryId: String) -> Map<String, Value>,
+): Result<Map<String, Map<String, Value>>> {
+    if (!query.required) return Result.success(emptyMap<String, Map<String, Value>>())
 
     // To satisfy a Credential Set Query, the Wallet MUST return presentations
     // of a set of Credentials that match to one of the options inside the
@@ -380,12 +388,19 @@ private fun checkCredentialSetQuery(
     }.find { it.isSuccess } ?: Result.failure(NoCredentialSetQueryOptionSatisfiedException())
 }
 
+/**
+ * Validates a presented credential set against a DCQL query.
+ *
+ * If [checkVpToken] throws while validating a VP token, the exception is captured
+ * and propagated as a `Result.failure`, allowing callers to handle verification issues
+ * without uncaught exceptions.
+ */
 fun checkDcqlPresentation(
     query: DcqlQuery,
     vpTokens: DcqlPresentation,
     checkVpToken: CheckVpTokenCallback,
-): Result<Map<String, Map<String, Any>>> {
-    val credentialQueries = query.credentials ?: return Result.success(mapOf())
+): Result<Map<String, Map<String, Value>>> {
+    val credentialQueries = query.credentials ?: return Result.success(emptyMap<String, Map<String, Value>>())
     val credentialSetQueries = query.credentialSets
 
     // The Verifier requests presentations of Credentials to be returned satisfying

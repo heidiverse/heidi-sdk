@@ -636,7 +636,7 @@ impl Credential {
                 }
 
                 if errors.is_empty() {
-                    Ok(vec![])
+                    Ok(claims.clone())
                 } else {
                     Err(DcqlCredentialQueryMismatch::UnsatisfiedClaimQueries(errors))
                 }

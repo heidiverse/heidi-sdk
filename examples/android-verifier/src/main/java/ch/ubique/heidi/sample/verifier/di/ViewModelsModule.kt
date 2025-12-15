@@ -21,11 +21,13 @@ package ch.ubique.heidi.sample.verifier.di
 
 import ch.ubique.heidi.sample.verifier.feature.bluetooth.BluetoothViewModel
 import ch.ubique.heidi.sample.verifier.feature.proximity.ProximityVerifierViewModel
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
 import org.koin.dsl.module
 
 val viewModelsModule = module {
 	includes(
 		BluetoothViewModel.koinModule,
 		ProximityVerifierViewModel.koinModule,
+		QrScannerViewModel.koinModule
 	)
 }

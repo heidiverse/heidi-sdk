@@ -22,14 +22,19 @@ package ch.ubique.heidi.proximity.ble.client
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.util.extensions.toData
 import ch.ubique.heidi.util.log.Logger
+import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import platform.CoreBluetooth.*
 import platform.Foundation.NSError
 import platform.Foundation.NSNumber
+import platform.darwin.DISPATCH_QUEUE_SERIAL
 import platform.darwin.NSObject
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_queue_create
 import kotlin.uuid.Uuid
 
+@OptIn(ExperimentalForeignApi::class)
 internal class GattClient (
 	internal val serviceUuid: Uuid
 ): BleGattClient {
@@ -47,6 +52,8 @@ internal class GattClient (
 	internal val incomingMessages: MutableMap<Uuid, okio.Buffer> = mutableMapOf()
 
 	internal var connectedPeripheral: CBPeripheral? = null
+	private val pendingWrites = ArrayDeque<PendingWrite>()
+	private val writeQueue = dispatch_queue_create("ch.ubique.heidi.proximity.GattClient.writeQueue", null)
 
 	override val characteristicValueSize: Int
 		get() = connectedPeripheral?.maximumWriteValueLengthForType(1)?.toInt() ?: 23
@@ -89,6 +96,7 @@ internal class GattClient (
 		}
 
 		connectedPeripheral = null
+		pendingWrites.clear()
 	}
 
 	override fun readCharacteristic(charUuid: Uuid) {
@@ -100,24 +108,38 @@ internal class GattClient (
 		}
 	}
 
-	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
+	override fun writeCharacteristic(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
+		Logger("GattClient").debug("write chunked: $charUuid (${data.size})")
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 		connectedPeripheral?.let { peripheral ->
 			peripheralCharacteristics[peripheral]
-				?.find { it.uuid == charUuid}
+				?.find { it.uuid == charUuid }
 				?.let { char ->
-					chunkMessage(data) {
-						peripheral.writeValue(it.toData(), char.characteristic, CBCharacteristicWriteWithoutResponse) }
+					chunkMessage(data) { chunk ->
+						val payloadSize = (chunk.size - 1).coerceAtLeast(0)
+						enqueueWrite(char.characteristic, chunk, progress, payloadSize)
+					}
 				}
 		}
 	}
-	override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
-		Logger("GattClient").debug("write non chunked: $charUuid (${data.contentToString()})")
+
+	override fun writeCharacteristicNonChunked(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
+		Logger("GattClient").debug("write non chunked: $charUuid (${data.size})")
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 		connectedPeripheral?.let { peripheral ->
 			peripheralCharacteristics[peripheral]
 				?.find { it.uuid == charUuid }
 				?.let {
-					Logger("GattClient").debug("Writing to char")
-					peripheral.writeValue(data.toData(), it.characteristic, CBCharacteristicWriteWithoutResponse)
+//					Logger("GattClient").debug("queueing non chunked write")
+					enqueueWrite(it.characteristic, data, progress, data.size)
 				}
 		}
 	}
@@ -151,6 +173,81 @@ internal class GattClient (
 						}
 
 				}
+		}
+	}
+
+	internal fun notifyReadyToSend(peripheral: CBPeripheral) {
+		if (peripheral != connectedPeripheral) {
+			return
+		}
+		// serialize on writeQueue to avoid concurrent deque mutations
+		dispatch_async(writeQueue) {
+			flushPendingWritesLocked()
+		}
+	}
+
+	internal fun onPeripheralDisconnected(peripheral: CBPeripheral) {
+		if (peripheral != connectedPeripheral) {
+			return
+		}
+		dispatch_async(writeQueue) {
+			pendingWrites.clear()
+		}
+		connectedPeripheral = null
+		incomingMessages.clear()
+	}
+
+	private fun enqueueWrite(
+		characteristic: CBCharacteristic,
+		payload: ByteArray,
+		progress: WriteProgress? = null,
+		payloadSize: Int = payload.size
+	) {
+		dispatch_async(writeQueue) {
+			pendingWrites.addLast(PendingWrite(characteristic, payload, progress, payloadSize))
+			flushPendingWritesLocked()
+		}
+	}
+
+	private fun flushPendingWrites() {
+		dispatch_async(writeQueue) {
+			flushPendingWritesLocked()
+		}
+	}
+
+	private fun flushPendingWritesLocked() {
+		val peripheral = connectedPeripheral ?: return
+		while (pendingWrites.isNotEmpty()) {
+			val next = pendingWrites.first()
+			if (!peripheral.canSendWriteWithoutResponse()) {
+				return
+			}
+			pendingWrites.removeFirst()
+			peripheral.writeValue(next.payload.toData(), next.characteristic, CBCharacteristicWriteWithoutResponse)
+			next.progress?.advance(next.payloadSize)
+		}
+	}
+
+	private data class PendingWrite(
+		val characteristic: CBCharacteristic,
+		val payload: ByteArray,
+		val progress: WriteProgress? = null,
+		val payloadSize: Int = payload.size,
+	)
+
+	private class WriteProgress(
+		private val total: Int,
+		private val onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
+		private var sent: Int = 0
+
+		fun advance(by: Int) {
+			if (total <= 0) {
+				onProgress?.invoke(1, 1)
+				return
+			}
+			sent = (sent + by).coerceAtMost(total)
+			onProgress?.invoke(sent, total)
 		}
 	}
 }

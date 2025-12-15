@@ -19,82 +19,232 @@ under the License.
  */
 package ch.ubique.heidi.proximity.ble.server
 
+import ch.ubique.heidi.proximity.ble.client.toByteArray
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.util.extensions.toData
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlin.collections.ArrayDeque
+import platform.CoreBluetooth.CBAdvertisementDataServiceUUIDsKey
+import platform.CoreBluetooth.CBATTErrorSuccess
+import platform.CoreBluetooth.CBATTErrorUnlikelyError
+import platform.CoreBluetooth.CBATTRequest
+import platform.CoreBluetooth.CBCentral
+import platform.CoreBluetooth.CBCharacteristic
 import platform.CoreBluetooth.CBMutableCharacteristic
 import platform.CoreBluetooth.CBMutableService
 import platform.CoreBluetooth.CBPeripheralManager
+import platform.CoreBluetooth.CBService
 import platform.CoreBluetooth.CBUUID
+import platform.Foundation.NSError
 import kotlin.uuid.Uuid
 
 internal class GattServer (
-	private val serviceUuid: Uuid
-): BleGattServer {
-	private var listener: BleGattServerListener? = null
-	private var advertiserListener: BleAdvertiserListener? = null
-	private var service: CBMutableService? = null
-	private var manager: CBPeripheralManager? = null
-	private var isReady: Boolean = false
+    private val serviceUuid: Uuid
+): BleGattServer, GattServerDelegate.Handler {
+    private var listener: BleGattServerListener? = null
+    private var advertiserListener: BleAdvertiserListener? = null
+    private var service: CBMutableService? = null
+    private var manager: CBPeripheralManager? = null
+    private var isReady: Boolean = false
+    private var canUpdateSubscribers = true
 
-	private val delegate = GattServerDelegate(listener) {
-		isReady = true
-	}
+    private val chunkAccumulator = ChunkAccumulator<String>()
+    private val pendingWrites = ArrayDeque<PendingWrite>()
+
+    private val delegate = GattServerDelegate(this)
 
 	init {
 		manager = CBPeripheralManager(delegate, null)
 	}
 
-	override fun setListener(listener: BleGattServerListener?) {
-		this.listener = listener
-	}
+    override fun setListener(listener: BleGattServerListener?) {
+        this.listener = listener
+    }
 
 	override fun start(characteristics: List<BleGattCharacteristic>): Boolean {
 		while(!isReady) {
 			runBlocking { delay(300) }
 		}
-		// TODO BM: why is this crashing, its not if called from swift code
 		service = CBMutableService(CBUUID.UUIDWithString(serviceUuid.toString()), true).also {
 			it.setCharacteristics(characteristics.map { it.characteristic })
 		}
 		manager?.addService(service!!)
+
+		service?.characteristics?.forEach {
+			val mut = it as? CBMutableCharacteristic
+			Logger.debug("Characteristc: ${mut?.UUID?.UUIDString} properties: ${mut?.properties} descriptors: ${mut?.descriptors}")
+		}
+
 		return true
 	}
 
 
 	override fun startAdvertising(listener: BleAdvertiserListener) {
 		advertiserListener = listener
-		manager?.startAdvertising(null)
+		manager?.startAdvertising(mapOf(
+			CBAdvertisementDataServiceUUIDsKey to listOf(CBUUID.UUIDWithString(serviceUuid.toString()))
+		))
 	}
 
-	override fun stopAdvertising() {
-		manager?.stopAdvertising()
-	}
+    override fun stopAdvertising() {
+        manager?.stopAdvertising()
+    }
 
-	override fun supportsSessionTermination(): Boolean {
-		return true
-	}
+    override fun supportsSessionTermination(): Boolean {
+        return true
+    }
 
-	override fun stop() {
-		manager?.stopAdvertising()
-	}
+    override fun stop() {
+        manager?.stopAdvertising()
+        chunkAccumulator.clear()
+        pendingWrites.clear()
+    }
 
-	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
-		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID.UUIDString == charUuid.toString() }?.let {
+	override fun writeCharacteristic(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
+		Logger.debug("GattServer: trying to write to: $charUuid, mtu: $characteristicValueSize")
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
+		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
 			chunkMessage(data) { chunked ->
-				manager?.updateValue(chunked.toData(), it, null)
+				val payloadSize = (chunked.size - 1).coerceAtLeast(0)
+				pendingWrites.addLast(PendingWrite(it, chunked, progress, payloadSize))
 			}
+			flushPendingWrites()
 		}
 	}
 
-	override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
-		service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID.UUIDString == charUuid.toString() }?.let {
-			manager?.updateValue(data.toData(), it, null)
-		}
-	}
+    override fun writeCharacteristicNonChunked(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
+		Logger.debug("GattServer: trying to write non chunked to: $charUuid, mtu: $characteristicValueSize")
+        val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
+        service?.characteristics?.map { it as CBMutableCharacteristic }?.find { it.UUID == CBUUID.UUIDWithString(charUuid.toString()) }?.let {
+            pendingWrites.addLast(PendingWrite(it, data, progress, data.size))
+            flushPendingWrites()
+        }
+    }
 
-	override val characteristicValueSize: Int
-		get() = 512
+    override val characteristicValueSize: Int
+        get() = 512
+
+    override fun onStateUpdated(peripheral: CBPeripheralManager) {
+        Logger.debug("Peripheral Manager did update state ${peripheral.state} / ${peripheral.isAdvertising()} ")
+        isReady = peripheral.state == 5L
+        if (!isReady) {
+            chunkAccumulator.clear()
+            pendingWrites.clear()
+            canUpdateSubscribers = false
+        } else {
+            canUpdateSubscribers = true
+            flushPendingWrites()
+        }
+    }
+
+    override fun onRead(peripheral: CBPeripheralManager, request: CBATTRequest) {
+//        Logger.debug("Peripheral Manager didReceiveReadRequest")
+        val characteristic = request.characteristic ?: return
+        listener?.onCharacteristicReadRequest(BleGattCharacteristic(characteristic))
+    }
+
+    override fun onWrite(peripheral: CBPeripheralManager, requests: List<*>) {
+//        Logger.debug("Peripheral Manager didReceiveWriteRequests $requests")
+
+        requests.forEach { anyReq ->
+            val request = anyReq as? CBATTRequest ?: return@forEach
+            val characteristic = request.characteristic ?: return@forEach
+            val uuidString = characteristic.UUID?.UUIDString ?: return@forEach
+            val value = request.value?.toByteArray() ?: byteArrayOf()
+
+            if (value.isEmpty()) {
+                return@forEach
+            }
+
+            when (val chunkResult = chunkAccumulator.consume(uuidString, value)) {
+                ChunkProcessingResult.Waiting -> { }
+                is ChunkProcessingResult.Complete -> {
+                    listener?.onCharacteristicWriteRequest(
+                        BleGattCharacteristic(characteristic, chunkResult.payload)
+                    )
+                }
+                is ChunkProcessingResult.Single -> {
+                    listener?.onCharacteristicWriteRequest(
+                        BleGattCharacteristic(characteristic, chunkResult.payload)
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onStartAdvertising(peripheral: CBPeripheralManager, error: NSError?) {
+        Logger.debug("Peripheral Manager did start advertising error: $error")
+    }
+
+    override fun onAddService(peripheral: CBPeripheralManager, service: CBService, error: NSError?) {
+        Logger.debug("Peripheral Manager didAddService advertising error: $error")
+    }
+
+    override fun onReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
+        Logger.debug("Peripheral Manager peripheralManagerIsReadyToUpdateSubscribers")
+        canUpdateSubscribers = true
+        flushPendingWrites()
+    }
+
+    override fun onSubscribe(
+        peripheral: CBPeripheralManager,
+        central: CBCentral,
+        characteristic: CBCharacteristic
+    ) {
+        Logger.debug("Peripheral Manager did didSubscribeToCharacteristic: ${characteristic.UUID.UUIDString}")
+    }
+
+    private fun flushPendingWrites() {
+        val currentManager = manager ?: return
+        if (!canUpdateSubscribers && pendingWrites.isNotEmpty()) {
+//            Logger.debug("GattServer: waiting for peripheralManagerIsReadyToUpdateSubscribers, queued chunks: ${pendingWrites.size}")
+            return
+        }
+        while (pendingWrites.isNotEmpty()) {
+            val next = pendingWrites.first()
+//            Logger.debug("GattServer: sending chunk ${next.payload.size} bytes to characteristic ${next.characteristic}")
+            val success = currentManager.updateValue(next.payload.toData(), next.characteristic, null)
+//            Logger.debug("GattServer: sending returned $success")
+            if (success == true) {
+                pendingWrites.removeFirst()
+                next.progress?.advance(next.payloadSize)
+            } else {
+                canUpdateSubscribers = false
+                break
+            }
+        }
+    }
+
+    private data class PendingWrite(
+        val characteristic: CBMutableCharacteristic,
+        val payload: ByteArray,
+        val progress: WriteProgress? = null,
+        val payloadSize: Int = payload.size,
+    )
+
+    private class WriteProgress(
+        private val total: Int,
+        private val onProgress: ((sent: Int, total: Int) -> Unit)?
+    ) {
+        private var sent: Int = 0
+
+        fun advance(by: Int) {
+            if (total <= 0) {
+                onProgress?.invoke(1, 1)
+                return
+            }
+            sent = (sent + by).coerceAtMost(total)
+            onProgress?.invoke(sent, total)
+        }
+    }
 }

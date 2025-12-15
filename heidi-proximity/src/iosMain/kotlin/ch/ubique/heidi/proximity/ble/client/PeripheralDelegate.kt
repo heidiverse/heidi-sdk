@@ -87,8 +87,13 @@ internal class PeripheralDelegate(
 		Logger("PeripheralDelegate").debug("didUpdateValueForCharacteristic: $didUpdateValueForCharacteristic")
 	}
 
+	override fun peripheralIsReadyToSendWriteWithoutResponse(peripheral: CBPeripheral) {
+//		Logger("PeripheralDelegate").debug("peripheralIsReadyToSendWriteWithoutResponse")
+		gattClient.notifyReadyToSend(peripheral)
+	}
+
 	override fun peripheral(peripheral: CBPeripheral, didWriteValueForDescriptor: CBDescriptor, error: NSError?) {
-		Logger("PeripheralDelegate").debug("didWriteValueForDescriptor: $didWriteValueForDescriptor")
+//		Logger("PeripheralDelegate").debug("didWriteValueForDescriptor: $didWriteValueForDescriptor")
 	}
 
 

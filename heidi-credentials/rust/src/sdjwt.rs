@@ -33,6 +33,7 @@ pub struct SdJwtRust {
     pub claims: Value,
     pub original_jwt: String,
     pub original_sdjwt: String,
+    pub keybinding_jwt: Option<String>,
     pub disclosures_map: HashMap<String, Disclosure>,
     pub disclosure_tree: DisclosureTree,
 }
@@ -65,6 +66,7 @@ pub fn decode_sdjwt(payload: &str) -> Result<SdJwtRust, SdJwtDecodeError> {
         claims: decoded.claims.into(),
         original_jwt: decoded.original_jwt,
         original_sdjwt: decoded.original_sdjwt,
+        keybinding_jwt: decoded.keybinding_jwt,
         disclosures_map: decoded.disclosure_map,
         disclosure_tree: decoded.disclosure_tree,
     })

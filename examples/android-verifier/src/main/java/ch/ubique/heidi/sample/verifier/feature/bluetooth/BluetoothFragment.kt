@@ -19,14 +19,21 @@ under the License.
  */
 package ch.ubique.heidi.sample.verifier.feature.bluetooth
 
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.fragment.app.Fragment
 import ch.ubique.heidi.sample.verifier.compose.theme.HeidiTheme
 import ch.ubique.heidi.sample.verifier.databinding.FragmentComposeBinding
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreenCallbacks
+import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class BluetoothFragment : Fragment() {
@@ -39,8 +46,22 @@ class BluetoothFragment : Fragment() {
 
 	private val viewModel by viewModel<BluetoothViewModel>()
 
+	private val qrScannerViewModel by viewModel<QrScannerViewModel>()
+
 	private var _binding: FragmentComposeBinding? = null
 	private val binding get() = _binding!!
+
+	private val launcher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+		if (permissions.all { it.value }) {
+			locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+		}
+	}
+
+	private val locationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+		if (granted) {
+			// TODO Handle permissions properly?
+		}
+	}
 
 	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
 		_binding = FragmentComposeBinding.inflate(inflater, container, false)
@@ -49,15 +70,39 @@ class BluetoothFragment : Fragment() {
 
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
 		super.onViewCreated(view, savedInstanceState)
+		launcher.launch(
+			arrayOf(
+				Manifest.permission.BLUETOOTH,
+				Manifest.permission.BLUETOOTH_SCAN,
+				Manifest.permission.BLUETOOTH_ADVERTISE,
+				Manifest.permission.BLUETOOTH_CONNECT,
+			)
+		)
 		binding.composeView.setContent {
 			HeidiTheme {
 				BluetoothScreen(
 					state = viewModel.bluetoothState.collectAsState(),
 					log = viewModel.bluetoothLog.collectAsState(),
+					proofTemplate = viewModel.proofTemplate.collectAsState(),
+					onProofTemplateChanged = viewModel::updateProofTemplate,
 					onStartServer = viewModel::startServerMode,
 					onStartClient = viewModel::startClientMode,
+					qrScannerViewModel = qrScannerViewModel,
+					scannerCallbacks = object : QrScannerScreenCallbacks {
+						override fun onPermissionInSettingsChange() {
+							val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+								.addCategory(Intent.CATEGORY_DEFAULT)
+								.setData(Uri.parse("package:${requireContext().packageName}"))
+							startActivity(intent)
+						}
+
+						override fun onSuccess(data: String) {
+							viewModel.startEngagement(data)
+						}
+					},
 					sendMessage = viewModel::sendMessage,
 					onStopClicked = viewModel::stop,
+					onResetClicked = viewModel::reset,
 				)
 			}
 		}

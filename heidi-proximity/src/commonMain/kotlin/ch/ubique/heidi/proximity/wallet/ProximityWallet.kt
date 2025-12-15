@@ -23,6 +23,8 @@ import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
+import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
+import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCentralClientModeTransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCharacteristicsFactory
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
@@ -40,6 +42,9 @@ import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
+import ch.ubique.heidi.proximity.verifier.TerminationReason
+import ch.ubique.heidi.proximity.util.logPayloadDebug
+import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -47,10 +52,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
 import uniffi.heidi_crypto_rust.SoftwareKeyPair
+import uniffi.heidi_crypto_rust.base64UrlEncode
+import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.decodeCbor
 import uniffi.heidi_util_rust.encodeCbor
@@ -61,7 +73,8 @@ class ProximityWallet private constructor(
 	private val scope: CoroutineScope,
 	private val engagementBuilder: EngagementBuilder?,
 	private val transportProtocol: TransportProtocol,
-	private var sessionCipher: SessionCipher? = null
+	private var sessionCipher: SessionCipher? = null,
+	var isDcApi: Boolean = false
 ) {
 	companion object {
 		fun create(
@@ -85,7 +98,9 @@ class ProximityWallet private constructor(
 					).toCbor())
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, Uuid.parse(serviceUuid),  Uuid.parse(peripheralServerUuid!!), keypair)
-					val engagementBuilder = MdlEngagementBuilder("", coseKey, Uuid.parse(serviceUuid), Uuid.parse(peripheralServerUuid!!), transportProtocol.centralClientModeTransportProtocol != null, transportProtocol.peripheralServerModeTransportProtocol != null)
+					val engagementBuilder = MdlEngagementBuilder("", coseKey, Uuid.parse(serviceUuid), Uuid.parse(peripheralServerUuid!!), false, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
+						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
+					)))
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
@@ -116,7 +131,11 @@ class ProximityWallet private constructor(
 					).toCbor())
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET,serviceUuid, peripheralServerUuid!!, keypair)
-					val engagementBuilder = MdlEngagementBuilder("", coseKey, serviceUuid, peripheralServerUuid!!, transportProtocol.centralClientModeTransportProtocol != null, transportProtocol.peripheralServerModeTransportProtocol != null)
+					//TODO: we probably should expose the lis of capabilities somehow to the constructor, or at least let the constructor
+					// choose, which protocols we wish to support.
+					val engagementBuilder = MdlEngagementBuilder("", coseKey, serviceUuid, peripheralServerUuid!!, transportProtocol.centralClientModeTransportProtocol != null, transportProtocol.peripheralServerModeTransportProtocol != null,capabilities = MdlCapabilities(mapOf(
+						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
+					)))
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
@@ -144,7 +163,9 @@ class ProximityWallet private constructor(
 				}
 
 				override fun onDisconnected() {
-					walletStateMutable.update { ProximityWalletState.Disconnected }
+					if (!markSubmissionCompleted()) {
+						walletStateMutable.update { ProximityWalletState.Disconnected }
+					}
 				}
 
 				override fun onMessageReceived() {
@@ -158,8 +179,10 @@ class ProximityWallet private constructor(
 
 				override fun onTransportSpecificSessionTermination() {
 					disconnect()
-					walletStateMutable.update {
-						ProximityWalletState.Disconnected
+					if (!markSubmissionCompleted()) {
+						walletStateMutable.update {
+							ProximityWalletState.Disconnected
+						}
 					}
 				}
 
@@ -194,18 +217,57 @@ class ProximityWallet private constructor(
 		if (walletState.value !is ProximityWalletState.RequestingDocuments) {
 			return false
 		}
-		walletStateMutable.update { ProximityWalletState.SubmittingDocuments }
+		walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = 0.0) }
 		val encryptedData = sessionCipher!!.encrypt(data)!!
+		val payloadShaSum = sha256Rs(encryptedData)
+		val payload = encodeCbor(
+			mapOf(
+				"data" to encryptedData,
+				"shaSum" to payloadShaSum,
+			).toCbor()
+		)
+		logPayloadDebug("Wallet sending MDL payload", payload)
+		transportProtocol.sendMessage(payload) { sent, total ->
+			val progress = if (total > 0) sent.toDouble() / total.toDouble() else null
+			walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = progress) }
+			if (progress != null && progress >= 1.0) {
+				markSubmissionCompleted()
+			}
+		}
+		// Fallback completion in case progress callbacks do not hit exactly 1.0
+		markSubmissionCompleted()
 
-		transportProtocol.sendMessage(encodeCbor(mapOf("data" to encryptedData).toCbor()))
+		return true
+	}
 
-		walletStateMutable.update { ProximityWalletState.PresentationCompleted }
+	fun declinePresentation(): Boolean {
+		if (sessionCipher == null) {
+			disconnect()
+			return false
+		}
+
+		// Build SessionData with null payload and status=user declined
+		val sessionData = encodeCbor(
+			mapOf(
+				"data" to Value.Null,
+				"status" to TerminationReason.REQUEST_REJECTED.code,
+			).toCbor()
+		)
+
+		// Transport layer handles fragmentation; payload is already CBOR encoded
+		transportProtocol.sendMessage(sessionData, null)
+
+		walletStateMutable.update { ProximityWalletState.Disconnected }
+		transportProtocol.disconnect()
+
 		return true
 	}
 
 	fun disconnect() {
 		transportProtocol.disconnect()
-		walletStateMutable.update { ProximityWalletState.Disconnected }
+		if (!markSubmissionCompleted()) {
+			walletStateMutable.update { ProximityWalletState.Disconnected }
+		}
 	}
 
 	private fun processMessageReceived(message: ByteArray) {
@@ -227,42 +289,30 @@ class ProximityWallet private constructor(
 							disconnect()
 							return@launch
 						}
-						val request = decodeCbor(result)
-						val docRequests = request.get("docRequests").asArray()!!.map {
-							val itemsRequestBytes = it.get("itemsRequest").asTag()?.value?.firstOrNull()?.asBytes()!!
-							val itemsRequest = decodeCbor(itemsRequestBytes)
-							val namespaces = itemsRequest.get("nameSpaces")
-							val elements = mutableListOf<DocumentRequest.MdlDocumentItem>()
-							for((namespace, entries) in namespaces.asOrderedObject()!!.entries) {
-								for((name, intentToRetain) in entries.asOrderedObject()!!.entries) {
-									elements.add(
-										DocumentRequest.MdlDocumentItem(namespace.asString()!!, name.asString()!!, intentToRetain.asBoolean()!!)
-									)
+						// The reader selected dcAPI
+						if(sessionEstablishment.dcApiSelected == true) {
+							isDcApi = true
+							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
+							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
+							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
+							//TODO: handle multiple requests and such
+							//TODO: we should choose which protocols we support and wish (e.g .signed not signed)
+							val dcRequest = Json.decodeFromString<JsonObject>(result.decodeToString())
+							// we just use the first request
+							runCatching {  dcRequest["requests"]!!.jsonArray.getOrNull(0)!!.jsonObject["data"]!!.jsonObject["request"]!!.jsonPrimitive.content }
+								.onFailure { error ->
+									walletStateMutable.update {
+										ProximityWalletState.Error(error)
+									}
 								}
-							}
-							DocumentRequest.MdlDocument(
-								itemsRequest.get("docType").asString()!!,
-								elements
-							)
-						}
-						walletStateMutable.update {
-							ProximityWalletState.RequestingDocuments(DocumentRequest.Mdl(docRequests))
-						}
-					} else {
-						val sessionData = MdlSessionData.fromCbor(message) ?: run {
-							disconnect()
-							return@launch
-						}
-						if(sessionData.status != null) {
-							walletStateMutable.update {
-								ProximityWalletState.Disconnected
-							}
-							disconnect()
-							return@launch
-						}
-						val data = sessionCipher?.decrypt(sessionData.data!!)!!
-						val request = decodeCbor(data)
-						if(request.get("docRequests") != Value.Null) {
+								.onSuccess { result ->
+									// Update our state to openid4vp document selection (and set the origin to the session transcript hash)
+									walletStateMutable.update {
+										ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(result, origin = origin))
+									}
+								}
+						} else {
+							val request = decodeCbor(result)
 							val docRequests = request.get("docRequests").asArray()!!.map {
 								val itemsRequestBytes = it.get("itemsRequest").asTag()?.value?.firstOrNull()?.asBytes()!!
 								val itemsRequest = decodeCbor(itemsRequestBytes)
@@ -288,6 +338,88 @@ class ProximityWallet private constructor(
 								ProximityWalletState.RequestingDocuments(DocumentRequest.Mdl(docRequests))
 							}
 						}
+					} else {
+						val sessionData = MdlSessionData.fromCbor(message) ?: run {
+							Logger.debug("Wallet failed to decode MdlSessionData from message of size ${message.size}")
+							disconnect()
+							return@launch
+						}
+						if (sessionData.status != null) {
+							Logger.debug("Wallet received terminal status=${sessionData.status}, disconnecting")
+							if (!markSubmissionCompleted()) {
+								walletStateMutable.update { ProximityWalletState.Disconnected }
+							}
+							disconnect()
+							return@launch
+						}
+						val encryptedPayload = sessionData.data ?: run {
+							Logger.debug("Wallet received session data without payload, disconnecting")
+							walletStateMutable.update { ProximityWalletState.Error(Error("Received empty session data")) }
+							disconnect()
+							return@launch
+						}
+						sessionData.shaSum?.let { expectedSha ->
+							val actualSha = sha256Rs(encryptedPayload)
+							if (!expectedSha.contentEquals(actualSha)) {
+								Logger.debug(
+									"Wallet received session data sha mismatch expected=${base64UrlEncode(expectedSha)} actual=${base64UrlEncode(actualSha)}"
+								)
+								walletStateMutable.update { ProximityWalletState.Error(Error("MDL payload hash mismatch")) }
+								disconnect()
+								return@launch
+							}
+						}
+						val currentCipher = sessionCipher ?: run {
+							Logger.debug("Wallet missing session cipher while processing message, disconnecting")
+							walletStateMutable.update { ProximityWalletState.Error(Error("Missing session cipher")) }
+							disconnect()
+							return@launch
+						}
+						val data = currentCipher.decrypt(encryptedPayload) ?: run {
+							Logger.debug("Wallet failed to decrypt payload of size ${encryptedPayload.size}")
+							walletStateMutable.update { ProximityWalletState.Error(Error("Failed to decrypt session data")) }
+							disconnect()
+							return@launch
+						}
+
+						if(isDcApi) {
+							isDcApi = true
+							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
+							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
+
+							val vpRequest = data.decodeToString()
+							walletStateMutable.update {
+								ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(vpRequest, origin = "iso-18013-5://${sessionTranscriptBytesHash}"))
+							}
+						} else {
+							val request = decodeCbor(data)
+							if(request.get("docRequests") != Value.Null) {
+								val docRequests = request.get("docRequests").asArray()!!.map {
+									val itemsRequestBytes = it.get("itemsRequest").asTag()?.value?.firstOrNull()?.asBytes()!!
+									val itemsRequest = decodeCbor(itemsRequestBytes)
+									val namespaces = itemsRequest.get("nameSpaces")
+									val elements = mutableListOf<DocumentRequest.MdlDocumentItem>()
+									for ((namespace, entries) in namespaces.asOrderedObject()!!.entries) {
+										for ((name, intentToRetain) in entries.asOrderedObject()!!.entries) {
+											elements.add(
+												DocumentRequest.MdlDocumentItem(
+													namespace.asString()!!,
+													name.asString()!!,
+													intentToRetain.asBoolean()!!
+												)
+											)
+										}
+									}
+									DocumentRequest.MdlDocument(
+										itemsRequest.get("docType").asString()!!,
+										elements
+									)
+								}
+								walletStateMutable.update {
+									ProximityWalletState.RequestingDocuments(DocumentRequest.Mdl(docRequests))
+								}
+							}
+						}
 					}
 				}
 				ProximityProtocol.OPENID4VP -> {
@@ -310,4 +442,12 @@ class ProximityWallet private constructor(
 		}
 	}
 
+	private fun markSubmissionCompleted(): Boolean {
+		return if (walletStateMutable.value is ProximityWalletState.SubmittingDocuments) {
+			walletStateMutable.update { ProximityWalletState.PresentationCompleted }
+			true
+		} else {
+			false
+		}
+	}
 }

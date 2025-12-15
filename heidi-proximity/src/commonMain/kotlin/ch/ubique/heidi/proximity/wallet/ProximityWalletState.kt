@@ -39,7 +39,7 @@ sealed interface ProximityWalletState {
 	data class RequestingDocuments(val request: DocumentRequest) : ProximityWalletState
 
 	/** The wallet is sending the documents to the verifier and is waiting for its result */
-	data object SubmittingDocuments : ProximityWalletState
+	data class SubmittingDocuments(val progress: Double? = null) : ProximityWalletState
 
 	/** The verifier has received the requested documents */
 	data object PresentationCompleted : ProximityWalletState

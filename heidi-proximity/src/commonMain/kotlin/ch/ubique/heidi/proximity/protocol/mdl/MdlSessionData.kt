@@ -25,16 +25,21 @@ import ch.ubique.heidi.util.extensions.asLong
 import ch.ubique.heidi.util.extensions.get
 import uniffi.heidi_util_rust.decodeCbor
 
-data class MdlSessionData(val data: ByteArray?, val status : Long?) {
+data class MdlSessionData(
+	val data: ByteArray?,
+	val status : Long?,
+	val shaSum: ByteArray?,
+) {
     companion object {
         fun fromCbor(data: ByteArray) : MdlSessionData? {
             val decoded = runCatching { decodeCbor(data) }.getOrNull() ?: return null
             val data = decoded.get("data").asBytes()
             val status = decoded.get("status").asLong()
+            val shaSum = decoded.get("shaSum").asBytes()
             if(status == null && data == null) {
                 return null
             }
-            return MdlSessionData(data, status)
+            return MdlSessionData(data, status, shaSum)
         }
     }
 }

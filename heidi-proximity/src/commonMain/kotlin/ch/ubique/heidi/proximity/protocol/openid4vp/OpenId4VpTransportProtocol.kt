@@ -96,7 +96,7 @@ internal class OpenId4VpTransportProtocol(
 		}
 	}
 
-	override fun sendMessage(data: ByteArray) {
+	override fun sendMessage(data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)?) {
 		// TODO This only works if there is only a single characteristic that can/should be written to
 		val charUuid = when (role) {
 			Role.WALLET -> charSubmitVcUuid
@@ -104,8 +104,8 @@ internal class OpenId4VpTransportProtocol(
 		}
 
 		when {
-			gattServer != null -> gattServer?.writeCharacteristic(charUuid, data)
-			gattClient != null -> gattClient?.writeCharacteristic(charUuid, data)
+			gattServer != null -> gattServer?.writeCharacteristic(charUuid, data, onProgress)
+			gattClient != null -> gattClient?.writeCharacteristic(charUuid, data, onProgress)
 			else -> throw IllegalStateException("No Gatt Server or Gatt Client available")
 		}
 	}

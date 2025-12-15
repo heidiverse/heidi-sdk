@@ -32,7 +32,6 @@ import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
 import ch.ubique.heidi.util.log.Logger
-import java.io.ByteArrayOutputStream
 import java.util.ArrayDeque
 import java.util.Arrays
 import java.util.Queue
@@ -63,9 +62,9 @@ internal class GattServer(
 	private var currentConnection: BluetoothDevice? = null
 	private var negotiatedMtu = 0
 
-	private val incomingMessages = mutableMapOf<UUID, ByteArrayOutputStream>().withDefault { ByteArrayOutputStream() }
+    private val chunkAccumulator = ChunkAccumulator<UUID>()
 	private val readQueues = mutableMapOf<UUID, Queue<ByteArray>>().withDefault { ArrayDeque() }
-	private val writingQueues = mutableMapOf<UUID, Queue<ByteArray>>().withDefault { ArrayDeque() }
+	private val writingQueues = mutableMapOf<UUID, Queue<PendingWrite>>().withDefault { ArrayDeque() }
 
 	private var characteristicValueSizeMemoized = 0
 	override val characteristicValueSize: Int
@@ -168,13 +167,21 @@ internal class GattServer(
 		}
 	}
 
-	override fun writeCharacteristic(charUuid: Uuid, data: ByteArray) {
+	override fun writeCharacteristic(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
 		// Only initiate the write if no other write was outstanding for the same characteristic
 		val queueNeedsDraining = writingQueues.getValue(charUuid.toJavaUuid()).size == 0
 
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 
 		chunkMessage(data) { chunk ->
-			writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(chunk)
+			val payloadSize = (chunk.size - 1).coerceAtLeast(0)
+			writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(
+				PendingWrite(chunk, progress, payloadSize)
+			)
 		}
 
 		if (queueNeedsDraining) {
@@ -182,12 +189,19 @@ internal class GattServer(
 		}
 	}
 
-	override fun writeCharacteristicNonChunked(charUuid: Uuid, data: ByteArray) {
+	override fun writeCharacteristicNonChunked(
+		charUuid: Uuid,
+		data: ByteArray,
+		onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
 		// Only initiate the write if no other write was outstanding for the same characteristic
 		val queueNeedsDraining = writingQueues.getValue(charUuid.toJavaUuid()).size == 0
 
+		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
 
-		writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(data)
+		writingQueues.getOrPut(charUuid.toJavaUuid()) { ArrayDeque() }.add(
+			PendingWrite(data, progress, data.size)
+		)
 
 		if (queueNeedsDraining) {
 			drainWritingQueue(charUuid.toJavaUuid())
@@ -197,17 +211,19 @@ internal class GattServer(
 	override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
 		// We assume that we only have one connection at a time
 		when (newState) {
-			BluetoothProfile.STATE_CONNECTED -> {
-				currentConnection = device
-				requireServer().connect(currentConnection, false)
-				reportPeerConnected()
-			}
-			BluetoothProfile.STATE_DISCONNECTED -> {
-				currentConnection = null
-				reportPeerDisconnected()
-			}
-		}
-	}
+            BluetoothProfile.STATE_CONNECTED -> {
+                currentConnection = device
+                chunkAccumulator.clear()
+                requireServer().connect(currentConnection, false)
+                reportPeerConnected()
+            }
+            BluetoothProfile.STATE_DISCONNECTED -> {
+                currentConnection = null
+                chunkAccumulator.clear()
+                reportPeerDisconnected()
+            }
+        }
+    }
 
 	override fun onCharacteristicReadRequest(
 		device: BluetoothDevice,
@@ -259,29 +275,23 @@ internal class GattServer(
 			return
 		}
 
-		val charUuid = characteristic.uuid
-		val result = when (value.firstOrNull()?.toInt()) {
-			0x00 -> {
-				// First byte indicates that this is the last chunk of the message
-				incomingMessages.getOrPut(charUuid) { ByteArrayOutputStream() }.write(value, 1, value.size - 1)
-				val entireMessage = incomingMessages.getValue(charUuid).toByteArray()
-				incomingMessages.getValue(charUuid).reset()
+        val charUuid = characteristic.uuid
+        val result = when (val chunkResult = chunkAccumulator.consume(charUuid, value)) {
+            is ChunkProcessingResult.Complete -> {
+                requireListener().onCharacteristicWriteRequest(
+                    BleGattCharacteristic(characteristic, chunkResult.payload)
+                )
+            }
+            ChunkProcessingResult.Waiting -> GattRequestResult(isSuccessful = true)
+            is ChunkProcessingResult.Single -> {
+                requireListener().onCharacteristicWriteRequest(
+                    BleGattCharacteristic(characteristic, chunkResult.payload)
+                )
+            }
+        }
 
-				requireListener().onCharacteristicWriteRequest(BleGattCharacteristic(characteristic, entireMessage))
-			}
-			0x01 -> {
-				// First byte indicates that more chunks are coming
-				incomingMessages.getOrPut(charUuid) { ByteArrayOutputStream() }.write(value, 1, value.size - 1)
-				GattRequestResult(isSuccessful = true)
-			}
-			else -> {
-				// Unknown if this message is chunked or not, so just send it in the callback
-				requireListener().onCharacteristicWriteRequest(BleGattCharacteristic(characteristic, value))
-			}
-		}
-
-		if (responseNeeded) {
-			sendResponse(
+        if (responseNeeded) {
+            sendResponse(
 				device,
 				requestId,
 				if (result.isSuccessful) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_FAILURE,
@@ -395,7 +405,7 @@ internal class GattServer(
 	private fun drainWritingQueue(charUuid: UUID) {
 		val chunk = writingQueues.getValue(charUuid).poll() ?: return
 
-		if (chunk.size == 1 && chunk.single() == TransportProtocol.SHUTDOWN_MESSAGE.single()) {
+		if (chunk.isShutdownMessage()) {
 			Logger(TAG).debug("Chunk is length 0, shutting down GattServer in 1000ms")
 			// TODO: On some devices we lose messages already sent if we don't have a delay like
 			//  this. Need to properly investigate if this is a problem in our stack or the
@@ -427,10 +437,10 @@ internal class GattServer(
 
 			try {
 				val success = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-					val result = requireServer().notifyCharacteristicChanged(connection, characteristic, false, chunk)
+					val result = requireServer().notifyCharacteristicChanged(connection, characteristic, false, chunk.payload)
 					result == BluetoothStatusCodes.SUCCESS
 				} else {
-					characteristic.value = chunk
+					characteristic.value = chunk.payload
 					requireServer().notifyCharacteristicChanged(connection, characteristic, false)
 				}
 
@@ -438,9 +448,36 @@ internal class GattServer(
 					reportError(Error("Error calling notifyCharacteristicsChanged on characteristic $charUuid"))
 					return
 				}
+				chunk.progress?.advance(chunk.payloadSize)
 			} catch (e: SecurityException) {
 				reportError(e)
 			}
+		}
+	}
+
+	private data class PendingWrite(
+		val payload: ByteArray,
+		val progress: WriteProgress? = null,
+		val payloadSize: Int = payload.size
+	) {
+		fun isShutdownMessage(): Boolean {
+			return payload.size == 1 && payload.single() == TransportProtocol.SHUTDOWN_MESSAGE.single()
+		}
+	}
+
+	private class WriteProgress(
+		private val total: Int,
+		private val onProgress: ((sent: Int, total: Int) -> Unit)?
+	) {
+		private var sent: Int = 0
+
+		fun advance(by: Int) {
+			if (total <= 0) {
+				onProgress?.invoke(1, 1)
+				return
+			}
+			sent = (sent + by).coerceAtMost(total)
+			onProgress?.invoke(sent, total)
 		}
 	}
 }

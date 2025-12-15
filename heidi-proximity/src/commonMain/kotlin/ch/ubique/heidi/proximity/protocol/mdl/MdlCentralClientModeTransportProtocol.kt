@@ -32,8 +32,6 @@ import ch.ubique.heidi.proximity.ble.server.BleGattServerListener
 import ch.ubique.heidi.proximity.ble.server.GattRequestResult
 import ch.ubique.heidi.proximity.di.HeidiProximityKoinComponent
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
-import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpCharacteristicsFactory
-import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
 import ch.ubique.heidi.util.extensions.asBytes
 import ch.ubique.heidi.util.extensions.asOrderedObject
 import ch.ubique.heidi.util.extensions.get
@@ -69,24 +67,30 @@ internal class MdlCentralClientModeTransportProtocol(
 	private var gattClient: BleGattClient? = null
 	override var sessionTranscript: Value? = null
 
-	fun isSupported() : Boolean {
-		if(this.role == Role.VERIFIER) {
+	fun isSupported(): Boolean {
+		if (this.role == Role.VERIFIER) {
 			return gattFactory.isBleAdvSupported()
 		}
 		return true
 	}
 
-	override fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray) : SessionCipher {
+	/*
+	* Get the session cipher struct, for session encryption. In the case of the mDl (wallet) we only use eReaderKeyBytes
+	* as they are part of the session transcript and also the peer public key.
+	* For the mDl reader we need the public key, which was presented in the QR-Code.
+	* */
+	override fun getSessionCipher(engagementBytes: ByteArray, eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?): SessionCipher {
 		sessionTranscript = listOf(24 to engagementBytes, 24 to eReaderKeyBytes, Value.Null).toCbor()
 		val sessionTranscriptBs = encodeCbor(sessionTranscript!!)
 		val sessionTranscriptBytes = encodeCbor(
 			(24 to sessionTranscriptBs).toCbor()
 		)
-		val coseKey = decodeCbor(eReaderKeyBytes)
+		// Use the peerKey if we are the mdl reader
+		val coseKey = decodeCbor(peerCoseKey ?: eReaderKeyBytes)
 		val x = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes()!!
 		val y = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes()!!
 		val publicKey = byteArrayOf(0x04) + x + y
-		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes,publicKey)!!
+		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes, publicKey)!!
 	}
 
 	override suspend fun connect() {
@@ -116,15 +120,15 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 	}
 
-	override fun sendMessage(data: ByteArray) {
+	override fun sendMessage(data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)?) {
 		val charUuid = when (role) {
 			Role.WALLET -> characteristicClient2ServerUuid
 			Role.VERIFIER -> characteristicServer2ClientUuid
 		}
 
 		when {
-			gattServer != null -> gattServer?.writeCharacteristic(charUuid, data)
-			gattClient != null -> gattClient?.writeCharacteristic(charUuid, data)
+			gattServer != null -> gattServer?.writeCharacteristic(charUuid, data, onProgress)
+			gattClient != null -> gattClient?.writeCharacteristic(charUuid, data, onProgress)
 			else -> throw IllegalStateException("No Gatt Server or Gatt Client available")
 		}
 	}
@@ -191,7 +195,6 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onPeerConnected() {
-			reportConnected()
 			gattServer?.stopAdvertising()
 		}
 
@@ -201,6 +204,21 @@ internal class MdlCentralClientModeTransportProtocol(
 
 		override fun onError(error: Throwable) {
 			reportError(error)
+		}
+
+		override fun onDescriptorWriteRequest(descriptor: BleGattCharacteristicDescriptor): GattRequestResult {
+			print("test")
+			return super.onDescriptorWriteRequest(descriptor)
+		}
+
+		override fun onCharacteristicReadRequest(characteristic: BleGattCharacteristic): GattRequestResult {
+			return super.onCharacteristicReadRequest(characteristic)
+		}
+
+		override fun onMtuChanged(mtu: Int) {
+			super.onMtuChanged(mtu)
+			// after the mtu was negotiated we can start sending data.
+//			reportConnected()
 		}
 
 		override fun onCharacteristicWriteRequest(characteristic: BleGattCharacteristic): GattRequestResult {
@@ -219,8 +237,12 @@ internal class MdlCentralClientModeTransportProtocol(
 						reportTransportSpecificSessionTermination()
 						GattRequestResult(isSuccessful = true)
 					}
+					value[0] == 0x01.toByte() -> {
+						reportConnected()
+						GattRequestResult(isSuccessful = true)
+					}
 					else -> {
-						reportError(Error("Invalid value for state characteristic"))
+						reportError(Error("Invalid value for state characteristic ${value.toHexString()}"))
 						GattRequestResult(isSuccessful = false)
 					}
 				}
@@ -252,6 +274,7 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onMtuChanged(mtu: Int) {
+			print(mtu)
 			// TODO Read Ident characteristic
 		}
 
@@ -327,7 +350,7 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onDescriptorWrite(descriptor: BleGattCharacteristicDescriptor) {
-			// TODO Protocol specific stuff
+			print("on descriptor write")
 		}
 	}
 }

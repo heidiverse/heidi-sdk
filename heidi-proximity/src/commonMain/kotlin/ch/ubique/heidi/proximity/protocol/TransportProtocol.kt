@@ -19,6 +19,8 @@ under the License.
  */
 package ch.ubique.heidi.proximity.protocol
 
+import ch.ubique.heidi.util.log.Logger
+
 abstract class TransportProtocol(
 	val role: Role,
 ) {
@@ -50,7 +52,7 @@ abstract class TransportProtocol(
 
 	abstract fun disconnect()
 
-	abstract fun sendMessage(data: ByteArray)
+	abstract fun sendMessage(data: ByteArray, onProgress: ((sent: Int, total: Int) -> Unit)? = null)
 
 	abstract fun sendTransportSpecificTerminationMessage()
 
@@ -75,10 +77,12 @@ abstract class TransportProtocol(
 	}
 
 	protected fun reportConnected() {
-		isConnected = true
+		Logger.debug("Transport Protocol report Connected")
 		if(isConnected) {
 			return
 		}
+		isConnected = true
+
 		if (!inhibitCallbacks) {
 			listener?.onConnected()
 		}
@@ -93,6 +97,7 @@ abstract class TransportProtocol(
 
 	protected fun reportMessageReceived(data: ByteArray) {
 		messageReceivedQueue.add(data)
+		Logger.debug("reportMessageReceived: ${data.size} queue has now ${messageReceivedQueue.size} entries")
 		if (!inhibitCallbacks) {
 			listener?.onMessageReceived()
 		}

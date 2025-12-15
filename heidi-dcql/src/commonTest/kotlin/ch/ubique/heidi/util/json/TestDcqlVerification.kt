@@ -98,11 +98,23 @@ class TestDcqlVerification {
         vpTokens,
         { type, vpToken, _ ->
             when (type) {
-                CredentialType.SdJwt -> mapOf("type" to "sdjwt", "content" to vpToken)
-                CredentialType.Mdoc -> mapOf("type" to "mdoc", "content" to vpToken)
-                CredentialType.BbsTermwise -> mapOf("type" to "bbs-termwise", "content" to vpToken)
-                CredentialType.W3C_VCDM -> mapOf("type" to "w3c", "content" to vpToken)
-                else -> mapOf()
+                CredentialType.SdJwt -> mapOf(
+                    "type" to Value.String("sdjwt"),
+                    "content" to Value.String(vpToken)
+                )
+                CredentialType.Mdoc -> mapOf(
+                    "type" to Value.String("mdoc"),
+                    "content" to Value.String(vpToken)
+                )
+                CredentialType.BbsTermwise -> mapOf(
+                    "type" to Value.String("bbs-termwise"),
+                    "content" to Value.String(vpToken)
+                )
+                CredentialType.W3C_VCDM -> mapOf(
+                    "type" to Value.String("w3c"),
+                    "content" to Value.String(vpToken)
+                )
+                else -> emptyMap<String, Value>()
             }
         })
 
