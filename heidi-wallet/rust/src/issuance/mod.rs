@@ -26,6 +26,7 @@ pub mod auth;
 pub mod helper;
 pub mod metadata;
 pub mod models;
+pub mod requests;
 
 #[cfg(feature = "uniffi")]
 pub use issuance::*;
@@ -33,7 +34,6 @@ pub use issuance::*;
 #[cfg(feature = "uniffi")]
 mod issuance {
     use anyhow::{anyhow, Context};
-    use chrono::Duration;
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
     use heidi_util_rust::value::Value;
 
@@ -50,7 +50,6 @@ mod issuance {
 
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
-    use std::time::{SystemTime, UNIX_EPOCH};
     use uniffi::Object;
 
     use crate::crypto::encryption::ContentDecryptor;
@@ -60,11 +59,15 @@ mod issuance {
     use crate::issuance::helper::base64_encode_bytes;
     use crate::issuance::models::{
         self, credential_formats, AuthorizationRequestReference,
-        CredentialConfigurationsSupportedObject, CredentialErrorResponse, CredentialIssuerMetadata,
-        CredentialOffer, CredentialOfferParameters, CredentialProofs, CredentialResponseEncryption,
-        CredentialResponseType, ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofType,
-        KeyProofsType, PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt,
-        TokenRequest, TokenResponse,
+        CredentialConfigurationsSupportedObject, CredentialIssuerMetadata, CredentialOffer,
+        CredentialOfferParameters, CredentialProofs, CredentialResponseEncryption,
+        CredentialResponseType, ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType,
+        PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest,
+        TokenResponse,
+    };
+    use crate::issuance::requests::{
+        get_access_token, get_credential, get_credential_with_proofs, get_proof_body,
+        try_get_deferred_credential,
     };
     use crate::jwx::EncryptionParameters;
     use crate::{
@@ -1261,7 +1264,6 @@ mod issuance {
         pub async fn finalize_issuance(
             self: Arc<Self>,
             code: Option<String>,
-            encryption: Option<EncryptionAlgorithm>,
             tx_code: Option<String>,
             num_credentials_per_type: u32,
             signer_factory: Arc<dyn SignerFactory>,
@@ -1320,17 +1322,20 @@ mod issuance {
                         },
                     )
                     .await
-                    .map_err(|e| {
-                        let desc = e.error_description.to_lowercase();
-                        if e.status.as_u16() == 400
-                            && (desc.contains("transaction code") || desc.contains("tx_code"))
-                        {
-                            ApiError::Credential(CredentialError::InvalidTransactionCode)
-                        } else {
-                            ApiError::Backend(BackendError::Network(NetworkError::Response(
-                                format!("{e}"),
-                            )))
+                    .map_err(|e| match e.downcast_ref::<ErrorDetails>() {
+                        Some(e) => {
+                            let desc = e.error_description.to_lowercase();
+                            if e.status.as_u16() == 400
+                                && (desc.contains("transaction code") || desc.contains("tx_code"))
+                            {
+                                ApiError::Credential(CredentialError::InvalidTransactionCode)
+                            } else {
+                                ApiError::Backend(BackendError::Network(NetworkError::Response(
+                                    format!("{e}"),
+                                )))
+                            }
                         }
+                        _ => e.into(),
                     })?
                 } else if let Some(auth_code) = code {
                     let auth_state = {
@@ -1358,17 +1363,20 @@ mod issuance {
                         },
                     )
                     .await
-                    .map_err(|e| {
-                        let desc = e.error_description.to_lowercase();
-                        if e.status.as_u16() == 400
-                            && (desc.contains("transaction code") || desc.contains("tx_code"))
-                        {
-                            ApiError::Credential(CredentialError::InvalidTransactionCode)
-                        } else {
-                            ApiError::Backend(BackendError::Network(NetworkError::Response(
-                                format!("{e}"),
-                            )))
+                    .map_err(|e| match e.downcast_ref::<ErrorDetails>() {
+                        Some(e) => {
+                            let desc = e.error_description.to_lowercase();
+                            if e.status.as_u16() == 400
+                                && (desc.contains("transaction code") || desc.contains("tx_code"))
+                            {
+                                ApiError::Credential(CredentialError::InvalidTransactionCode)
+                            } else {
+                                ApiError::Backend(BackendError::Network(NetworkError::Response(
+                                    format!("{e}"),
+                                )))
+                            }
                         }
+                        _ => e.into(),
                     })?
                 } else {
                     return Err(anyhow!("Neither pre-authorized code nor code provided").into());
@@ -1379,7 +1387,6 @@ mod issuance {
             self.get_credentials(
                 client.clone(),
                 token_response,
-                encryption,
                 num_credentials_per_type,
                 signer_factory,
                 is_for_pre_authorized_code,
@@ -1392,7 +1399,6 @@ mod issuance {
         pub async fn supplement_issuance(
             self: &Arc<Self>,
             tokens: DeviceBoundTokens,
-            encryption: Option<EncryptionAlgorithm>,
             num_credentials_per_type: u32,
             dpop_signing_alg_values_supported: Option<Vec<String>>,
             signer_factory: Arc<dyn SignerFactory>,
@@ -1420,97 +1426,12 @@ mod issuance {
             self.get_credentials(
                 client,
                 tokens,
-                encryption,
                 num_credentials_per_type,
                 signer_factory,
                 is_for_pre_authorized_code,
             )
             .await
         }
-    }
-
-    async fn get_access_token(
-        client: Arc<ClientWithMiddleware>,
-        token_endpoint: Url,
-        clone: TokenRequest,
-    ) -> Result<TokenResponse, ErrorDetails> {
-        todo!()
-    }
-
-    async fn get_proof_body(
-        subjects: Vec<Arc<SecureSubject>>,
-        credential_issuer_metadata: CredentialIssuerMetadata,
-        c_nonce: Option<String>,
-        client_id: String,
-        is_for_pre_authorized: bool,
-    ) -> Result<Vec<String>, ApiError> {
-        let nonce = c_nonce
-            .as_ref()
-            .ok_or(anyhow::anyhow!("No c_nonce found."))?; // XXX
-        let timestamp = SystemTime::now();
-        let timestamp = timestamp
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
-        let mut proofs = vec![];
-        for subject in &subjects {
-            let mut builder = KeyProofType::builder()
-                .proof_type(ProofType::Jwt)
-                .signer(subject.clone());
-            // `iss` MUST not be set when in pre-authorized-flow https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#appendix-F.1-2.2.2.1
-            if !is_for_pre_authorized {
-                builder = builder.iss(client_id.clone());
-            }
-            let Ok(kpt) = builder
-                .aud(credential_issuer_metadata.credential_issuer.clone())
-                .iat(timestamp.as_secs() as i64)
-                .exp((timestamp + std::time::Duration::from_secs(360)).as_secs() as i64)
-                .nonce(nonce.clone())
-                .build_no_sign()
-                .await
-            else {
-                continue;
-            };
-            if let KeyProofType::Jwt { jwt } = kpt {
-                proofs.push(jwt);
-            }
-        }
-        Ok(proofs)
-    }
-
-    async fn get_credential_with_proofs(
-        dpop_client: Arc<ClientWithMiddleware>,
-        credential_issuer_metadata: CredentialIssuerMetadata,
-        access_token: String,
-        credential_configuration_id: String,
-        credential_format: Value,
-        content_decryptor: Option<Box<dyn ContentDecryptor>>,
-        proofs: CredentialProofs,
-    ) -> Result<crate::issuance::models::CredentialResponse, ApiError> {
-        todo!()
-    }
-
-    async fn get_credential(
-        dpop_client: Arc<ClientWithMiddleware>,
-        secure_subjects: Vec<Arc<SecureSubject>>,
-        credential_issuer_metadata: CredentialIssuerMetadata,
-        access_token: String,
-        nonce: Option<String>,
-        credential_configuration_id: String,
-        credential_format: Value,
-        content_decryptor: Option<Box<dyn ContentDecryptor>>,
-        client_id: String,
-        is_for_pre_authorized_code: bool,
-    ) -> Result<crate::issuance::models::CredentialResponse, CredentialErrorResponse> {
-        todo!()
-    }
-
-    async fn try_get_deferred_credential(
-        dpop_client: Arc<ClientWithMiddleware>,
-        cred_issuer_meta: CredentialIssuerMetadata,
-        tokens: TokenResponse,
-        credential_response: crate::issuance::models::CredentialResponse,
-    ) -> Result<crate::issuance::models::CredentialResponse, ApiError> {
-        todo!()
     }
 
     impl OID4VciIssuance {
@@ -1893,7 +1814,6 @@ mod issuance {
             self: &Arc<Self>,
             client: Arc<ClientWithMiddleware>,
             tokens: TokenResponse,
-            encryption: Option<EncryptionAlgorithm>,
             num_credentials_per_type: u32,
             signer_factory: Arc<dyn SignerFactory>,
             is_for_pre_authorized_code: bool,
@@ -1993,7 +1913,6 @@ mod issuance {
                         credential_issuer_metadata.clone(),
                         cred_config_id.clone(),
                         cred_config.credential_format.clone(),
-                        encryption,
                         &token_response,
                         key_type,
                         is_for_pre_authorized_code,
@@ -2048,7 +1967,6 @@ mod issuance {
             credential_configuration_id: String,
             // credential_format only kept here for backwards compatibility with pre-draft15 issuer. Remove.
             credential_format: Value,
-            encryption: Option<EncryptionAlgorithm>,
             token_response: &TokenResponse,
             key_type: KeyType,
             is_for_pre_authorized_code: bool,
@@ -2836,7 +2754,6 @@ mod issuance {
                 .clone()
                 .finalize_issuance(
                     code,
-                    None,
                     tx_code,
                     num_credentials_per_type,
                     Arc::new(TestSignerFactory {}),
@@ -2892,7 +2809,6 @@ mod issuance {
                 .clone()
                 .supplement_issuance(
                     tokens,
-                    None,
                     2,
                     None,
                     signer_factory.clone(),
@@ -2904,7 +2820,6 @@ mod issuance {
                 .clone()
                 .supplement_issuance(
                     credentials.tokens,
-                    None,
                     3,
                     None,
                     signer_factory.clone(),

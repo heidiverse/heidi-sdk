@@ -602,3 +602,70 @@ impl ProofBuilder {
     builder_fn!(nonce, String);
     builder_fn!(subject_syntax_type, String);
 }
+
+// Like reqwest.Response.error_for_status, but includes the details of the error returned by the
+// server, if they can be parsed.
+pub trait ErrorForStatusDetailed
+where
+    Self: std::marker::Sized,
+{
+    async fn error_for_status_detailed(self) -> anyhow::Result<Self>;
+}
+
+impl ErrorForStatusDetailed for reqwest::Response {
+    async fn error_for_status_detailed(self) -> anyhow::Result<Self> {
+        if let Err(err_status) = self.error_for_status_ref() {
+            let status = self.status();
+            if status.is_client_error() {
+                match self.json::<ErrorDetails>().await {
+                    Ok(details) => Err(ErrorDetails {
+                        status,
+                        error: details.error,
+                        error_description: details.error_description,
+                    }
+                    .into()),
+                    Err(_) => Err(err_status.into()),
+                }
+            } else {
+                Err(err_status.into())
+            }
+        } else {
+            Ok(self)
+        }
+    }
+}
+
+pub trait ErrorAsCredentialErrorResponse
+where
+    Self: std::marker::Sized,
+{
+    async fn as_credential_error_response(self) -> Result<Self, CredentialErrorResponse>;
+}
+
+impl ErrorAsCredentialErrorResponse for reqwest::Response {
+    async fn as_credential_error_response(self) -> Result<Self, CredentialErrorResponse> {
+        if let Err(err_status) = self.error_for_status_ref() {
+            let status = self.status();
+            if status.is_client_error() {
+                match self.json::<CredentialErrorResponse>().await {
+                    Ok(details) => Err(details),
+                    Err(e) => Err(CredentialErrorResponse {
+                        error: "no_credential_error_response".to_string(),
+                        error_description: Some(format!("{e}")),
+                        c_nonce: None,
+                        c_nonce_expires_in: None,
+                    }),
+                }
+            } else {
+                Err(CredentialErrorResponse {
+                    error: "unknown_error".to_string(),
+                    error_description: Some(format!("{err_status}")),
+                    c_nonce: None,
+                    c_nonce_expires_in: None,
+                })
+            }
+        } else {
+            Ok(self)
+        }
+    }
+}

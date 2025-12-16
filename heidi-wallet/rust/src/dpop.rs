@@ -190,12 +190,15 @@ pub fn validate_dpop(
 
     // 2. The DPoP HTTP request header field value is a single and well-formed JWT.
     let mut jwt_iter = jwt.split('.');
-    let header = serde_json::from_str::<models::Header>(&String::from_utf8(b64url_decode_bytes(
-        &jwt_iter
-            .next()
-            .context("JWT Header not present!")?
-            .as_bytes(),
-    )?)?)?;
+    let header = serde_json::from_str::<models::Header>(&String::from_utf8(
+        b64url_decode_bytes(
+            &jwt_iter
+                .next()
+                .context("JWT Header not present!")?
+                .as_bytes(),
+        )
+        .context("header decode failed")?,
+    )?)?;
 
     let payload = jwt_iter
         .next()
@@ -210,9 +213,9 @@ pub fn validate_dpop(
     ensure!(jwt_iter.next().is_none(), "JWT had more that 3 parts!");
 
     // 3. All required claims per Section 4.2 are contained in the JWT.
-    let payload = serde_json::from_str::<models::Payload>(&String::from_utf8(
-        b64url_decode_bytes(&payload)?,
-    )?)?;
+    let payload = serde_json::from_str::<models::Payload>(
+        &String::from_utf8(b64url_decode_bytes(&payload)?).context("payload invalid base64")?,
+    )?;
 
     // 4. The typ JOSE Header Parameter has the value dpop+jwt.
     // Already validated as the 'typ' Header is a 'MustBe!("dpop+jwt")'
@@ -285,11 +288,7 @@ pub fn validate_dpop(
         let hash = hasher.finalize();
 
         ensure!(
-            payload
-                .ath
-                .context("Missing 'ath' claim in JWT.")?
-                .as_bytes()
-                == b64url_decode_bytes(&hash)?.as_slice(),
+            payload.ath.context("Missing 'ath' claim in JWT.")? == b64url_encode_bytes(&hash),
             "'ath' claim does not match access token hash!"
         );
 

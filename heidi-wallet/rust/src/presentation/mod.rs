@@ -360,7 +360,7 @@ mod test {
 
 #[test]
 fn test_presentation_parse() {
-    let _auth_request = r#"{
+    let auth_request = r#"{
   "response_uri": "https://oid4vp-verifier-ws-dev.ubique.ch/v1/wallet/authorization",
   "aud": "https://self-issued.me/v2",
   "client_id_scheme": "x509_san_dns",
@@ -586,17 +586,17 @@ fn test_presentation_parse() {
   },
   "response_mode": "direct_post.jwt"
 }"#;
-    // let auth_request_value: crate::value::Value = serde_json::from_str(&auth_request).unwrap();
-    // let auth_request: AuthorizationRequest = auth_request_value.transform().unwrap();
-    // println!("{:#?}", auth_request_value.get("presentation_definition"));
-    // let pd: PresentationDefinition = auth_request_value
-    //     .get("presentation_definition")
-    //     .unwrap()
-    //     .transform()
-    //     .unwrap();
+    let auth_request_value: Value = serde_json::from_str(&auth_request).unwrap();
+    let auth_request: AuthorizationRequest = auth_request_value.transform().unwrap();
+    println!("{:#?}", auth_request_value.get("presentation_definition"));
+    let pd: PresentationDefinition = auth_request_value
+        .get("presentation_definition")
+        .unwrap()
+        .transform()
+        .unwrap();
 
-    // let mut back_pd: crate::value::Value = crate::value::Value::from_serialize(&pd).unwrap();
-    // println!("{back_pd:#?}");
+    let mut back_pd: Value = Value::from_serialize(&pd).unwrap();
+    println!("{back_pd:#?}");
     // fix_pd_value(&mut back_pd);
     // let pd: PresentationDefinition = back_pd.transform().unwrap();
     // println!("{auth_request:?}");
