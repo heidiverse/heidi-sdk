@@ -12,9 +12,11 @@ use crate::{
     crypto::encryption::ContentDecryptor,
     issuance::models::{
         CredentialErrorResponse, CredentialIssuerMetadata, CredentialProofs, CredentialRequest,
-        CredentialResponseType, ErrorAsCredentialErrorResponse, ErrorForStatusDetailed,
-        KeyProofType, KeyProofsType, ProofType, TokenRequest, TokenResponse,
+        CredentialResponseEncryptionSpecification, CredentialResponseType,
+        ErrorAsCredentialErrorResponse, ErrorForStatusDetailed, KeyProofType, KeyProofsType,
+        ProofType, TokenRequest, TokenResponse,
     },
+    log_debug,
     signing::SecureSubject,
     ApiError,
 };
@@ -76,6 +78,67 @@ pub async fn get_proof_body(
     Ok(proofs)
 }
 
+pub fn get_correct_credential_request(
+    credential_issuer_metadata: &CredentialIssuerMetadata,
+    credential_configuration_id: String,
+    credential_response_encryption: Option<CredentialResponseEncryptionSpecification>,
+    selected_configuration_format: &Value,
+    proofs: CredentialProofs,
+) -> CredentialRequest {
+    // Backwards compatibility hack to only send appropriate fields in request:
+    // No surefire way to find out which version, but draft 15 compatible issuer will very
+    // likely have a nonce endpoint.
+    let is_openid4vci_draft15_issuer = credential_issuer_metadata.nonce_endpoint.is_some();
+    if is_openid4vci_draft15_issuer {
+        // we also can use proofs ..
+        return CredentialRequest {
+            credential_configuration_id: Some(credential_configuration_id),
+            credential_format: None,
+            proof: proofs,
+            credential_response_encryption,
+            //TODO: Implement credential_identifier
+            credential_identifier: None,
+        };
+    } else {
+        // if we are before 15 we for sure only have proof. so we skip "batches"
+        let proof = {
+            let CredentialProofs::Proofs(p) = proofs else {
+                // we fallback to the proof as we are requesting one proof (or none)
+                return CredentialRequest {
+                    credential_configuration_id: None,
+                    credential_format: Some(selected_configuration_format.clone()),
+                    proof: proofs,
+                    credential_response_encryption: credential_response_encryption.clone(),
+                    //TODO: Implement credential_identifier
+                    credential_identifier: None,
+                };
+            };
+            let proof = match p {
+                KeyProofsType::Jwt(items) => CredentialProofs::Proof(Some(KeyProofType::Jwt {
+                    jwt: items[0].clone(),
+                })),
+                KeyProofsType::Cwt(items) => CredentialProofs::Proof(Some(KeyProofType::Cwt {
+                    cwt: items[0].clone(),
+                })),
+                KeyProofsType::Attestation(items) => {
+                    CredentialProofs::Proof(Some(KeyProofType::Attestation {
+                        attestation: items[0].clone(),
+                    }))
+                }
+            };
+            proof
+        };
+        return CredentialRequest {
+            credential_configuration_id: None,
+            credential_format: Some(selected_configuration_format.clone()),
+            proof: proof,
+            credential_response_encryption: credential_response_encryption.clone(),
+            //TODO: Implement credential_identifier
+            credential_identifier: None,
+        };
+    };
+}
+
 pub async fn get_credential_with_proofs(
     client: Arc<ClientWithMiddleware>,
     credential_issuer_metadata: CredentialIssuerMetadata,
@@ -92,29 +155,13 @@ pub async fn get_credential_with_proofs(
         None
     };
 
-    // Backwards compatibility hack to only send appropriate fields in request:
-    // No surefire way to find out which version, but draft 15 compatible issuer will very
-    // likely have a nonce endpoint.
-    let is_openid4vci_draft15_issuer = credential_issuer_metadata.nonce_endpoint.is_some();
-    let credential_request = if is_openid4vci_draft15_issuer {
-        CredentialRequest {
-            credential_configuration_id: Some(credential_configuration_id),
-            credential_format: None,
-            proof: proofs,
-            credential_response_encryption: credential_response_encryption.clone(),
-            //TODO: Implement credential_identifier
-            credential_identifier: None,
-        }
-    } else {
-        CredentialRequest {
-            credential_configuration_id: None,
-            credential_format: Some(credential_format),
-            proof: proofs,
-            credential_response_encryption: credential_response_encryption.clone(),
-            //TODO: Implement credential_identifier
-            credential_identifier: None,
-        }
-    };
+    let credential_request = get_correct_credential_request(
+        &credential_issuer_metadata,
+        credential_configuration_id,
+        credential_response_encryption,
+        &credential_format,
+        proofs,
+    );
 
     let response = client
         .post(credential_issuer_metadata.credential_endpoint.clone())
@@ -136,15 +183,32 @@ pub async fn get_credential_with_proofs(
         c_nonce: None,
         c_nonce_expires_in: None,
     })?;
-    println!("{text}");
-    serde_json::from_str::<crate::issuance::models::CredentialResponse>(&text).map_err(|e| {
-        CredentialErrorResponse {
+    log_debug!(
+        "GET CREDENTIAL RESPONSE",
+        &format!(
+            "content encryption is on: {:?}",
+            content_decryptor.is_some()
+        )
+    );
+    let credential_response_json = if let Some(decrypter) = content_decryptor {
+        decrypter
+            .decrypt(&text)
+            .map_err(|e| CredentialErrorResponse {
+                error: "unknown_error_decrypting".to_string(),
+                error_description: Some(format!("{e}")),
+                c_nonce: None,
+                c_nonce_expires_in: None,
+            })?
+    } else {
+        text
+    };
+    serde_json::from_str::<crate::issuance::models::CredentialResponse>(&credential_response_json)
+        .map_err(|e| CredentialErrorResponse {
             error: "unknown_error_parsing".to_string(),
             error_description: Some(format!("{e}")),
             c_nonce: None,
             c_nonce_expires_in: None,
-        }
-    })
+        })
 }
 
 pub async fn get_credential(

@@ -2,6 +2,7 @@ use josekit::jwk;
 
 use crate::{
     issuance::models::CredentialResponseEncryptionSpecification, jwx::EncryptionParameters,
+    log_debug,
 };
 
 pub trait ContentDecryptor: Send + Sync {
@@ -12,12 +13,18 @@ pub trait ContentDecryptor: Send + Sync {
 
 impl ContentDecryptor for EncryptionParameters {
     fn public_key(&self) -> jwk::Jwk {
-        self.jwk.clone()
+        self.jwk
+            .to_public_key()
+            .expect("somethings terribly wrong with the jwk")
+            .clone()
     }
 
     fn encryption_specification(&self) -> CredentialResponseEncryptionSpecification {
         CredentialResponseEncryptionSpecification {
-            jwk: self.jwk.clone(),
+            jwk: self
+                .jwk
+                .to_public_key()
+                .expect("somethings terribly wrong with the jwk"),
             enc: self.authorization_encrypted_response_enc.clone(),
             alg: self.authorization_encrytped_response_alg.clone(),
         }

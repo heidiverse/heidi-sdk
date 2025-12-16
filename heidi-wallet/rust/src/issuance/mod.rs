@@ -61,9 +61,9 @@ mod issuance {
         self, credential_formats, AuthorizationRequestReference,
         CredentialConfigurationsSupportedObject, CredentialIssuerMetadata, CredentialOffer,
         CredentialOfferParameters, CredentialProofs, CredentialResponseEncryption,
-        CredentialResponseType, ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType,
-        PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest,
-        TokenResponse,
+        CredentialResponseType, ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofType,
+        KeyProofsType, PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt,
+        TokenRequest, TokenResponse,
     };
     use crate::issuance::requests::{
         get_access_token, get_credential, get_credential_with_proofs, get_proof_body,
@@ -549,6 +549,7 @@ mod issuance {
                         (
                             CredentialType::SdJwt,
                             credential_formats::CredentialFormat::VcIetfSdJwt
+                                | credential_formats::CredentialFormat::VcIetfSdJwtLegacy
                         ) | (
                             CredentialType::Mdoc,
                             credential_formats::CredentialFormat::MsoMdoc
@@ -868,6 +869,7 @@ mod issuance {
                         (
                             CredentialType::SdJwt,
                             credential_formats::CredentialFormat::VcIetfSdJwt
+                                | credential_formats::CredentialFormat::VcIetfSdJwtLegacy
                         ) | (
                             CredentialType::Mdoc,
                             credential_formats::CredentialFormat::MsoMdoc
@@ -2034,7 +2036,6 @@ mod issuance {
                 } else {
                     CredentialProofs::Proofs(KeyProofsType::Attestation(vec![key_attestation]))
                 };
-
                 get_credential_with_proofs(
                     client.clone(),
                     credential_issuer_metadata.clone(),
@@ -2475,8 +2476,10 @@ mod issuance {
         if !matches!(
             credential_formats::CredentialFormat::from(&cred_config.credential_format),
             credential_formats::CredentialFormat::VcIetfSdJwt
+                | credential_formats::CredentialFormat::VcIetfSdJwtLegacy
                 | credential_formats::CredentialFormat::MsoMdoc
                 | credential_formats::CredentialFormat::ZkpVc
+                | credential_formats::CredentialFormat::W3cSdJwt
         ) {
             return false;
         }

@@ -472,6 +472,7 @@ pub mod credential_formats {
     pub enum CredentialFormat {
         JwtVcJson,
         VcIetfSdJwt,
+        VcIetfSdJwtLegacy,
         W3cSdJwt,
         MsoMdoc,
         ZkpVc,
@@ -483,6 +484,9 @@ pub mod credential_formats {
         fn from(value: &Value) -> Self {
             match value.get("format").and_then(|a| a.as_str()) {
                 Some(JWT_VC_JSON) => CredentialFormat::JwtVcJson,
+                Some(VC_IETF_SD_JWT_LEGACY) if value.get("vct").is_some() => {
+                    CredentialFormat::VcIetfSdJwtLegacy
+                }
                 Some(W3C_SD_JWT) => CredentialFormat::W3cSdJwt,
                 Some(VC_IETF_SD_JWT) => CredentialFormat::VcIetfSdJwt,
                 Some(MSO_MDOC) => CredentialFormat::MsoMdoc,
