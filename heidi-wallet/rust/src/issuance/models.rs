@@ -78,7 +78,6 @@ pub struct AuthorizationServerMetadata {
 /// https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-13.html#name-credential-issuer-metadata-p
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CredentialIssuerMetadata {
     pub credential_issuer: String,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -108,7 +107,6 @@ pub struct CredentialResponseEncryption {
 /// Credentials Supported object as described here: https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-13.html#section-11.2.3-2.11.1
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CredentialConfigurationsSupportedObject {
     /// This field is flattened into a `format` field and optionally extra format-specific fields.
     #[serde(flatten)]
@@ -210,7 +208,6 @@ impl From<StringOrInt> for u64 {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[serde(tag = "type")]
 pub enum AuthorizationDetail {
     #[serde(rename = "openid_credential")]
@@ -219,7 +216,6 @@ pub enum AuthorizationDetail {
 
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OpenIdCredential {
     pub credential_configuration_id: Option<String>,
     pub format: Option<String>,
@@ -279,7 +275,6 @@ pub struct CredentialOfferParameters {
 /// Credential Offer as described in https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-13.html#name-credential-offer
 #[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum CredentialOffer {
     CredentialOfferUri(String),
     CredentialOffer(CredentialOfferParameters),
@@ -387,7 +382,6 @@ pub enum KeyProofsType {
 #[skip_serializing_none]
 #[derive(Serialize, Debug, PartialEq, Deserialize, Clone)]
 #[serde(untagged)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum CredentialResponseType {
     Deferred {
         transaction_id: String,
@@ -412,7 +406,6 @@ pub struct CredentialErrorResponse {
 // Credential Response as described here: https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0-13.html#name-credential-response
 #[skip_serializing_none]
 #[derive(Serialize, Debug, PartialEq, Deserialize, Clone)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct CredentialResponse {
     #[serde(flatten)]
     pub credential: CredentialResponseType,

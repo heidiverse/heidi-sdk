@@ -127,7 +127,6 @@ class EaaRefreshProcess(
 
 			val credentials = issuance.supplementIssuance(
 				tokens = tokens,
-				encryption = null,
 				numCredentialsPerType = numberOfCredentials,
 				dpopSigningAlgValuesSupported = authorizationServerMetadata?.dpopSigningAlgValuesSupported,
 				signerFactory = object : SignerFactory {

@@ -345,7 +345,6 @@ open class EaaIssuanceProcess(
 
             val credentials = issuance.finalizeIssuance(
                 code = authorizationCode,
-                encryption = null,
                 txCode = transactionCode,
                 numCredentialsPerType = numberOfCredentials.toUInt(),
                 signerFactory = object : SignerFactory {
