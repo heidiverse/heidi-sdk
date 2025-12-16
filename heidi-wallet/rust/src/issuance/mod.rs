@@ -2312,6 +2312,7 @@ mod issuance {
                         Some(CredentialType::SdJwt)
                     }
                 }
+                credential_formats::CredentialFormat::VcIetfSdJwt => Some(CredentialType::SdJwt),
                 credential_formats::CredentialFormat::MsoMdoc => Some(CredentialType::Mdoc),
                 credential_formats::CredentialFormat::ZkpVc => Some(CredentialType::BbsTermWise),
                 _ => {
