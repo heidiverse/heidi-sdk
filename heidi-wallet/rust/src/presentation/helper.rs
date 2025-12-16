@@ -23,10 +23,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context};
-use oid4vc::oid4vc_core::client_metadata::ClientMetadataResource;
-use oid4vc::oid4vci::jsonwebtoken::{self, Algorithm, EncodingKey, Header};
-use oid4vc::oid4vp::authorization_request::{ClientIdScheme, ClientMetadataParameters};
-use oid4vc::oid4vp::PresentationDefinition;
 use regex::Regex;
 use reqwest::Url;
 use sdjwt::{ExternalSigner, Holder, SpecVersion};
@@ -326,7 +322,7 @@ pub(super) fn create_submission(
 
     let mut jwt_presentation = Holder::presentation_with_nonce(sd_jwt, Some(nonce.clone()))
         .context("Could not generate presentation")?;
-    
+
     // Only perform device binding if cryptographic holder binding is required
     if requires_cryptographic_binding {
         jwt_presentation
@@ -334,7 +330,10 @@ pub(super) fn create_submission(
             .context("device binding failed")?;
         log_warn!("PRESENTATION", "Applied cryptographic device binding");
     } else {
-        log_warn!("PRESENTATION", "Skipped cryptographic device binding - claim-based binding");
+        log_warn!(
+            "PRESENTATION",
+            "Skipped cryptographic device binding - claim-based binding"
+        );
     }
     jwt_presentation.redact_all().context("redact all failed")?;
 

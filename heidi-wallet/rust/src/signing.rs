@@ -24,9 +24,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
-use oid4vc::oid4vc_core::authentication::sign::ExternalSign;
-use oid4vc::oid4vc_core::{Sign, Subject, Verify};
-use oid4vc::oid4vci::jsonwebtoken;
+use heidi_util_rust::value::Value;
 use sdjwt::ExternalSigner;
 
 use crate::error::SigningError;
@@ -54,14 +52,13 @@ pub trait BatchSigner: Send + Sync + Debug {
     fn batch_sign_bytes(&self, msg: Vec<Vec<u8>>) -> Result<Vec<Vec<u8>>, SigningError>;
 }
 
-#[derive(Clone, Copy, Debug)]
-#[derive(PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum KeyType {
     Software,    // lowest level, software-based key management
     DeviceBound, // secure, device-bound keys
     RemoteHSM,
-    None // for claim based binding
+    None, // for claim based binding
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
@@ -80,6 +77,33 @@ impl SecureSubject {
     pub fn get_key_reference(self: &Arc<Self>) -> Vec<u8> {
         self.signer.key_reference()
     }
+}
+
+#[async_trait]
+pub trait Sign: Send + Sync {
+    // TODO: add this?
+    async fn jwt_header(&self) -> Value;
+    async fn key_id(&self, subject_syntax_type: &str) -> Option<String>;
+    async fn sign(&self, message: &str, subject_syntax_type: &str) -> anyhow::Result<Vec<u8>>;
+    fn external_signer(&self) -> Option<Arc<dyn ExternalSign>>;
+}
+pub trait ExternalSign: Send + Sync {
+    fn sign(&self, message: &str) -> anyhow::Result<Vec<u8>>;
+}
+
+pub type SigningSubject = Arc<dyn Subject>;
+
+/// This [`Verify`] trait is used to verify JWTs.
+#[async_trait]
+pub trait Verify: Send + Sync {
+    async fn public_key(&self, kid: &str) -> anyhow::Result<Vec<u8>>;
+}
+
+// TODO: Use a URI of some sort.
+/// This [`Subject`] trait is used to sign and verify JWTs.
+#[async_trait]
+pub trait Subject: Sign + Verify + Send + Sync {
+    async fn identifier(&self, subject_syntax_type: &str) -> anyhow::Result<String>;
 }
 
 impl ExternalSign for SecureSubject {
@@ -118,9 +142,9 @@ impl Verify for SecureSubject {
 
 #[async_trait]
 impl Sign for SecureSubject {
-    async fn jwt_header(&self) -> jsonwebtoken::Header {
+    async fn jwt_header(&self) -> Value {
         let header_string = self.signer.jwt_header();
-        serde_json::from_str(&header_string).unwrap_or(jsonwebtoken::Header::default())
+        serde_json::from_str(&header_string).unwrap_or(Value::Null)
     }
     async fn key_id(&self, subject_syntax_type: &str) -> Option<String> {
         let Ok(key_id) = self.identifier(subject_syntax_type).await else {

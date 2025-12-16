@@ -21,7 +21,7 @@ under the License.
 use anyhow::anyhow;
 
 use josekit::{
-    jwe::{JweEncrypter, JweHeader},
+    jwe::{JweDecrypter, JweEncrypter, JweHeader},
     jwk::JwkSet,
     jwt::{self, JwtPayload},
     Map, Value,
@@ -32,12 +32,106 @@ use crate::{log_warn, ApiError};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EncryptionParameters {
-    jwk: josekit::jwk::Jwk,
-    authorization_encrytped_response_alg: String,
-    authorization_encrypted_response_enc: String,
+    pub jwk: josekit::jwk::Jwk,
+    pub authorization_encrytped_response_alg: String,
+    pub authorization_encrypted_response_enc: String,
 }
 
 impl EncryptionParameters {
+    pub fn new_decryptor(alg: &str, enc: &str) -> Self {
+        match alg {
+            "ECDH-ES" | "ECDH-ES+A128KW" | "ECDH-ES+A192KW" | "ECDH-ES+A256KW" => Self {
+                jwk: josekit::jwe::ECDH_ES
+                    .generate_ec_key_pair(josekit::jwk::alg::ec::EcCurve::P256)
+                    .unwrap()
+                    .to_jwk_key_pair(),
+                authorization_encrytped_response_alg: alg.to_string(),
+                authorization_encrypted_response_enc: enc.to_string(),
+            },
+            "RSA1_5" => Self {
+                jwk: josekit::jwe::RSA1_5
+                    .generate_key_pair(2048)
+                    .unwrap()
+                    .to_jwk_key_pair(),
+                authorization_encrytped_response_alg: alg.to_string(),
+                authorization_encrypted_response_enc: enc.to_string(),
+            },
+            "RSA-OAEP" => Self {
+                jwk: josekit::jwe::RSA_OAEP
+                    .generate_key_pair(2048)
+                    .unwrap()
+                    .to_jwk_key_pair(),
+                authorization_encrytped_response_alg: alg.to_string(),
+                authorization_encrypted_response_enc: enc.to_string(),
+            },
+            "RSA-OAEP-256" => Self {
+                jwk: josekit::jwe::RSA_OAEP_256
+                    .generate_key_pair(2048)
+                    .unwrap()
+                    .to_jwk_key_pair(),
+                authorization_encrytped_response_alg: alg.to_string(),
+                authorization_encrypted_response_enc: enc.to_string(),
+            },
+            //TODO: handle this
+            _ => unimplemented!("not implemented"),
+        }
+    }
+}
+
+impl EncryptionParameters {
+    pub fn decrypt(&self, payload: &str) -> Result<(JwtPayload, JweHeader), ApiError> {
+        let decrypter = match self.authorization_encrytped_response_alg.as_str() {
+            "ECDH-ES" => Box::new(
+                josekit::jwe::ECDH_ES
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            "ECDH-ES+A128KW" => Box::new(
+                josekit::jwe::ECDH_ES_A128KW
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            "ECDH-ES+A192KW" => Box::new(
+                josekit::jwe::ECDH_ES_A192KW
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            "ECDH-ES+A256KW" => Box::new(
+                josekit::jwe::ECDH_ES_A256KW
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            "RSA1_5" => Box::new(
+                #[allow(deprecated)]
+                josekit::jwe::RSA1_5
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            "RSA-OAEP" => Box::new(
+                josekit::jwe::RSA_OAEP
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            "A128KW" => Box::new(
+                josekit::jwe::A128KW
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            "A192KW" => Box::new(
+                josekit::jwe::A192KW
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            "A256KW" => Box::new(
+                josekit::jwe::A256KW
+                    .decrypter_from_jwk(&self.jwk)
+                    .map_err(|e| anyhow!(e))?,
+            ) as Box<dyn JweDecrypter>,
+            _ => return Err(anyhow!("Algorithm not supported").into()),
+        };
+        jwt::decode_with_decrypter(payload, decrypter.as_ref()).map_err(|e| anyhow!(e).into())
+    }
+
     pub fn encrypt(
         &self,
         claims: Map<String, Value>,

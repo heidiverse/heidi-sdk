@@ -39,7 +39,6 @@ use ciborium::cbor;
 use heidi_util_rust::value::Value;
 #[cfg(feature = "reqwest")]
 use helper::{ARWrapper, PresentationData};
-use oid4vc::dif_presentation_exchange::{PresentationDefinition, PresentationSubmission};
 use reqwest::Url;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -253,10 +252,17 @@ pub fn create_submission(
     // let presentation_definition : PresentationDefinition = val_pd.transform().unwrap();
 
     let credential_type = credential.credential.get_type()?;
-    
+
     // Check if cryptographic holder binding is required
-    let requires_cryptographic_binding = is_cryptographic_holder_binding_required(&authorization_request);
-    log_warn!("PRESENTATION", &format!("Cryptographic binding required: {}", requires_cryptographic_binding));
+    let requires_cryptographic_binding =
+        is_cryptographic_holder_binding_required(&authorization_request);
+    log_warn!(
+        "PRESENTATION",
+        &format!(
+            "Cryptographic binding required: {}",
+            requires_cryptographic_binding
+        )
+    );
 
     match credential_type.as_str() {
         "SdJwt" => Ok(helper::create_submission(
@@ -602,8 +608,8 @@ fn is_cryptographic_holder_binding_required(authorization_request: &Value) -> bo
         if let Some(credentials) = dcql_query.get("credentials").and_then(|c| c.as_array()) {
             // Check if any credential query has require_cryptographic_holder_binding set to false
             for credential_query in credentials {
-                if let Some(binding_value) = credential_query
-                    .get("require_cryptographic_holder_binding")
+                if let Some(binding_value) =
+                    credential_query.get("require_cryptographic_holder_binding")
                 {
                     // Check if the value is a boolean false
                     match binding_value {
@@ -614,7 +620,7 @@ fn is_cryptographic_holder_binding_required(authorization_request: &Value) -> bo
             }
         }
     }
-    
+
     // Default to requiring cryptographic holder binding if not specified
     true
 }

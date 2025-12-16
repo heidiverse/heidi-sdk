@@ -28,6 +28,7 @@ use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use ciborium::Value;
 use sha2::Digest;
 
+pub mod encryption;
 pub mod signing;
 
 /// Base64 url encode bytes using no padding

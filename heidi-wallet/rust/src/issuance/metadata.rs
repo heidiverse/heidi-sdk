@@ -19,44 +19,28 @@ under the License.
  */
 
 //! This module contains structs/methods to fetch metadata from OID4VCI endpoints.
-use std::marker::PhantomData;
 
-use oid4vc::oid4vci::{
-    credential_format_profiles::{CredentialFormatCollection, CredentialFormats, WithParameters},
-    credential_issuer::{
-        authorization_server_metadata::AuthorizationServerMetadata,
-        credential_issuer_metadata::CredentialIssuerMetadata,
+use crate::{
+    issuance::models::{
+        AuthorizationRequestReference, AuthorizationServerMetadata, CredentialIssuerMetadata,
+        PushedAuthorizationRequest, TokenRequest, TokenResponse,
     },
-    credential_offer::AuthorizationRequestReference,
-    token_request::TokenRequest,
-    token_response::TokenResponse,
+    ApiError,
 };
 
-use crate::ApiError;
-
-use super::auth::{
-    build_pushed_authorization_request, ClientAttestation, PushedAuthorizationRequest,
-};
+use super::auth::{build_pushed_authorization_request, ClientAttestation};
 
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
-use serde::de::DeserializeOwned;
 
 /// Convenienve struct for easier fetching of metadata
-pub struct MetadataFetcher<CFC = CredentialFormats<WithParameters>>
-where
-    CFC: CredentialFormatCollection,
-{
+pub struct MetadataFetcher {
     pub client: ClientWithMiddleware,
-    phantom: std::marker::PhantomData<CFC>,
 }
 
-impl<CFC: CredentialFormatCollection + DeserializeOwned> MetadataFetcher<CFC> {
+impl MetadataFetcher {
     pub fn new(client: ClientWithMiddleware) -> Self {
-        Self {
-            client,
-            phantom: PhantomData,
-        }
+        Self { client }
     }
     /// Issue a pusehd AuthroizationRequest to a issuer authorization server
     pub async fn push_authorization_request(
@@ -140,7 +124,7 @@ impl<CFC: CredentialFormatCollection + DeserializeOwned> MetadataFetcher<CFC> {
     pub async fn get_credential_issuer_metadata(
         &self,
         credential_issuer_url: Url,
-    ) -> Result<CredentialIssuerMetadata<CFC>, ApiError> {
+    ) -> Result<CredentialIssuerMetadata, ApiError> {
         let mut openid_credential_issuer_endpoint = credential_issuer_url.clone();
 
         openid_credential_issuer_endpoint
@@ -154,7 +138,7 @@ impl<CFC: CredentialFormatCollection + DeserializeOwned> MetadataFetcher<CFC> {
             .send()
             .await?
             .error_for_status()?
-            .json::<CredentialIssuerMetadata<CFC>>()
+            .json::<CredentialIssuerMetadata>()
             .await
             .map_err(|e| {
                 anyhow::anyhow!("Parsing of openid-credential-issuer endpoint failed: {e}").into()

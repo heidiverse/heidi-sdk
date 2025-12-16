@@ -23,10 +23,6 @@ under the License.
 use anyhow::{anyhow, bail, ensure, Context};
 use http::StatusCode;
 use models::Payload;
-use oid4vc::{
-    oid4vc_core::jwt::{base64_url_decode, base64_url_encode},
-    oid4vci::wallet::content_encryption::{base64_decode_bytes, base64_encode_bytes},
-};
 use p256::{
     ecdsa::{signature::Verifier, Signature, VerifyingKey},
     PublicKey,

@@ -24,9 +24,7 @@ use reqwest::Url;
 use reqwest_middleware::{ClientWithMiddleware, RequestBuilder};
 use serde::Serialize;
 
-pub use oid4vc::oid4vci::authorization_request::PushedAuthorizationRequest;
-
-use crate::ApiError;
+use crate::{issuance::models::PushedAuthorizationRequest, ApiError};
 
 pub struct ClientAttestation {
     pub client_attestation: String,
