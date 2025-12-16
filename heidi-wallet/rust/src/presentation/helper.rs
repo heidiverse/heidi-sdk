@@ -23,6 +23,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context};
+use heidi_jwt::jwt::creator::JwtCreator;
 use regex::Regex;
 use reqwest::Url;
 use sdjwt::{ExternalSigner, Holder, SpecVersion};
@@ -34,14 +35,11 @@ use crate::agents::{AgentInfo, AgentType};
 #[cfg(all(feature = "reqwest", feature = "oid4vp"))]
 use crate::get_reqwest_client;
 use crate::jwx::EncryptionParameters;
+use crate::presentation::presentation_exchange::{
+    AuthorizationRequest, ClientIdScheme, ClientMetadataResource, PresentationDefinition,
+};
 use crate::vc::PresentableCredential;
 use crate::{log_debug, log_warn, ApiError};
-
-/// Typealias for OID4VP AuthorizationRequest
-pub(crate) type AuthorizationRequest =
-    oid4vc::oid4vc_core::authorization_request::AuthorizationRequest<
-        oid4vc::oid4vc_core::authorization_request::Object<oid4vc::oid4vp::oid4vp::OID4VP>,
-    >;
 
 /// Wrap AuthorizationRequest and AgentInfo into one struct
 pub(crate) struct ARWrapper(pub heidi_util_rust::value::Value, pub AgentInfo, pub String);
@@ -104,7 +102,7 @@ impl ARWrapper {
                     domain: auth_request.body.client_id.clone(),
                     trust_anchor: "".to_string(),
                     valid: auth_request.body.client_id
-                        == auth_request.body.extension.response_uri.unwrap_or_default(),
+                        == auth_request.body.response_uri.unwrap_or_default(),
                     trusted: false,
                 },
                 url.to_string(),
@@ -144,9 +142,7 @@ impl ARWrapper {
         };
         let mut auth_request = AuthorizationRequest::builder();
         if let Some(metadata) = metadata.as_ref() {
-            if let Ok(metadata) = serde_json::from_value::<
-                ClientMetadataResource<ClientMetadataParameters>,
-            >(metadata.clone())
+            if let Ok(metadata) = serde_json::from_value::<ClientMetadataResource>(metadata.clone())
             {
                 auth_request = auth_request.client_metadata(metadata);
             }
@@ -215,7 +211,7 @@ impl ARWrapper {
                 domain: auth_request.body.client_id.clone(),
                 trust_anchor: "".to_string(),
                 valid: auth_request.body.client_id
-                    == auth_request.body.extension.response_uri.unwrap_or_default(),
+                    == auth_request.body.response_uri.unwrap_or_default(),
                 trusted: false,
             },
             url.to_string(),
@@ -465,7 +461,9 @@ QDVxPuyj2MJjrfJpObqhmKuzjXWhRANCAARoOdx9P/3Pr9TOyWtvRNnv9gyVEJd9
 eQitkfKWSHR/Sco6Jm/PJkO2ozsMJz5R5k7/+bXVJWll7Lo4xfKij8XI
 -----END PRIVATE KEY-----"#;
 
-    let issuer = EncodingKey::from_ec_pem(pem).unwrap();
+    let signer = josekit::jws::ES256.signer_from_der(&pem).unwrap();
+
+    // let issuer = EncodingKey::from_ec_pem(pem).unwrap();
     let payload = {
         let mut payload: serde_json::Value =
             serde_json::from_str(&json).expect("json decoding failed");
@@ -479,10 +477,18 @@ eQitkfKWSHR/Sco6Jm/PJkO2ozsMJz5R5k7/+bXVJWll7Lo4xfKij8XI
         payload["cnf"]["jwk"]["alg"] = serde_json::Value::String("ES256".into());
         payload
     };
-    let mut header = Header::new(Algorithm::ES256);
-    header.typ = Some("vc+sd-jwt".into());
+    let mut header = josekit::jws::JwsHeader::new();
+    header.set_algorithm(josekit::jws::ES256.name());
+    header.set_token_type("vc+sd-jwt");
 
-    jsonwebtoken::encode(&header, &payload, &issuer).unwrap()
+    payload
+        .create_jwt(
+            &header,
+            Some("example-test"),
+            heidi_jwt::chrono::Duration::weeks(52),
+            &signer,
+        )
+        .expect("JWT creation failed")
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
@@ -576,9 +582,6 @@ mod tests {
     use std::collections::VecDeque;
 
     use base64::Engine;
-    use oid4vc::oid4vci::jsonwebtoken::{self, Algorithm, Validation};
-
-    use crate::presentation::helper::AuthorizationRequest;
 
     use super::transform_disclosure_path;
 
@@ -608,25 +611,25 @@ mod tests {
 
         let jwt = "eyJ4NWMiOlsiTUlJQlp6Q0NBUTJnQXdJQkFnSUdBWkVzdmt6Wk1Bb0dDQ3FHU000OUJBTUNNQjh4SFRBYkJnTlZCQU1NRkdoMGRIQnpPaTh2WVhWMGFHOXlhWFI1TG1Ob01CNFhEVEkwTURnd056RXlNRGt4TkZvWERUSTFNRGd3TnpFeU1Ea3hORm93SVRFZk1CMEdBMVVFQXd3V2MyTm9ibUZ3YzJ4aFpHVnVMblZpYVhGMVpTNWtaVEJaTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEEwSUFCS3VQTjZyQkQveTJuTVM2SkVDY0l4WGorTy9NKy9SUzBDcytDSjJ1MUY1d2JySTV0NEJkbEZEdWVSZE1EeXRjVWNUZ1haSm54WDhnbXpjUSt4b01iWENqTXpBeE1DRUdBMVVkRVFRYU1CaUNGbk5qYUc1aGNITnNZV1JsYmk1MVltbHhkV1V1WkdVd0RBWURWUjBUQVFIL0JBSXdBREFLQmdncWhrak9QUVFEQWdOSUFEQkZBaUJIK3lDYTlTaGVtc0xQU1ladFEzWVpoUWVPZWNyWTBHRGFtNzhPclJoMVdBSWhBS1JER3A1Yjc1enF2b0p1VWRWVFBWVEI2VGI2QWZ4SkVYY2FZcTk3UHFnbSIsIk1JSUJaakNDQVF5Z0F3SUJBZ0lHQVpFc3Zrek9NQW9HQ0NxR1NNNDlCQU1DTUI4eEhUQWJCZ05WQkFNTUZHaDBkSEJ6T2k4dllYVjBhRzl5YVhSNUxtTm9NQjRYRFRJME1EZ3dOekV5TURreE5Gb1hEVEkxTURnd056RXlNRGt4TkZvd0h6RWRNQnNHQTFVRUF3d1VhSFIwY0hNNkx5OWhkWFJvYjNKcGRIa3VZMmd3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVNjSWpBbUhya3AzVEM2YmlzZ2FxbXN6YktrcFkwaUdUZEhGMnJjUmVtSkNWK2lrb3REdDdHK0Fwd0cwbTZmeHQ4YUJKSGVKMm1zc0x2WkJtWmo1THRXb3pRd01qQWZCZ05WSFJFRUdEQVdnaFJvZEhSd2N6b3ZMMkYxZEdodmNtbDBlUzVqYURBUEJnTlZIUk1CQWY4RUJUQURBUUgvTUFvR0NDcUdTTTQ5QkFNQ0EwZ0FNRVVDSVFDS3lDckVkT1dYeXFKT1lXQWtIcFdNZWRWRXRTTVVPSUhveEhoZmNBeWxxQUlnVFJtcGJmaEJXOGJ6UGFyR2E2NGhQUG4zMGNvK3plaFdqQUFNWGlIRjNDND0iXSwiYWxnIjoiRVMyNTYifQ.eyJyZXNwb25zZV91cmkiOiJvaWQ0dnAtdmVyaWZpZXItd3MtZGV2LnViaXF1ZS5jaC92MS93YWxsZXQvYXV0aG9yaXphdGlvbiIsImF1ZCI6Imh0dHBzOi8vc2VsZi1pc3N1ZWQubWUvdjIiLCJjbGllbnRfaWRfc2NoZW1lIjoieDUwOV9zYW5fZG5zIiwicmVzcG9uc2VfdHlwZSI6InZwX3Rva2VuIiwicHJlc2VudGF0aW9uX2RlZmluaXRpb24iOnsiaWQiOiJhMjJhN2ZjYy1mZTM3LTQ5ZTItOTU4My1lMmM2MGYxNjI3NzQiLCJpbnB1dF9kZXNjcmlwdG9ycyI6W3siaWQiOiJzb21lIGNyZWRlbnRpYWwiLCJuYW1lIjoic2FtcGxlIGlucHV0IGRlc2NyaXB0b3IiLCJwdXJwb3NlIjoiQVBJIHRlc3RzIiwiZm9ybWF0Ijp7InZjK3NkLWp3dCI6e319LCJncm91cCI6WyJBIl0sImNvbnN0cmFpbnRzIjp7ImZpZWxkcyI6W3sicGF0aCI6WyIkLmdpdmVuX25hbWUiXSwicHVycG9zZSI6IkFQSSB0ZXN0cyIsIm5hbWUiOiJzYW1wbGUgaW5wdXQgZGVzY3JpcHRvciBmaWVsZCIsImludGVudF90b19yZXRhaW4iOmZhbHNlLCJvcHRpb25hbCI6ZmFsc2V9XSwibGltaXRfZGlzY2xvc3VyZSI6InJlcXVpcmVkIn19XSwibmFtZSI6IlNhbXBsZSBjcmVkZW50aWFsIHJlcXVlc3QiLCJwdXJwb3NlIjoiQVBJIHRlc3RzIiwic3VibWlzc2lvbl9yZXF1aXJlbWVudHMiOlt7Im5hbWUiOiJzYW1wbGUgc3VibWlzc2lvbiByZXF1aXJlbWVudCIsInB1cnBvc2UiOiJBUEkgdGVzdHMiLCJydWxlIjoiUElDSyIsImNvdW50IjoxLCJmcm9tIjoiQSJ9XX0sInN0YXRlIjoiNjFkMjBiZGMtYjc5Yi00ZDVjLWIzOWMtNjAzY2RiMWVmYjI4Iiwibm9uY2UiOiJ0ZXN0cy1ub25jZSIsImNsaWVudF9pZCI6InNjaG5hcHNsYWRlbi51YmlxdWUuZGUiLCJjbGllbnRfbWV0YWRhdGEiOnsidnBfZm9ybWF0cyI6eyJtc29fbWRvYyI6eyJhbGciOlsiRVMyNTYiLCJFUzM4NCIsIkVTNTEyIiwiRWREU0EiXX0sInZjK3NkLWp3dCI6eyJzZC1qd3RfYWxnX3ZhbHVlcyI6WyJFUzI1NiIsIkVTMzg0IiwiRVM1MTIiLCJFZERTQSJdLCJrYi1qd3RfYWxnX3ZhbHVlcyI6WyJFUzI1NiIsIkVTMzg0IiwiRVM1MTIiLCJFZERTQSJdfX19LCJyZXNwb25zZV9tb2RlIjoiZGlyZWN0X3Bvc3QifQ.PKXofatUruhhaGoeGbpLUZce-7WpQYusEaoNYDoe9964GgVLaOEQ9s09zsR3HJLUiKQ-32HOSoVFELCovs_SqA";
 
-        let header = jsonwebtoken::decode_header(jwt).unwrap();
-        let key = parsed_cert.public_key().subject_public_key.as_ref();
-        let key = match header.alg {
-            jsonwebtoken::Algorithm::ES256 | jsonwebtoken::Algorithm::ES384 => {
-                jsonwebtoken::DecodingKey::from_ec_der(key)
-            }
-            Algorithm::PS256
-            | Algorithm::PS384
-            | Algorithm::RS256
-            | Algorithm::RS384
-            | Algorithm::RS512 => jsonwebtoken::DecodingKey::from_rsa_der(key),
-            Algorithm::EdDSA => jsonwebtoken::DecodingKey::from_ed_der(key),
-            _ => panic!("{:?} not supported", header.alg),
-        };
-        let mut validation = Validation::default();
-        validation.required_spec_claims = Default::default();
-        validation.validate_exp = false;
-        validation.algorithms = vec![Algorithm::ES256, Algorithm::ES384];
-        let token = jsonwebtoken::decode::<AuthorizationRequest>(jwt, &key, &validation).unwrap();
-        println!("{token:?}");
+        // let header = jsonwebtoken::decode_header(jwt).unwrap();
+        // let key = parsed_cert.public_key().subject_public_key.as_ref();
+        // let key = match header.alg {
+        //     jsonwebtoken::Algorithm::ES256 | jsonwebtoken::Algorithm::ES384 => {
+        //         jsonwebtoken::DecodingKey::from_ec_der(key)
+        //     }
+        //     Algorithm::PS256
+        //     | Algorithm::PS384
+        //     | Algorithm::RS256
+        //     | Algorithm::RS384
+        //     | Algorithm::RS512 => jsonwebtoken::DecodingKey::from_rsa_der(key),
+        //     Algorithm::EdDSA => jsonwebtoken::DecodingKey::from_ed_der(key),
+        //     _ => panic!("{:?} not supported", header.alg),
+        // };
+        // let mut validation = Validation::default();
+        // validation.required_spec_claims = Default::default();
+        // validation.validate_exp = false;
+        // validation.algorithms = vec![Algorithm::ES256, Algorithm::ES384];
+        // let token = jsonwebtoken::decode::<AuthorizationRequest>(jwt, &key, &validation).unwrap();
+        // println!("{token:?}");
     }
 }

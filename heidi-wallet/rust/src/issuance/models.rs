@@ -1,11 +1,15 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
+use heidi_jwt::jwt::creator::JwtCreator;
 use heidi_util_rust::value::Value;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_with_macros::skip_serializing_none;
 
-use crate::issuance::helper::to_query_value;
+use crate::{
+    builder_fn, crypto::b64url_encode_bytes, issuance::helper::to_query_value,
+    presentation::presentation_exchange::RFC7519Claims, signing::SecureSubject,
+};
 
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug)]
@@ -364,6 +368,11 @@ pub enum KeyProofType {
     #[serde(rename = "attestation")]
     Attestation { attestation: String },
 }
+impl KeyProofType {
+    pub fn builder() -> ProofBuilder {
+        ProofBuilder::default()
+    }
+}
 
 // Key Proof_s_ type for multiple proof-of-posessions in the same credential request
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -491,4 +500,105 @@ pub mod credential_formats {
             }
         }
     }
+}
+
+#[derive(Default)]
+pub struct ProofBuilder {
+    proof_type: Option<ProofType>,
+    rfc7519_claims: RFC7519Claims,
+    nonce: Option<String>,
+    signer: Option<Arc<SecureSubject>>,
+    subject_syntax_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProofOfPossession {
+    #[serde(flatten)]
+    pub rfc7519_claims: RFC7519Claims,
+    pub nonce: String,
+}
+
+impl ProofBuilder {
+    pub fn build_signing_payload(&self) -> anyhow::Result<String> {
+        let jws_header = josekit::jws::JwsHeader::from_bytes(
+            self.signer.as_ref().unwrap().signer.jwt_header().as_bytes(),
+        )
+        .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?;
+        let pop = ProofOfPossession {
+            rfc7519_claims: self.rfc7519_claims.clone(),
+            nonce: self
+                .nonce
+                .clone()
+                .ok_or(anyhow::anyhow!("No nonce found"))?,
+        };
+        Ok(format!(
+            "{}.{}",
+            b64url_encode_bytes(
+                serde_json::to_string(jws_header.as_ref())
+                    .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?
+            ),
+            b64url_encode_bytes(
+                serde_json::to_string(&pop)
+                    .or_else(|e| Err(anyhow::anyhow!("Invalid Proof of Possession: {e}")))?
+            ),
+        ))
+    }
+    pub async fn build_no_sign(self) -> anyhow::Result<KeyProofType> {
+        anyhow::ensure!(self.rfc7519_claims.aud.is_some(), "aud claim is required");
+        anyhow::ensure!(self.rfc7519_claims.iat.is_some(), "iat claim is required");
+        anyhow::ensure!(self.nonce.is_some(), "nonce claim is required");
+
+        match self.proof_type {
+            Some(ProofType::Jwt) => Ok(KeyProofType::Jwt {
+                jwt: self.build_signing_payload()?,
+            }),
+            Some(_) => todo!(),
+            None => Err(anyhow::anyhow!("proof_type is required")),
+        }
+    }
+    pub async fn build(self) -> anyhow::Result<KeyProofType> {
+        anyhow::ensure!(self.rfc7519_claims.aud.is_some(), "aud claim is required");
+        anyhow::ensure!(self.rfc7519_claims.iat.is_some(), "iat claim is required");
+        let jws_header = josekit::jws::JwsHeader::from_bytes(
+            self.signer.as_ref().unwrap().signer.jwt_header().as_bytes(),
+        )
+        .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?;
+        let pop = ProofOfPossession {
+            rfc7519_claims: self.rfc7519_claims,
+            nonce: self.nonce.ok_or(anyhow::anyhow!("No nonce found"))?,
+        };
+        let signer = self
+            .signer
+            .as_ref()
+            .ok_or(anyhow::anyhow!("No subject found"))?;
+
+        match self.proof_type {
+            Some(ProofType::Jwt) => Ok(KeyProofType::Jwt {
+                jwt: pop
+                    .create_jwt(
+                        &jws_header,
+                        None,
+                        chrono::Duration::minutes(2),
+                        signer.as_ref(),
+                    )
+                    .or_else(|e| Err(anyhow::anyhow!("failed to build jwt: {e}")))?,
+            }),
+            Some(_) => Err(anyhow::anyhow!("proof type not supported")),
+            None => Err(anyhow::anyhow!("proof_type is required")),
+        }
+    }
+
+    pub fn signer(mut self, signer: Arc<SecureSubject>) -> Self {
+        self.signer = Some(signer);
+        self
+    }
+
+    builder_fn!(proof_type, ProofType);
+    builder_fn!(rfc7519_claims, iss, String);
+    builder_fn!(rfc7519_claims, aud, String);
+    // TODO: fix this, required by jsonwebtoken crate.
+    builder_fn!(rfc7519_claims, exp, i64);
+    builder_fn!(rfc7519_claims, iat, i64);
+    builder_fn!(nonce, String);
+    builder_fn!(subject_syntax_type, String);
 }

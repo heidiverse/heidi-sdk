@@ -1063,7 +1063,6 @@ pub(crate) mod test_hsm {
     use reqwest_middleware::ClientBuilder;
     use std::sync::Arc;
 
-    use oid4vc::oid4vci::wallet::content_encryption::base64_encode_bytes;
     use p256::ecdsa::signature::Signer;
     use p256::PublicKey;
 
@@ -1076,10 +1075,9 @@ pub(crate) mod test_hsm {
     use crate::error::SigningError;
     use crate::get_reqwest_client;
     use crate::hsm::{encode_jwt, EnterPin, Hsm};
-    use crate::issuance::auth::{
-        build_pushed_authorization_request, ClientAttestation, PushedAuthorizationRequest,
-    };
-    use crate::issuance::helper::bytes_to_ec_jwk;
+    use crate::issuance::auth::{build_pushed_authorization_request, ClientAttestation};
+    use crate::issuance::helper::{base64_encode_bytes, bytes_to_ec_jwk};
+    use crate::issuance::models::PushedAuthorizationRequest;
     use crate::signing::NativeSigner;
     use crate::util::{generate_code_challenge, generate_code_verifier};
 

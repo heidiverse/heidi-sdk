@@ -23,13 +23,13 @@ use std::{collections::HashMap, sync::Arc, time::SystemTime};
 
 use anyhow::Context;
 use heidi_credentials_rust::sdjwt::decode_sdjwt;
-use oid4vc::{
-    dif_presentation_exchange::input_evaluation::{evaluate_input_raw, FieldQueryResult},
-    oid4vp::{ClaimFormatDesignation, InputDescriptorMappingObject},
-};
+
 use serde_json::Value;
 
 use crate::{
+    presentation::presentation_exchange::{
+        ClaimFormatDesignation, FieldQueryResult, InputDescriptorMappingObject,
+    },
     vc::{PresentableCredential, VerifiableCredential},
     ApiError,
 };
@@ -150,9 +150,13 @@ pub(crate) fn get_matching_credentials(
                 .filter_map(|input_descriptor| {
                     // let credential = crate::value::Value::from(credential.clone());
                     let input_descriptor = input_descriptor.transform().unwrap();
-                    evaluate_input_raw(&input_descriptor, credential).map(|results| {
+                    crate::presentation::presentation_exchange::evaluate_input_raw(
+                        &input_descriptor,
+                        credential,
+                    )
+                    .map(|results| {
                         let obj = InputDescriptorMappingObject {
-                            id: input_descriptor.id().clone(),
+                            id: input_descriptor.id.clone(),
                             format: ClaimFormatDesignation::VcSdJwt,
                             path: "$".to_string(),
                             path_nested: None,
@@ -160,7 +164,7 @@ pub(crate) fn get_matching_credentials(
                         (
                             results,
                             obj,
-                            input_descriptor.group().clone().unwrap_or_default(),
+                            input_descriptor.group.clone().unwrap_or_default(),
                         )
                     })
                 })
@@ -254,9 +258,11 @@ pub(crate) fn get_matching_credentials(
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod sd_jwt_test {
     use heidi_util_rust::value::Value;
-    use oid4vc::oid4vc_core::jwt::base64_url_decode;
 
-    use crate::{presentation::get_matching_credentials_with_dif_pex, vc::VerifiableCredential};
+    use crate::{
+        crypto::b64url_decode_bytes, presentation::get_matching_credentials_with_dif_pex,
+        vc::VerifiableCredential,
+    };
 
     use super::SdJwtProperty;
 
@@ -268,7 +274,7 @@ mod sd_jwt_test {
         let disclosures: Vec<_> = disclosures
             .iter()
             .map(|e| {
-                let value = base64_url_decode(e).unwrap();
+                let value = b64url_decode_bytes(e).unwrap();
                 let disclosure: serde_json::Value = serde_json::from_slice(&value).unwrap();
                 let d = disclosure.as_array().unwrap();
 

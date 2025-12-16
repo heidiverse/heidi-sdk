@@ -286,7 +286,7 @@ mod tests {
     };
     use serde_json::json;
 
-    use crate::presentation::helper::AuthorizationRequest;
+    use crate::presentation::presentation_exchange::AuthorizationRequest;
 
     use super::EncryptionParameters;
 
@@ -395,13 +395,12 @@ mod tests {
         // let Some(client_metadata) = ar.body.extension.client_metadata else {
         //     panic!("")
         // };
-        let client_metadata = heidi_util_rust::value::Value::from_serialize(
-            &ar.body.extension.client_metadata.unwrap(),
-        )
-        .unwrap()
-        .get("client_metadata")
-        .unwrap()
-        .to_owned();
+        let client_metadata =
+            heidi_util_rust::value::Value::from_serialize(&ar.body.client_metadata.unwrap())
+                .unwrap()
+                .get("client_metadata")
+                .unwrap()
+                .to_owned();
 
         let encryption = EncryptionParameters::try_from(&client_metadata).unwrap();
         let obj = json!({

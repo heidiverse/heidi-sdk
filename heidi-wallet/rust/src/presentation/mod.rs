@@ -29,6 +29,9 @@ use crate::agents::AgentInfo;
 use crate::get_reqwest_client;
 #[cfg(feature = "reqwest")]
 use crate::presentation::helper::encrypt_submission;
+use crate::presentation::presentation_exchange::{
+    AuthorizationRequest, PresentationDefinition, PresentationSubmission,
+};
 use crate::vc::VerifiableCredential;
 use crate::{
     formats, log_warn, signing::SecureSubject, util::generate_code_verifier,
@@ -44,11 +47,12 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 
 pub mod helper;
+pub mod presentation_exchange;
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 /// Object holding the relevant state for the presentation process.
 pub struct PresentationProcess {
-    _authorization_request: helper::AuthorizationRequest,
+    _authorization_request: AuthorizationRequest,
 
     _agent_info: AgentInfo,
 }
@@ -159,8 +163,8 @@ pub fn present_credential_with_proximity(
         .transform()
         .unwrap();
     let presentation_submission = PresentationSubmission {
-        id: presentation_definition.id().to_string(),
-        definition_id: presentation_definition.id().clone(),
+        id: presentation_definition.id.to_string(),
+        definition_id: presentation_definition.id.clone(),
         descriptor_map: serde_json::from_str(&credential.descriptor_map).unwrap_or(vec![]),
     };
 

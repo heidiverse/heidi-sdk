@@ -44,7 +44,6 @@ use crate::issuance::{self, metadata::MetadataFetcher};
 #[allow(unused)]
 use crate::{
     error::{AgentParseError, IssuerError, VerifierError, VerifierParseError},
-    presentation::helper::AuthorizationRequest,
     ApiError,
 };
 #[cfg(all(feature = "uniffi", feature = "reqwest"))]

@@ -1,3 +1,4 @@
+use base64::Engine;
 /* Copyright 2024 Ubique Innovation AG
 
 Licensed to the Apache Software Foundation (ASF) under one
@@ -36,7 +37,4 @@ pub fn to_query_value<T: Serialize>(value: &T) -> anyhow::Result<String> {
 
 pub fn base64_encode_bytes<T: AsRef<[u8]>>(bytes: &T) -> String {
     base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(bytes.as_ref())
-}
-pub fn base64_decode_bytes<T: AsRef<[u8]>>(bytes: &T) -> String {
-    base64::prelude::BASE64_URL_SAFE_NO_PAD.decode(bytes.as_ref())
 }

@@ -33,6 +33,7 @@ pub use issuance::*;
 #[cfg(feature = "uniffi")]
 mod issuance {
     use anyhow::{anyhow, Context};
+    use chrono::Duration;
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
     use heidi_util_rust::value::Value;
 
@@ -49,6 +50,7 @@ mod issuance {
 
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
     use uniffi::Object;
 
     use crate::crypto::encryption::ContentDecryptor;
@@ -568,7 +570,7 @@ mod issuance {
                 return Err(anyhow!("No accesstoken").into());
             };
             let proof_bodys = get_proof_body(
-                dpop_client.clone(),
+                subjects.clone(),
                 cred_issuer_meta.clone(),
                 device_bound_tokens.c_nonce.clone(),
                 self.oidc_settings.client_id.clone(),
@@ -1436,13 +1438,43 @@ mod issuance {
     }
 
     async fn get_proof_body(
-        dpop_client: Arc<ClientWithMiddleware>,
+        subjects: Vec<Arc<SecureSubject>>,
         credential_issuer_metadata: CredentialIssuerMetadata,
-        nonce: Option<String>,
+        c_nonce: Option<String>,
         client_id: String,
-        is_for_pre_authorized_code: bool,
+        is_for_pre_authorized: bool,
     ) -> Result<Vec<String>, ApiError> {
-        todo!()
+        let nonce = c_nonce
+            .as_ref()
+            .ok_or(anyhow::anyhow!("No c_nonce found."))?; // XXX
+        let timestamp = SystemTime::now();
+        let timestamp = timestamp
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+        let mut proofs = vec![];
+        for subject in &subjects {
+            let mut builder = KeyProofType::builder()
+                .proof_type(ProofType::Jwt)
+                .signer(subject.clone());
+            // `iss` MUST not be set when in pre-authorized-flow https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#appendix-F.1-2.2.2.1
+            if !is_for_pre_authorized {
+                builder = builder.iss(client_id.clone());
+            }
+            let Ok(kpt) = builder
+                .aud(credential_issuer_metadata.credential_issuer.clone())
+                .iat(timestamp.as_secs() as i64)
+                .exp((timestamp + std::time::Duration::from_secs(360)).as_secs() as i64)
+                .nonce(nonce.clone())
+                .build_no_sign()
+                .await
+            else {
+                continue;
+            };
+            if let KeyProofType::Jwt { jwt } = kpt {
+                proofs.push(jwt);
+            }
+        }
+        Ok(proofs)
     }
 
     async fn get_credential_with_proofs(
