@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_with_macros::skip_serializing_none;
 
 use crate::{
-    builder_fn, crypto::b64url_encode_bytes, issuance::helper::to_query_value,
-    presentation::presentation_exchange::RFC7519Claims, signing::SecureSubject,
+    builder_fn, crypto::b64url_encode_bytes, presentation::presentation_exchange::RFC7519Claims,
+    signing::SecureSubject,
 };
 
 #[skip_serializing_none]
@@ -297,31 +297,6 @@ impl std::str::FromStr for CredentialOffer {
             })
             .collect::<anyhow::Result<_>>()?;
         serde_json::from_value(serde_json::Value::Object(map)).map_err(Into::into)
-    }
-}
-
-impl std::fmt::Display for CredentialOffer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CredentialOffer::CredentialOfferUri(uri) => {
-                let mut url =
-                    Url::parse("openid-credential-offer://").map_err(|_| std::fmt::Error)?;
-                url.query_pairs_mut().append_pair(
-                    "credential_offer_uri",
-                    &to_query_value(uri).map_err(|_| std::fmt::Error)?,
-                );
-                write!(f, "{}", url)
-            }
-            CredentialOffer::CredentialOffer(offer) => {
-                let mut url =
-                    Url::parse("openid-credential-offer://").map_err(|_| std::fmt::Error)?;
-                url.query_pairs_mut().append_pair(
-                    "credential_offer",
-                    &to_query_value(offer).map_err(|_| std::fmt::Error)?,
-                );
-                write!(f, "{}", url)
-            }
-        }
     }
 }
 

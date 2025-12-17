@@ -19,20 +19,12 @@ specific language governing permissions and limitations
 under the License.
  */
 use p256::PublicKey;
-use serde::Serialize;
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 /// Convert P256 SEC1 Public key bytes (compressed or uncompressed) into JWK
 pub fn bytes_to_ec_jwk(bytes: Vec<u8>) -> Option<String> {
     let public_key = PublicKey::from_sec1_bytes(&bytes).ok()?;
     Some(public_key.to_jwk_string())
-}
-
-// Helper function that allows to serialize custom structs into a query string.
-pub fn to_query_value<T: Serialize>(value: &T) -> anyhow::Result<String> {
-    serde_json::to_string(value)
-        .map(|s| s.chars().filter(|c| !c.is_whitespace()).collect::<String>())
-        .map_err(|e| e.into())
 }
 
 pub fn base64_encode_bytes<T: AsRef<[u8]>>(bytes: &T) -> String {
