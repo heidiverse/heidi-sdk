@@ -29,7 +29,7 @@ import kotlinx.serialization.json.JsonNames
  */
 @Serializable
 data class SdJwtVcMetadata(
-	@SerialName("iss") val issuer: String,
+	@SerialName("iss") val issuer: String? = null,
 	@JsonNames("vct", "type") val vct: String,
 	@SerialName("iat") val issuedAt: Long? = null,
 	@SerialName("exp") val expiresAt: Long? = null,

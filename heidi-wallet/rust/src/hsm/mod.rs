@@ -62,7 +62,7 @@ const DST: &[u8] = b"HEIDI-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_";
 /// - *pin*: User defined input (handle with care)
 /// - *aes_key*: An AES-GCM 256 key, used for HMAC key derivation
 /// - *nonce*: A AES-GCM 256 nonce (needs to be the same for the key derivation,
-///  therefore make sure to keep it as private as the key itself)
+/// therefore make sure to keep it as private as the key itself)
 pub(crate) fn derive_pin_key(
     pin: &[u8],
     aes_key: &[u8],
@@ -1063,7 +1063,6 @@ pub(crate) mod test_hsm {
     use reqwest_middleware::ClientBuilder;
     use std::sync::Arc;
 
-    use oid4vc::oid4vci::wallet::content_encryption::base64_encode_bytes;
     use p256::ecdsa::signature::Signer;
     use p256::PublicKey;
 
@@ -1076,10 +1075,9 @@ pub(crate) mod test_hsm {
     use crate::error::SigningError;
     use crate::get_reqwest_client;
     use crate::hsm::{encode_jwt, EnterPin, Hsm};
-    use crate::issuance::auth::{
-        build_pushed_authorization_request, ClientAttestation, PushedAuthorizationRequest,
-    };
-    use crate::issuance::helper::bytes_to_ec_jwk;
+    use crate::issuance::auth::{build_pushed_authorization_request, ClientAttestation};
+    use crate::issuance::helper::{base64_encode_bytes, bytes_to_ec_jwk};
+    use crate::issuance::models::PushedAuthorizationRequest;
     use crate::signing::NativeSigner;
     use crate::util::{generate_code_challenge, generate_code_verifier};
 

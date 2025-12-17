@@ -238,7 +238,7 @@ class SdJwt(val innerJwt: SdJwtRust) : ClaimGetter {
     fun getMetadata(): SdJwtVcMetadata {
         val claims = innerJwt.claims
         return SdJwtVcMetadata(
-            issuer = requireNotNull(claims["iss"].asString()),
+            issuer = claims["iss"].asString(),
             vct = requireNotNull(claims["vct"].asString()),
             issuedAt = claims["iat"].let { it.asLong() ?: it.asString()?.toLongOrNull() },
             expiresAt = claims["exp"].let { it.asLong() ?: it.asString()?.toLongOrNull() },

@@ -21,6 +21,7 @@ under the License.
 use std::sync::Arc;
 
 use base64::Engine;
+use heidi_jwt::models::errors::JwsError;
 use p256::ecdsa::{signature::Signer, Signature, SigningKey};
 use rand::rngs::OsRng;
 use sha2::{Digest, Sha256};
@@ -91,6 +92,7 @@ impl KeyPair {
     }
 }
 
+use crate::signing::SecureSubject;
 use crate::{error::SigningError, signing::NativeSigner};
 
 #[derive(Debug, Clone)]
@@ -164,5 +166,15 @@ impl NativeSigner for SoftwareKeyPair {
 
     fn key_attestation(&self) -> Option<String> {
         None
+    }
+}
+
+impl heidi_jwt::jwt::creator::Signer for SecureSubject {
+    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, heidi_jwt::models::errors::JwtError> {
+        self.signer.sign_bytes(data.to_vec()).or_else(|e| {
+            Err(heidi_jwt::models::errors::JwtError::Jws(
+                JwsError::InvalidSignature(format!("{e}")),
+            ))
+        })
     }
 }

@@ -1,3 +1,4 @@
+use base64::Engine;
 /* Copyright 2024 Ubique Innovation AG
 
 Licensed to the Apache Software Foundation (ASF) under one
@@ -24,4 +25,8 @@ use p256::PublicKey;
 pub fn bytes_to_ec_jwk(bytes: Vec<u8>) -> Option<String> {
     let public_key = PublicKey::from_sec1_bytes(&bytes).ok()?;
     Some(public_key.to_jwk_string())
+}
+
+pub fn base64_encode_bytes<T: AsRef<[u8]>>(bytes: &T) -> String {
+    base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(bytes.as_ref())
 }

@@ -28,16 +28,17 @@ use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use ciborium::Value;
 use sha2::Digest;
 
+pub mod encryption;
 pub mod signing;
 
 /// Base64 url encode bytes using no padding
-pub fn b64url_encode_bytes(bytes: &[u8]) -> String {
-    BASE64_URL_SAFE_NO_PAD.encode(bytes)
+pub fn b64url_encode_bytes<R: AsRef<[u8]>>(bytes: R) -> String {
+    BASE64_URL_SAFE_NO_PAD.encode(bytes.as_ref())
 }
 
 /// Base64 URL decode bytes using no padding
-pub fn b64url_decode_bytes(value: &str) -> Result<Vec<u8>, base64::DecodeError> {
-    BASE64_URL_SAFE_NO_PAD.decode(value)
+pub fn b64url_decode_bytes<R: AsRef<[u8]>>(value: R) -> Result<Vec<u8>, base64::DecodeError> {
+    BASE64_URL_SAFE_NO_PAD.decode(value.as_ref())
 }
 
 /// Sha256 digest helper function

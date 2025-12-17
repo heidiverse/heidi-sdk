@@ -342,10 +342,10 @@ open class EaaIssuanceProcess(
             var numberOfCredentials =
                 credentialIssuerMetadata.batchCredentialIssuance?.batchSize?.let { it / 2 }
                     ?: 1
+			numberOfCredentials = maxOf(numberOfCredentials, 1)
 
             val credentials = issuance.finalizeIssuance(
                 code = authorizationCode,
-                encryption = null,
                 txCode = transactionCode,
                 numCredentialsPerType = numberOfCredentials.toUInt(),
                 signerFactory = object : SignerFactory {

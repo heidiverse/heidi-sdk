@@ -23,10 +23,6 @@ under the License.
 use anyhow::{anyhow, bail, ensure, Context};
 use http::StatusCode;
 use models::Payload;
-use oid4vc::{
-    oid4vc_core::jwt::{base64_url_decode, base64_url_encode},
-    oid4vci::wallet::content_encryption::{base64_decode_bytes, base64_encode_bytes},
-};
 use p256::{
     ecdsa::{signature::Verifier, Signature, VerifyingKey},
     PublicKey,
@@ -42,7 +38,10 @@ use serde_json::{json, Value};
 use sha2::Digest;
 use task_local_extensions::Extensions;
 
-use crate::signing::NativeSigner;
+use crate::{
+    crypto::{b64url_decode_bytes, b64url_encode_bytes},
+    signing::NativeSigner,
+};
 
 pub mod models {
     use monostate::MustBe;
@@ -144,14 +143,14 @@ pub fn public_key_from_jwk(jwk: &Value) -> anyhow::Result<PublicKey> {
     // The jwk JOSE Header Parameter does not contain a private key.
     ensure!(jwk.get("d").is_none(), "Only public keys are supported.");
 
-    let x_bytes = base64_url_decode(
+    let x_bytes = b64url_decode_bytes(
         &jwk.get("x")
             .context("JWK does not have 'x' field")?
             .as_str()
             .context("JWK 'x' field is not a string")?,
     )?;
 
-    let y_bytes = base64_url_decode(
+    let y_bytes = b64url_decode_bytes(
         &jwk.get("y")
             .context("JWK does not have 'y' field")?
             .as_str()
@@ -191,12 +190,15 @@ pub fn validate_dpop(
 
     // 2. The DPoP HTTP request header field value is a single and well-formed JWT.
     let mut jwt_iter = jwt.split('.');
-    let header = serde_json::from_str::<models::Header>(&String::from_utf8(base64_decode_bytes(
-        &jwt_iter
-            .next()
-            .context("JWT Header not present!")?
-            .as_bytes(),
-    )?)?)?;
+    let header = serde_json::from_str::<models::Header>(&String::from_utf8(
+        b64url_decode_bytes(
+            &jwt_iter
+                .next()
+                .context("JWT Header not present!")?
+                .as_bytes(),
+        )
+        .context("header decode failed")?,
+    )?)?;
 
     let payload = jwt_iter
         .next()
@@ -204,16 +206,16 @@ pub fn validate_dpop(
         .as_bytes();
 
     let signature = jwt_iter.next().context("JWT Signature not present!")?;
-    let signature = base64_url_decode(&signature)?;
+    let signature = b64url_decode_bytes(&signature)?;
     let signature = Signature::from_bytes((&signature[..]).into())
         .context("Failed to deserialize signature")?;
 
     ensure!(jwt_iter.next().is_none(), "JWT had more that 3 parts!");
 
     // 3. All required claims per Section 4.2 are contained in the JWT.
-    let payload = serde_json::from_str::<models::Payload>(&String::from_utf8(
-        base64_decode_bytes(&payload)?,
-    )?)?;
+    let payload = serde_json::from_str::<models::Payload>(
+        &String::from_utf8(b64url_decode_bytes(&payload)?).context("payload invalid base64")?,
+    )?;
 
     // 4. The typ JOSE Header Parameter has the value dpop+jwt.
     // Already validated as the 'typ' Header is a 'MustBe!("dpop+jwt")'
@@ -286,7 +288,7 @@ pub fn validate_dpop(
         let hash = hasher.finalize();
 
         ensure!(
-            payload.ath.context("Missing 'ath' claim in JWT.")? == base64_encode_bytes(&hash),
+            payload.ath.context("Missing 'ath' claim in JWT.")? == b64url_encode_bytes(&hash),
             "'ath' claim does not match access token hash!"
         );
 
@@ -321,7 +323,7 @@ pub fn create_dpop(
         hasher.update(token.as_bytes());
         let hash = hasher.finalize();
 
-        Some(base64_encode_bytes(&hash))
+        Some(b64url_encode_bytes(&hash))
     } else {
         None
     };
@@ -337,8 +339,8 @@ pub fn create_dpop(
 
     let to_sign = format!(
         "{}.{}",
-        base64_url_encode(&header)?,
-        base64_url_encode(&payload)?
+        b64url_encode_bytes(&serde_json::to_vec(&header).unwrap_or(vec![])),
+        b64url_encode_bytes(&serde_json::to_vec(&payload).unwrap_or(vec![]))
     );
 
     let Ok(signature) = secret_key.sign_bytes(to_sign.as_bytes().to_vec()) else {
@@ -348,7 +350,7 @@ pub fn create_dpop(
         bail!("could not deserialize signature");
     };
 
-    let signature = base64_encode_bytes(&signature.to_bytes());
+    let signature = b64url_encode_bytes(&signature.to_bytes());
 
     Ok(format!("{}.{}", to_sign, signature))
 }

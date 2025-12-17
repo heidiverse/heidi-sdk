@@ -25,6 +25,8 @@ under the License.
 pub mod auth;
 pub mod helper;
 pub mod metadata;
+pub mod models;
+pub mod requests;
 
 #[cfg(feature = "uniffi")]
 pub use issuance::*;
@@ -33,33 +35,11 @@ pub use issuance::*;
 mod issuance {
     use anyhow::{anyhow, Context};
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
+    use heidi_util_rust::value::Value;
 
     use super::auth::{build_refresh_request, ClientAttestation};
     use super::metadata::MetadataFetcher;
-    use oid4vc::{
-        oid4vc_core::Subject,
-        oid4vci::{
-            authorization_request::PushedAuthorizationRequest,
-            credential_format_profiles::{CredentialFormats, WithParameters},
-            credential_issuer::{
-                credential_configurations_supported::CredentialConfigurationsSupportedObject,
-                credential_issuer_metadata::CredentialIssuerMetadata,
-            },
-            credential_offer::{
-                AuthorizationRequestReference, CredentialOffer, CredentialOfferParameters,
-                InputMode, PreAuthorizedCode,
-            },
-            credential_request::CredentialProofs::{NoProof, Proofs},
-            credential_response::CredentialResponseType,
-            proof::{KeyAttestationMetadata, KeyProofsType, ProofType},
-            token_response::{StringOrInt, TokenResponse},
-            wallet::{
-                content_encryption::{base64_encode_bytes, ContentDecryptor, RsaOAEP256},
-                ErrorDetails,
-            },
-            Wallet,
-        },
-    };
+
     use reqwest::{
         redirect::{Attempt, Policy},
         StatusCode, Url,
@@ -72,8 +52,24 @@ mod issuance {
     use std::sync::{Arc, Mutex};
     use uniffi::Object;
 
+    use crate::crypto::encryption::ContentDecryptor;
+    use crate::error::{BackendError, NetworkError};
     use crate::formats::{CredentialResult, Deferred};
 
+    use crate::issuance::helper::base64_encode_bytes;
+    use crate::issuance::models::{
+        self, credential_formats, AuthorizationRequestReference,
+        CredentialConfigurationsSupportedObject, CredentialIssuerMetadata, CredentialOffer,
+        CredentialOfferParameters, CredentialProofs, CredentialResponseEncryption,
+        CredentialResponseType, ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType,
+        PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest,
+        TokenResponse,
+    };
+    use crate::issuance::requests::{
+        get_access_token, get_credential, get_credential_with_proofs, get_proof_body,
+        try_get_deferred_credential,
+    };
+    use crate::jwx::EncryptionParameters;
     use crate::{
         backend::WalletBackend,
         dpop::{DpopAuth, DpopWrapper},
@@ -546,11 +542,24 @@ mod issuance {
                 .iter()
                 .find(|(_, value)| {
                     matches!(
-                        (&credential_type, &value.credential_format),
-                        (CredentialType::SdJwt, CredentialFormats::JwtVcSdJwt(..))
-                            | (CredentialType::Mdoc, CredentialFormats::MsoMdoc(..))
-                            | (CredentialType::BbsTermWise, CredentialFormats::ZkpVc(..))
-                            | (CredentialType::W3C, CredentialFormats::JwtVcSdJwt(..))
+                        (
+                            &credential_type,
+                            credential_formats::CredentialFormat::from(&value.credential_format)
+                        ),
+                        (
+                            CredentialType::SdJwt,
+                            credential_formats::CredentialFormat::VcIetfSdJwt
+                                | credential_formats::CredentialFormat::VcIetfSdJwtLegacy
+                        ) | (
+                            CredentialType::Mdoc,
+                            credential_formats::CredentialFormat::MsoMdoc
+                        ) | (
+                            CredentialType::BbsTermWise,
+                            credential_formats::CredentialFormat::ZkpVc
+                        ) | (
+                            CredentialType::W3C,
+                            credential_formats::CredentialFormat::W3cSdJwt
+                        )
                     )
                 })
             else {
@@ -560,30 +569,19 @@ mod issuance {
             // STEP 5: Exchange access token for credentials
             // let content_decryptor: Option<Box<dyn ContentDecryptor>> = None;
 
-            let mut dpop_wallet = Wallet::new(
-                subjects
-                    .clone()
-                    .into_iter()
-                    .map(|a| a as Arc<dyn Subject>)
-                    .collect(),
-                "did:key",
-            )
-            .map_err(|e| anyhow!("{e}"))?;
-
             let dpop_client = self.dpop_client.lock()?.clone();
-            dpop_wallet.client = (*dpop_client).clone();
             let Some(access_token) = device_bound_tokens.access_token.as_ref() else {
                 return Err(anyhow!("No accesstoken").into());
             };
-            let proof_bodys = dpop_wallet
-                .get_proof_body(
-                    cred_issuer_meta.clone(),
-                    device_bound_tokens.c_nonce.clone(),
-                    &self.oidc_settings.client_id,
-                    is_for_pre_authorized_code,
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("failed to get proof: {e}"))?;
+            let proof_bodys = get_proof_body(
+                subjects.clone(),
+                cred_issuer_meta.clone(),
+                device_bound_tokens.c_nonce.clone(),
+                self.oidc_settings.client_id.clone(),
+                is_for_pre_authorized_code,
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to get proof: {e}"))?;
             let proof_signatures = batch_subject
                 .batch_sign(proof_bodys.clone())
                 .map_err(|e| anyhow::anyhow!("failed to get cred: {e}"))?;
@@ -596,37 +594,38 @@ mod issuance {
                 })
                 .collect::<Vec<_>>();
 
-            let credential = match dpop_wallet
-                .get_credential_with_proofs(
-                    cred_issuer_meta.clone(),
-                    access_token.clone(),
-                    credential_configuration_id.clone(),
-                    credential_configuration.credential_format.clone(),
-                    None,
-                    Proofs(KeyProofsType::Jwt(proofs.clone())),
-                )
-                .await
+            let credential = match get_credential_with_proofs(
+                dpop_client.clone(),
+                cred_issuer_meta.clone(),
+                access_token.clone(),
+                credential_configuration_id.clone(),
+                credential_configuration.credential_format.clone(),
+                None,
+                CredentialProofs::Proofs(KeyProofsType::Jwt(proofs.clone())),
+            )
+            .await
             {
                 Ok(c) => c,
                 Err(_) => {
                     let mut cred_issuer_meta = cred_issuer_meta.clone();
                     // hacky workaround to try old RFC
                     cred_issuer_meta.nonce_endpoint = None;
-                    dpop_wallet
-                        .get_credential_with_proofs(
-                            cred_issuer_meta.clone(),
-                            access_token.clone(),
-                            credential_configuration_id.clone(),
-                            credential_configuration.credential_format.clone(),
-                            None,
-                            Proofs(KeyProofsType::Jwt(proofs)),
+
+                    get_credential_with_proofs(
+                        dpop_client,
+                        cred_issuer_meta.clone(),
+                        access_token.clone(),
+                        credential_configuration_id.clone(),
+                        credential_configuration.credential_format.clone(),
+                        None,
+                        CredentialProofs::Proofs(KeyProofsType::Jwt(proofs)),
+                    )
+                    .await
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "failed to get cred (get_batch_credentials_with_dpop): {e:?}"
                         )
-                        .await
-                        .map_err(|e| {
-                            anyhow::anyhow!(
-                                "failed to get cred (get_batch_credentials_with_dpop): {e:?}"
-                            )
-                        })?
+                    })?
                 }
             };
 
@@ -638,7 +637,7 @@ mod issuance {
                 dpop_key_reference: self.auth_key.key_reference(),
             };
             if let CredentialResponseType::Immediate { credential, .. } = &credential.credential {
-                let credential = if let serde_json::Value::Array(credentials) = credential {
+                let credential = if let Value::Array(credentials) = credential {
                     credentials
                         .iter()
                         .filter_map(|a| {
@@ -671,7 +670,7 @@ mod issuance {
                             })
                         })
                         .collect()
-                } else if let serde_json::Value::String(payload) = credential {
+                } else if let Value::String(payload) = credential {
                     vec![CredentialResult::CredentialType(Credential {
                         credential: match credential_type {
                             CredentialType::SdJwt => CredentialFormat::SdJwt(payload.to_string()),
@@ -721,33 +720,32 @@ mod issuance {
                 };
                 meta_data.clone()
             };
-            let mut dpop_wallet = Wallet::new(vec![], "did:key").map_err(|e| anyhow!("{e}"))?;
+
             let dpop_client = self.dpop_client.lock()?.clone();
-            dpop_wallet.client = (*dpop_client).clone();
             let Some(access_token) = &device_bound_tokens.access_token else {
                 return Err(anyhow!("Access token is empty").into());
             };
-            let credential = dpop_wallet
-                .try_get_deferred_credential(
-                    cred_issuer_meta,
-                    &TokenResponse {
-                        access_token: access_token.to_string(),
-                        token_type: "Bearer".to_string(),
-                        expires_in: None,
-                        refresh_token: None,
-                        scope: None,
-                        c_nonce: None,
-                        c_nonce_expires_in: None,
+            let credential = try_get_deferred_credential(
+                dpop_client,
+                cred_issuer_meta,
+                TokenResponse {
+                    access_token: access_token.to_string(),
+                    token_type: "Bearer".to_string(),
+                    expires_in: None,
+                    refresh_token: None,
+                    scope: None,
+                    c_nonce: None,
+                    c_nonce_expires_in: None,
+                },
+                models::CredentialResponse {
+                    credential: CredentialResponseType::Deferred {
+                        transaction_id: transaction_id,
                     },
-                    oid4vc::oid4vci::credential_response::CredentialResponse {
-                        credential: CredentialResponseType::Deferred {
-                            transaction_id: transaction_id,
-                        },
-                        c_nonce: None,
-                        c_nonce_expires_in: None,
-                    },
-                )
-                .await?;
+                    c_nonce: None,
+                    c_nonce_expires_in: None,
+                },
+            )
+            .await?;
 
             let tokens = DeviceBoundTokens {
                 access_token: device_bound_tokens.access_token.clone(),
@@ -757,7 +755,7 @@ mod issuance {
             };
 
             if let CredentialResponseType::Immediate { credential, .. } = &credential.credential {
-                let credential = if let serde_json::Value::Array(credentials) = credential {
+                let credential = if let Value::Array(credentials) = credential {
                     credentials
                         .iter()
                         .filter_map(|a| {
@@ -796,7 +794,7 @@ mod issuance {
                             }))
                         })
                         .collect()
-                } else if let serde_json::Value::String(payload) = credential {
+                } else if let Value::String(payload) = credential {
                     let credential_type =
                         if heidi_credentials_rust::sdjwt::decode_sdjwt(&payload).is_ok() {
                             CredentialType::SdJwt
@@ -864,9 +862,18 @@ mod issuance {
                 .iter()
                 .find(|(_, value)| {
                     matches!(
-                        (&credential_type, &value.credential_format),
-                        (CredentialType::SdJwt, CredentialFormats::JwtVcSdJwt(..))
-                            | (CredentialType::Mdoc, CredentialFormats::MsoMdoc(..))
+                        (
+                            &credential_type,
+                            credential_formats::CredentialFormat::from(&value.credential_format)
+                        ),
+                        (
+                            CredentialType::SdJwt,
+                            credential_formats::CredentialFormat::VcIetfSdJwt
+                                | credential_formats::CredentialFormat::VcIetfSdJwtLegacy
+                        ) | (
+                            CredentialType::Mdoc,
+                            credential_formats::CredentialFormat::MsoMdoc
+                        )
                     )
                 })
             else {
@@ -875,51 +882,44 @@ mod issuance {
 
             // STEP 5: Exchange access token for credentials
             // let content_decryptor: Option<Box<dyn ContentDecryptor>> = None;
-
-            let mut dpop_wallet = Wallet::new(
-                subjects
-                    .clone()
-                    .into_iter()
-                    .map(|a| a as Arc<dyn Subject>)
-                    .collect(),
-                "did:key",
-            )
-            .map_err(|e| anyhow!("{e}"))?;
             let dpop_client = self.dpop_client.lock()?.clone();
-            dpop_wallet.client = (*dpop_client).clone();
+
             let Some(access_token) = device_bound_tokens.access_token.as_ref() else {
                 return Err(anyhow!("No accesstoken").into());
             };
-            let credential = match dpop_wallet
-                .get_credential(
-                    cred_issuer_meta.clone(),
-                    access_token.clone(),
-                    device_bound_tokens.c_nonce.clone(),
-                    credential_configuration_id.clone(),
-                    credential_configuration.credential_format.clone(),
-                    None,
-                    &self.oidc_settings.client_id,
-                    is_for_pre_authorized_code,
-                )
-                .await
+
+            let credential = match get_credential(
+                dpop_client.clone(),
+                subjects.clone(),
+                cred_issuer_meta.clone(),
+                access_token.clone(),
+                device_bound_tokens.c_nonce.clone(),
+                credential_configuration_id.clone(),
+                credential_configuration.credential_format.clone(),
+                None,
+                self.oidc_settings.client_id.clone(),
+                is_for_pre_authorized_code,
+            )
+            .await
             {
                 Ok(c) => c,
                 Err(_) => {
                     let mut cred_issuer_meta = cred_issuer_meta.clone();
                     cred_issuer_meta.nonce_endpoint = None;
-                    dpop_wallet
-                        .get_credential(
-                            cred_issuer_meta.clone(),
-                            access_token.clone(),
-                            device_bound_tokens.c_nonce.clone(),
-                            credential_configuration_id.clone(),
-                            credential_configuration.credential_format.clone(),
-                            None,
-                            &self.oidc_settings.client_id,
-                            is_for_pre_authorized_code,
-                        )
-                        .await
-                        .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
+                    get_credential(
+                        dpop_client.clone(),
+                        subjects.clone(),
+                        cred_issuer_meta.clone(),
+                        access_token.clone(),
+                        device_bound_tokens.c_nonce.clone(),
+                        credential_configuration_id.clone(),
+                        credential_configuration.credential_format.clone(),
+                        None,
+                        self.oidc_settings.client_id.clone(),
+                        is_for_pre_authorized_code,
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
                 }
             };
             let c_nonce = credential.c_nonce.clone();
@@ -930,7 +930,7 @@ mod issuance {
                 dpop_key_reference: self.auth_key.key_reference(),
             };
             if let CredentialResponseType::Immediate { credential, .. } = &credential.credential {
-                let credential = if let serde_json::Value::Array(credentials) = credential {
+                let credential = if let Value::Array(credentials) = credential {
                     credentials
                         .iter()
                         .filter_map(|a| {
@@ -963,7 +963,7 @@ mod issuance {
                             })
                         })
                         .collect()
-                } else if let serde_json::Value::String(payload) = credential {
+                } else if let Value::String(payload) = credential {
                     vec![CredentialResult::CredentialType(Credential {
                         credential: match credential_type {
                             CredentialType::SdJwt => CredentialFormat::SdJwt(payload.to_string()),
@@ -1050,14 +1050,12 @@ mod issuance {
             let token_response = {
                 dpop_client
                     .post(token_endpoint)
-                    .form(
-                        &oid4vc::oid4vci::token_request::TokenRequest::AuthorizationCode {
-                            code: code.to_string(),
-                            code_verifier: Some(auth_state.code_verifier.clone()),
-                            redirect_uri: Some(self.oidc_settings.redirect_url.clone()),
-                            client_id: Some(self.oidc_settings.client_id.clone()),
-                        },
-                    )
+                    .form(&TokenRequest::AuthorizationCode {
+                        code: code.to_string(),
+                        code_verifier: Some(auth_state.code_verifier.clone()),
+                        redirect_uri: Some(self.oidc_settings.redirect_url.clone()),
+                        client_id: Some(self.oidc_settings.client_id.clone()),
+                    })
                     .send()
                     .await?
                     .error_for_status()?
@@ -1268,7 +1266,6 @@ mod issuance {
         pub async fn finalize_issuance(
             self: Arc<Self>,
             code: Option<String>,
-            encryption: Option<EncryptionAlgorithm>,
             tx_code: Option<String>,
             num_credentials_per_type: u32,
             signer_factory: Arc<dyn SignerFactory>,
@@ -1280,13 +1277,13 @@ mod issuance {
             let use_dpop = can_use_dpop(dpop_signing_alg_values_supported, self.auth_key.alg())?;
 
             // Initialize the wallet either with the regular client or the DPoP client
-            let mut wallet = Wallet::new(vec![], "did:key").map_err(|e| anyhow::anyhow!("{e}"))?;
-            if use_dpop {
+
+            let client = if use_dpop {
                 let dpop_client = self.dpop_client.lock()?.clone();
-                wallet.client = (*dpop_client).clone();
+                dpop_client
             } else {
-                wallet.client = self.client.clone();
-            }
+                Arc::new(self.client.clone())
+            };
 
             let token_response = {
                 let pre_authorized_code = self.pre_authorized_code.lock()?.clone();
@@ -1304,7 +1301,7 @@ mod issuance {
 
                     let Some(token_endpoint) = token_endpoint
                         .and_then(|url| Url::parse(&url).ok())
-                        .or_else(|| meta_data.token_endpoint.clone())
+                        .or_else(|| meta_data.token_endpoint.and_then(|a| Url::parse(&a).ok()))
                     else {
                         return Err(anyhow!("No token endpoint").into());
                     };
@@ -1318,35 +1315,30 @@ mod issuance {
                         .finish()
                         .clone();
 
-                    wallet
-                        .get_access_token(
-                            token_endpoint_with_client_id,
-                            oid4vc::oid4vci::token_request::TokenRequest::PreAuthorizedCode {
-                                pre_authorized_code: pre_authorized_code
-                                    .pre_authorized_code
-                                    .clone(),
-                                tx_code,
-                            },
-                        )
-                        .await
-                        .map_err(|e| match e.downcast_ref::<ErrorDetails>() {
-                            Some(ErrorDetails {
-                                status,
-                                error_description,
-                                ..
-                            }) => {
-                                let desc = error_description.to_lowercase();
-                                if *status == 400
-                                    && (desc.contains("transaction code")
-                                        || desc.contains("tx_code"))
-                                {
-                                    ApiError::Credential(CredentialError::InvalidTransactionCode)
-                                } else {
-                                    e.into()
-                                }
+                    get_access_token(
+                        client.clone(),
+                        token_endpoint_with_client_id,
+                        TokenRequest::PreAuthorizedCode {
+                            pre_authorized_code: pre_authorized_code.pre_authorized_code.clone(),
+                            tx_code,
+                        },
+                    )
+                    .await
+                    .map_err(|e| match e.downcast_ref::<ErrorDetails>() {
+                        Some(e) => {
+                            let desc = e.error_description.to_lowercase();
+                            if e.status.as_u16() == 400
+                                && (desc.contains("transaction code") || desc.contains("tx_code"))
+                            {
+                                ApiError::Credential(CredentialError::InvalidTransactionCode)
+                            } else {
+                                ApiError::Backend(BackendError::Network(NetworkError::Response(
+                                    format!("{e}"),
+                                )))
                             }
-                            None => e.into(),
-                        })?
+                        }
+                        _ => e.into(),
+                    })?
                 } else if let Some(auth_code) = code {
                     let auth_state = {
                         let state = self.auth_state.lock()?;
@@ -1362,17 +1354,32 @@ mod issuance {
                         return Err(anyhow!("No token endpoint").into());
                     };
 
-                    wallet
-                        .get_access_token(
-                            token_endpoint,
-                            oid4vc::oid4vci::token_request::TokenRequest::AuthorizationCode {
-                                code: auth_code,
-                                code_verifier: Some(auth_state.code_verifier.clone()),
-                                redirect_uri: Some(self.oidc_settings.redirect_url.clone()),
-                                client_id: Some(self.oidc_settings.client_id.clone()),
-                            },
-                        )
-                        .await?
+                    get_access_token(
+                        client.clone(),
+                        token_endpoint,
+                        TokenRequest::AuthorizationCode {
+                            code: auth_code,
+                            code_verifier: Some(auth_state.code_verifier.clone()),
+                            redirect_uri: Some(self.oidc_settings.redirect_url.clone()),
+                            client_id: Some(self.oidc_settings.client_id.clone()),
+                        },
+                    )
+                    .await
+                    .map_err(|e| match e.downcast_ref::<ErrorDetails>() {
+                        Some(e) => {
+                            let desc = e.error_description.to_lowercase();
+                            if e.status.as_u16() == 400
+                                && (desc.contains("transaction code") || desc.contains("tx_code"))
+                            {
+                                ApiError::Credential(CredentialError::InvalidTransactionCode)
+                            } else {
+                                ApiError::Backend(BackendError::Network(NetworkError::Response(
+                                    format!("{e}"),
+                                )))
+                            }
+                        }
+                        _ => e.into(),
+                    })?
                 } else {
                     return Err(anyhow!("Neither pre-authorized code nor code provided").into());
                 }
@@ -1380,9 +1387,8 @@ mod issuance {
             log_debug!("ISSUANCE", &format!("{:?}", token_response));
 
             self.get_credentials(
-                &mut wallet,
+                client.clone(),
                 token_response,
-                encryption,
                 num_credentials_per_type,
                 signer_factory,
                 is_for_pre_authorized_code,
@@ -1395,7 +1401,6 @@ mod issuance {
         pub async fn supplement_issuance(
             self: &Arc<Self>,
             tokens: DeviceBoundTokens,
-            encryption: Option<EncryptionAlgorithm>,
             num_credentials_per_type: u32,
             dpop_signing_alg_values_supported: Option<Vec<String>>,
             signer_factory: Arc<dyn SignerFactory>,
@@ -1413,18 +1418,16 @@ mod issuance {
 
             let use_dpop = can_use_dpop(dpop_signing_alg_values_supported, self.auth_key.alg())?;
 
-            let mut wallet = Wallet::new(vec![], "did:key")?;
-            if use_dpop {
+            let client = if use_dpop {
                 let dpop_client = self.dpop_client.lock()?.clone();
-                wallet.client = (*dpop_client).clone();
+                dpop_client
             } else {
-                wallet.client = self.client.clone();
-            }
+                Arc::new(self.client.clone())
+            };
 
             self.get_credentials(
-                &mut wallet,
+                client,
                 tokens,
-                encryption,
                 num_credentials_per_type,
                 signer_factory,
                 is_for_pre_authorized_code,
@@ -1480,8 +1483,13 @@ mod issuance {
                 *cred_meta = Some(credential_issuer_metadata.clone());
             }
 
+            //TODO: don't unwrap url parse
             let auth_server = get_authorization_server(
-                &credential_issuer_metadata.authorization_servers,
+                &credential_issuer_metadata
+                    .authorization_servers
+                    .iter()
+                    .map(|a| Url::parse(a).unwrap())
+                    .collect::<Vec<Url>>(),
                 &cred_offer,
             )
             .map_err(|_| ApiError::from(anyhow::anyhow!("server selection error")))?;
@@ -1806,9 +1814,8 @@ mod issuance {
     impl OID4VciIssuance {
         pub async fn get_credentials(
             self: &Arc<Self>,
-            wallet: &mut Wallet,
+            client: Arc<ClientWithMiddleware>,
             tokens: TokenResponse,
-            encryption: Option<EncryptionAlgorithm>,
             num_credentials_per_type: u32,
             signer_factory: Arc<dyn SignerFactory>,
             is_for_pre_authorized_code: bool,
@@ -1860,12 +1867,14 @@ mod issuance {
                     .get(cred_config_id)
                     .ok_or(anyhow!("No configuration found"))?;
                 // if we have a bbs force issuance of just one credential
-                let batch_size =
-                    if matches!(cred_config.credential_format, CredentialFormats::ZkpVc(..)) {
-                        1
-                    } else {
-                        batch_size
-                    };
+                let batch_size = if matches!(
+                    credential_formats::CredentialFormat::from(&cred_config.credential_format),
+                    credential_formats::CredentialFormat::ZkpVc
+                ) {
+                    1
+                } else {
+                    batch_size
+                };
                 let key_attestations_required = get_key_attestations_required(cred_config);
                 dbg!(key_attestations_required);
                 log_warn!("ISSUANCE", &format!("{key_attestations_required:?}"));
@@ -1900,13 +1909,12 @@ mod issuance {
                 };
                 let credential_response = self
                     .get_credentials_one_config(
-                        wallet,
+                        client.clone(),
                         &curr_subjects,
                         key_attestations_required,
                         credential_issuer_metadata.clone(),
                         cred_config_id.clone(),
                         cred_config.credential_format.clone(),
-                        encryption,
                         &token_response,
                         key_type,
                         is_for_pre_authorized_code,
@@ -1954,25 +1962,33 @@ mod issuance {
         #[allow(clippy::too_many_arguments)]
         async fn get_credentials_one_config(
             &self,
-            wallet: &mut Wallet,
+            client: Arc<ClientWithMiddleware>,
             subjects: &Vec<Arc<dyn NativeSigner>>,
             key_attestations_required: Option<&KeyAttestationMetadata>,
-            credential_issuer_metadata: CredentialIssuerMetadata<CredentialFormats<WithParameters>>,
+            credential_issuer_metadata: CredentialIssuerMetadata,
             credential_configuration_id: String,
             // credential_format only kept here for backwards compatibility with pre-draft15 issuer. Remove.
-            credential_format: CredentialFormats<WithParameters>,
-            encryption: Option<EncryptionAlgorithm>,
+            credential_format: Value,
             token_response: &TokenResponse,
             key_type: KeyType,
             is_for_pre_authorized_code: bool,
         ) -> Result<CredentialResponseTypeInternal, ApiError> {
             // STEP 5: Exchange access token for credentials
-            let content_decryptor: Option<Box<dyn ContentDecryptor>> = match encryption {
-                Some(EncryptionAlgorithm::RsaPss256AesCbcHs256) => {
-                    Some(Box::new(RsaOAEP256::new()))
-                }
-                _ => None,
-            };
+            let content_decryptor: Option<Box<dyn ContentDecryptor>> =
+                match &credential_issuer_metadata.credential_response_encryption {
+                    Some(CredentialResponseEncryption {
+                        alg_values_supported,
+                        enc_values_supported,
+                        encryption_required: _,
+                    }) => {
+                        let decryption_parameters = EncryptionParameters::new_decryptor(
+                            &alg_values_supported[0],
+                            &enc_values_supported[0],
+                        );
+                        decryption_parameters.map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
+                    }
+                    _ => None,
+                };
             log_warn!("ISSUANCE", &format!("Cnonce: {:?}", token_response.c_nonce));
             let c_nonce = if token_response.c_nonce.is_some() {
                 token_response.c_nonce.clone()
@@ -2000,95 +2016,119 @@ mod issuance {
                 None
             };
 
-            let credential_response =
-                if let Some(key_attestation_metadata) = key_attestations_required {
-                    let issuer_id = credential_issuer_metadata.credential_issuer.to_string();
-                    let key_attestation = self
-                        .wallet_backend
-                        .get_key_attestation(
-                            c_nonce.clone(),
-                            Some(issuer_id),
-                            key_attestation_metadata.key_storage.clone(),
-                            key_attestation_metadata.user_authentication.clone(),
-                            subjects.clone(),
-                        )
-                        .await?;
+            let credential_response = if let Some(key_attestation_metadata) =
+                key_attestations_required
+            {
+                let issuer_id = credential_issuer_metadata.credential_issuer.to_string();
+                let key_attestation = self
+                    .wallet_backend
+                    .get_key_attestation(
+                        c_nonce.clone(),
+                        Some(issuer_id),
+                        key_attestation_metadata.key_storage.clone(),
+                        key_attestation_metadata.user_authentication.clone(),
+                        subjects.clone(),
+                    )
+                    .await?;
 
-                    let proof = if key_type == KeyType::None {
-                        NoProof
-                    } else {
-                        Proofs(KeyProofsType::Attestation(vec![key_attestation]))
-                    };
-
-                    wallet
-                        .get_credential_with_proofs(
-                            credential_issuer_metadata.clone(),
-                            token_response.access_token.clone(),
-                            credential_configuration_id.clone(),
-                            credential_format.clone(),
-                            content_decryptor,
-                            proof,
-                        )
-                        .await
-                        .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
+                let proof = if key_type == KeyType::None {
+                    CredentialProofs::NoProof
                 } else {
-                    log_warn!("ISSUANCE", &format!("start issuing"));
-                    wallet.subjects = subjects
-                        .iter()
-                        .map(|s| -> Arc<dyn Subject> {
-                            Arc::new(SecureSubject::with_signer(s.clone()))
-                        })
-                        .collect();
-                    log_warn!(
-                        "ISSUANCE",
-                        &format!("gathered all subjects ({})", wallet.subjects.len())
-                    );
-                    let result = match wallet
-                        .get_credential(
+                    CredentialProofs::Proofs(KeyProofsType::Attestation(vec![key_attestation]))
+                };
+                get_credential_with_proofs(
+                    client.clone(),
+                    credential_issuer_metadata.clone(),
+                    token_response.access_token.clone(),
+                    credential_configuration_id.clone(),
+                    credential_format.clone(),
+                    content_decryptor,
+                    proof,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
+            } else {
+                log_warn!("ISSUANCE", &format!("start issuing"));
+                let subjects = subjects
+                    .iter()
+                    .map(|s| Arc::new(SecureSubject::with_signer(s.clone())))
+                    .collect::<Vec<Arc<SecureSubject>>>();
+                log_warn!(
+                    "ISSUANCE",
+                    &format!("gathered all subjects ({})", subjects.len())
+                );
+                let content_decryptor: Option<Box<dyn ContentDecryptor>> =
+                    match &credential_issuer_metadata.credential_response_encryption {
+                        Some(CredentialResponseEncryption {
+                            alg_values_supported,
+                            enc_values_supported,
+                            encryption_required: _,
+                        }) => {
+                            let decryption_parameters = EncryptionParameters::new_decryptor(
+                                &alg_values_supported[0],
+                                &enc_values_supported[0],
+                            );
+                            decryption_parameters.map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
+                        }
+                        _ => None,
+                    };
+                let result = match get_credential(
+                    client.clone(),
+                    subjects.clone(),
+                    credential_issuer_metadata.clone(),
+                    token_response.access_token.clone(),
+                    c_nonce.clone(),
+                    credential_configuration_id.clone(),
+                    credential_format.clone(),
+                    content_decryptor,
+                    self.oidc_settings.client_id.clone(),
+                    is_for_pre_authorized_code,
+                )
+                .await
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        log_warn!(
+                            "ISSUANCE",
+                            &format!("failed to get cred on first try: {e:?}")
+                        );
+                        let mut credential_issuer_metadata = credential_issuer_metadata.clone();
+                        credential_issuer_metadata.nonce_endpoint = None;
+                        let content_decryptor: Option<Box<dyn ContentDecryptor>> =
+                            match &credential_issuer_metadata.credential_response_encryption {
+                                Some(CredentialResponseEncryption {
+                                    alg_values_supported,
+                                    enc_values_supported,
+                                    encryption_required: _,
+                                }) => {
+                                    let decryption_parameters = EncryptionParameters::new_decryptor(
+                                        &alg_values_supported[0],
+                                        &enc_values_supported[0],
+                                    );
+                                    decryption_parameters
+                                        .map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
+                                }
+                                _ => None,
+                            };
+                        get_credential(
+                            client,
+                            subjects,
                             credential_issuer_metadata.clone(),
                             token_response.access_token.clone(),
-                            c_nonce.clone(),
+                            e.c_nonce,
                             credential_configuration_id.clone(),
                             credential_format.clone(),
                             content_decryptor,
-                            &self.oidc_settings.client_id,
+                            self.oidc_settings.client_id.clone(),
                             is_for_pre_authorized_code,
                         )
                         .await
-                    {
-                        Ok(c) => c,
-                        Err(e) => {
-                            log_warn!(
-                                "ISSUANCE",
-                                &format!("failed to get cred on first try: {e:?}")
-                            );
-                            let mut credential_issuer_metadata = credential_issuer_metadata.clone();
-                            credential_issuer_metadata.nonce_endpoint = None;
-                            let content_decryptor: Option<Box<dyn ContentDecryptor>> =
-                                match encryption {
-                                    Some(EncryptionAlgorithm::RsaPss256AesCbcHs256) => {
-                                        Some(Box::new(RsaOAEP256::new()))
-                                    }
-                                    _ => None,
-                                };
-                            wallet
-                                .get_credential(
-                                    credential_issuer_metadata.clone(),
-                                    token_response.access_token.clone(),
-                                    e.c_nonce,
-                                    credential_configuration_id.clone(),
-                                    credential_format.clone(),
-                                    content_decryptor,
-                                    &self.oidc_settings.client_id,
-                                    is_for_pre_authorized_code,
-                                )
-                                .await
-                                .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
-                        }
-                    };
-                    log_warn!("ISSUANCE", &format!("finished request"));
-                    result
+                        .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
+                    }
                 };
+                log_warn!("ISSUANCE", &format!("finished request"));
+                result
+            };
             log_warn!("ISSUANCE", &format!("got everything"));
             // let tokens = Some(DeviceBoundTokens {
             //     access_token: Some(token_response.access_token.to_string()),
@@ -2113,7 +2153,7 @@ mod issuance {
             if let CredentialResponseType::Immediate { credential, .. } =
                 &credential_response.credential
             {
-                let payloads = if let serde_json::Value::Array(credentials) = credential {
+                let payloads = if let Value::Array(credentials) = credential {
                     log_debug!("ISSUANCE", "we have array valued response");
                     credentials
                         .iter()
@@ -2129,7 +2169,7 @@ mod issuance {
                             }
                         })
                         .collect()
-                } else if let serde_json::Value::String(payload) = credential {
+                } else if let Value::String(payload) = credential {
                     vec![payload.as_str()]
                 } else {
                     return Err(anyhow!("Malformed credential response").into());
@@ -2226,7 +2266,7 @@ mod issuance {
 
     fn resolve_credential_format(
         payloads: &Vec<&str>,
-        format: Option<&CredentialFormats<WithParameters>>,
+        format: Option<&Value>,
     ) -> Option<CredentialType> {
         let mut formats = payloads
             .iter()
@@ -2256,11 +2296,11 @@ mod issuance {
 
     fn resolve_credential_format_single(
         payload: &str,
-        format: Option<&CredentialFormats<WithParameters>>,
+        format: Option<&Value>,
     ) -> Option<CredentialType> {
         if let Some(format) = format {
-            match format {
-                CredentialFormats::JwtVcSdJwt(_) => {
+            match credential_formats::CredentialFormat::from(format) {
+                credential_formats::CredentialFormat::W3cSdJwt => {
                     // NOTE: This is a workaround, as W3C SD-JWTs have the same
                     // format as non-W3C SD-JWTs.
                     // We can distinguish them by checking if the @context is present.
@@ -2274,8 +2314,12 @@ mod issuance {
                         Some(CredentialType::SdJwt)
                     }
                 }
-                CredentialFormats::MsoMdoc(_) => Some(CredentialType::Mdoc),
-                CredentialFormats::ZkpVc(_) => Some(CredentialType::BbsTermWise),
+                credential_formats::CredentialFormat::VcIetfSdJwt
+                | credential_formats::CredentialFormat::VcIetfSdJwtLegacy => {
+                    Some(CredentialType::SdJwt)
+                }
+                credential_formats::CredentialFormat::MsoMdoc => Some(CredentialType::Mdoc),
+                credential_formats::CredentialFormat::ZkpVc => Some(CredentialType::BbsTermWise),
                 _ => {
                     log_debug!("ISSUANCE", &format!("invalid format: {:?}", format));
                     None
@@ -2332,7 +2376,7 @@ mod issuance {
             .parse()
             .map_err(|e| anyhow!("Could not parse offer: {e}"))?;
         match cred_offer {
-            CredentialOffer::CredentialOffer(cred_offer_params) => Ok(*cred_offer_params),
+            CredentialOffer::CredentialOffer(cred_offer_params) => Ok(cred_offer_params),
             CredentialOffer::CredentialOfferUri(credential_offer_uri) => client
                 .get(credential_offer_uri)
                 .send()
@@ -2412,8 +2456,8 @@ mod issuance {
                 })
         });
 
-        if let Some(expected_auth_server) = expected_auth_server {
-            if authorization_servers.contains(expected_auth_server) {
+        if let Some(expected_auth_server) = expected_auth_server.and_then(|a| Url::parse(a).ok()) {
+            if authorization_servers.contains(&expected_auth_server) {
                 Ok(expected_auth_server.clone())
             } else {
                 Err(anyhow!("Credential offer specified authorization server {} which is not present in the list of authorization servers", expected_auth_server.to_string()).into())
@@ -2431,13 +2475,15 @@ mod issuance {
     }
 
     fn is_supported_credential_configuration(
-        cred_config: &CredentialConfigurationsSupportedObject<CredentialFormats<WithParameters>>,
+        cred_config: &CredentialConfigurationsSupportedObject,
     ) -> bool {
         if !matches!(
-            cred_config.credential_format,
-            CredentialFormats::JwtVcSdJwt(..)
-                | CredentialFormats::MsoMdoc(..)
-                | CredentialFormats::ZkpVc(..)
+            credential_formats::CredentialFormat::from(&cred_config.credential_format),
+            credential_formats::CredentialFormat::VcIetfSdJwt
+                | credential_formats::CredentialFormat::VcIetfSdJwtLegacy
+                | credential_formats::CredentialFormat::MsoMdoc
+                | credential_formats::CredentialFormat::ZkpVc
+                | credential_formats::CredentialFormat::W3cSdJwt
         ) {
             return false;
         }
@@ -2481,7 +2527,7 @@ mod issuance {
     }
 
     fn get_key_attestations_required(
-        cred_config: &CredentialConfigurationsSupportedObject<CredentialFormats<WithParameters>>,
+        cred_config: &CredentialConfigurationsSupportedObject,
     ) -> Option<&KeyAttestationMetadata> {
         return cred_config
             .proof_types_supported
@@ -2492,7 +2538,7 @@ mod issuance {
     /// Check if cryptographic binding is required for the credential configuration.
     /// Returns false if cryptographic_binding_methods_supported is empty (claim-based binding).
     fn is_cryptographic_binding_required(
-        cred_config: &CredentialConfigurationsSupportedObject<CredentialFormats<WithParameters>>,
+        cred_config: &CredentialConfigurationsSupportedObject,
     ) -> bool {
         // If cryptographic_binding_methods_supported is empty, no cryptographic binding is required
         !cred_config
@@ -2537,12 +2583,10 @@ mod issuance {
     #[allow(clippy::unwrap_used, clippy::expect_used)]
     mod test_issuance {
         use super::*;
-        use crate::crypto::signing::SoftwareKeyPair;
         use crate::get_reqwest_client;
+        use crate::issuance::models::AuthorizationCode;
         use crate::testing::new_native_signer;
-        use oid4vc::oid4vci::credential_offer::{
-            AuthorizationCode, CredentialOfferParameters, Grants,
-        };
+        use crate::{crypto::signing::SoftwareKeyPair, issuance::models::Grants};
         use reqwest::Url;
         use reqwest_middleware::ClientBuilder;
         use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
@@ -2718,7 +2762,6 @@ mod issuance {
                 .clone()
                 .finalize_issuance(
                     code,
-                    None,
                     tx_code,
                     num_credentials_per_type,
                     Arc::new(TestSignerFactory {}),
@@ -2774,7 +2817,6 @@ mod issuance {
                 .clone()
                 .supplement_issuance(
                     tokens,
-                    None,
                     2,
                     None,
                     signer_factory.clone(),
@@ -2786,7 +2828,6 @@ mod issuance {
                 .clone()
                 .supplement_issuance(
                     credentials.tokens,
-                    None,
                     3,
                     None,
                     signer_factory.clone(),

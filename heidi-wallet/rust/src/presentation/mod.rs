@@ -29,6 +29,9 @@ use crate::agents::AgentInfo;
 use crate::get_reqwest_client;
 #[cfg(feature = "reqwest")]
 use crate::presentation::helper::encrypt_submission;
+use crate::presentation::presentation_exchange::{
+    AuthorizationRequest, PresentationDefinition, PresentationSubmission,
+};
 use crate::vc::VerifiableCredential;
 use crate::{
     formats, log_warn, signing::SecureSubject, util::generate_code_verifier,
@@ -39,17 +42,17 @@ use ciborium::cbor;
 use heidi_util_rust::value::Value;
 #[cfg(feature = "reqwest")]
 use helper::{ARWrapper, PresentationData};
-use oid4vc::dif_presentation_exchange::{PresentationDefinition, PresentationSubmission};
 use reqwest::Url;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
 pub mod helper;
+pub mod presentation_exchange;
 
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 /// Object holding the relevant state for the presentation process.
 pub struct PresentationProcess {
-    _authorization_request: helper::AuthorizationRequest,
+    _authorization_request: AuthorizationRequest,
 
     _agent_info: AgentInfo,
 }
@@ -156,12 +159,12 @@ pub fn present_credential_with_proximity(
     log_warn!("PEX", "try deserializing presentaiton defintion");
     let presentation_definition: PresentationDefinition = authorization_request
         .get("presentation_definition")
-        .unwrap()
+        .ok_or_else(|| ApiError::from(anyhow::anyhow!("No presentation definition found")))?
         .transform()
-        .unwrap();
+        .ok_or_else(|| ApiError::from(anyhow::anyhow!("Transform failed")))?;
     let presentation_submission = PresentationSubmission {
-        id: presentation_definition.id().to_string(),
-        definition_id: presentation_definition.id().clone(),
+        id: presentation_definition.id.to_string(),
+        definition_id: presentation_definition.id.clone(),
         descriptor_map: serde_json::from_str(&credential.descriptor_map).unwrap_or(vec![]),
     };
 
@@ -177,11 +180,13 @@ pub fn present_credential_with_proximity(
             let nonce = authorization_request
                 .get("nonce")
                 .and_then(|a| a.as_str())
-                .unwrap()
+                .ok_or_else(|| ApiError::from(anyhow::anyhow!("No nonce found")))?
                 .to_string();
             let response = encrypt_submission(
                 heidi_util_rust::value::Value::String(vp_token),
-                Value::from_serialize(&presentation_submission).unwrap(),
+                Value::from_serialize(&presentation_submission).ok_or_else(|| {
+                    ApiError::from(anyhow::anyhow!("Coult not serialize presentation"))
+                })?,
                 mdoc_generated_nonce,
                 nonce.as_bytes().to_vec(),
                 state,
@@ -236,27 +241,34 @@ pub fn create_submission(
     let nonce = authorization_request
         .get("nonce")
         .and_then(|a| a.as_str())
-        .unwrap()
+        .ok_or_else(|| ApiError::from(anyhow::anyhow!("request invalid")))?
         .to_string();
     log_warn!("PEX", "before audience");
     let audience = authorization_request
         .get("client_id")
         .and_then(|a| a.as_str())
-        .unwrap()
+        .ok_or_else(|| ApiError::from(anyhow::anyhow!("request invalid")))?
         .to_string();
     log_warn!("PEX", "transform presi");
     let presentation_definition = authorization_request
         .get("presentation_definition")
-        .unwrap()
+        .ok_or_else(|| ApiError::from(anyhow::anyhow!("request invalid")))?
         .to_owned();
     // fix_pd_value(&mut val_pd);
     // let presentation_definition : PresentationDefinition = val_pd.transform().unwrap();
 
     let credential_type = credential.credential.get_type()?;
-    
+
     // Check if cryptographic holder binding is required
-    let requires_cryptographic_binding = is_cryptographic_holder_binding_required(&authorization_request);
-    log_warn!("PRESENTATION", &format!("Cryptographic binding required: {}", requires_cryptographic_binding));
+    let requires_cryptographic_binding =
+        is_cryptographic_holder_binding_required(&authorization_request);
+    log_warn!(
+        "PRESENTATION",
+        &format!(
+            "Cryptographic binding required: {}",
+            requires_cryptographic_binding
+        )
+    );
 
     match credential_type.as_str() {
         "SdJwt" => Ok(helper::create_submission(
@@ -350,7 +362,7 @@ mod test {
 
 #[test]
 fn test_presentation_parse() {
-    let _auth_request = r#"{
+    let auth_request = r#"{
   "response_uri": "https://oid4vp-verifier-ws-dev.ubique.ch/v1/wallet/authorization",
   "aud": "https://self-issued.me/v2",
   "client_id_scheme": "x509_san_dns",
@@ -576,17 +588,17 @@ fn test_presentation_parse() {
   },
   "response_mode": "direct_post.jwt"
 }"#;
-    // let auth_request_value: crate::value::Value = serde_json::from_str(&auth_request).unwrap();
-    // let auth_request: AuthorizationRequest = auth_request_value.transform().unwrap();
-    // println!("{:#?}", auth_request_value.get("presentation_definition"));
-    // let pd: PresentationDefinition = auth_request_value
-    //     .get("presentation_definition")
-    //     .unwrap()
-    //     .transform()
-    //     .unwrap();
+    let auth_request_value: Value = serde_json::from_str(&auth_request).unwrap();
+    let _auth_request: AuthorizationRequest = auth_request_value.transform().unwrap();
+    println!("{:#?}", auth_request_value.get("presentation_definition"));
+    let pd: PresentationDefinition = auth_request_value
+        .get("presentation_definition")
+        .unwrap()
+        .transform()
+        .unwrap();
 
-    // let mut back_pd: crate::value::Value = crate::value::Value::from_serialize(&pd).unwrap();
-    // println!("{back_pd:#?}");
+    let back_pd: Value = Value::from_serialize(&pd).unwrap();
+    println!("{back_pd:#?}");
     // fix_pd_value(&mut back_pd);
     // let pd: PresentationDefinition = back_pd.transform().unwrap();
     // println!("{auth_request:?}");
@@ -602,19 +614,16 @@ fn is_cryptographic_holder_binding_required(authorization_request: &Value) -> bo
         if let Some(credentials) = dcql_query.get("credentials").and_then(|c| c.as_array()) {
             // Check if any credential query has require_cryptographic_holder_binding set to false
             for credential_query in credentials {
-                if let Some(binding_value) = credential_query
-                    .get("require_cryptographic_holder_binding")
+                if let Some(Value::Boolean(false)) =
+                    credential_query.get("require_cryptographic_holder_binding")
                 {
                     // Check if the value is a boolean false
-                    match binding_value {
-                        Value::Boolean(false) => return false,
-                        _ => {}
-                    }
+                    return false;
                 }
             }
         }
     }
-    
+
     // Default to requiring cryptographic holder binding if not specified
     true
 }
