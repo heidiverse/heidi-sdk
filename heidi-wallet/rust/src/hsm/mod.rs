@@ -62,7 +62,7 @@ const DST: &[u8] = b"HEIDI-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_";
 /// - *pin*: User defined input (handle with care)
 /// - *aes_key*: An AES-GCM 256 key, used for HMAC key derivation
 /// - *nonce*: A AES-GCM 256 nonce (needs to be the same for the key derivation,
-///  therefore make sure to keep it as private as the key itself)
+/// therefore make sure to keep it as private as the key itself)
 pub(crate) fn derive_pin_key(
     pin: &[u8],
     aes_key: &[u8],

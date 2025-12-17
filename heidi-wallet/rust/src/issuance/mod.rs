@@ -61,9 +61,9 @@ mod issuance {
         self, credential_formats, AuthorizationRequestReference,
         CredentialConfigurationsSupportedObject, CredentialIssuerMetadata, CredentialOffer,
         CredentialOfferParameters, CredentialProofs, CredentialResponseEncryption,
-        CredentialResponseType, ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofType,
-        KeyProofsType, PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt,
-        TokenRequest, TokenResponse,
+        CredentialResponseType, ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType,
+        PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest,
+        TokenResponse,
     };
     use crate::issuance::requests::{
         get_access_token, get_credential, get_credential_with_proofs, get_proof_body,
@@ -1985,7 +1985,7 @@ mod issuance {
                             &alg_values_supported[0],
                             &enc_values_supported[0],
                         );
-                        Some(Box::new(decryption_parameters))
+                        decryption_parameters.map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
                     }
                     _ => None,
                 };
@@ -2068,7 +2068,7 @@ mod issuance {
                                 &alg_values_supported[0],
                                 &enc_values_supported[0],
                             );
-                            Some(Box::new(decryption_parameters))
+                            decryption_parameters.map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
                         }
                         _ => None,
                     };
@@ -2105,7 +2105,8 @@ mod issuance {
                                         &alg_values_supported[0],
                                         &enc_values_supported[0],
                                     );
-                                    Some(Box::new(decryption_parameters))
+                                    decryption_parameters
+                                        .map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
                                 }
                                 _ => None,
                             };

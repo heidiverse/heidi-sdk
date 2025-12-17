@@ -37,7 +37,7 @@ pub fn jwt_get_payload_unchecked(jwt: &str) -> anyhow::Result<String> {
         anyhow::bail!("JWT has less/more than 3 parts: jwt = {jwt}")
     }
 
-    let payload = String::from_utf8(BASE64_URL_SAFE_NO_PAD.decode(&parts[1])?)?;
+    let payload = String::from_utf8(BASE64_URL_SAFE_NO_PAD.decode(parts[1])?)?;
 
     Ok(payload)
 }
@@ -48,13 +48,13 @@ pub fn generate_code_verifier_bytes() -> [u8; 32] {
 
 #[cfg(feature = "oid4vp")]
 pub fn generate_code_verifier() -> String {
-    BASE64_URL_SAFE_NO_PAD.encode(&generate_code_verifier_bytes())
+    BASE64_URL_SAFE_NO_PAD.encode(generate_code_verifier_bytes())
 }
 
 #[cfg(feature = "oid4vp")]
 pub fn generate_code_challenge(code_verifier: &str, code_challenge_method: &str) -> String {
     if code_challenge_method == "plain" {
-        return code_verifier.to_string();
+        code_verifier.to_string()
     } else if code_challenge_method == "S256" {
         use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 

@@ -1,3 +1,4 @@
+#![allow(async_fn_in_trait)]
 use std::{collections::HashMap, sync::Arc};
 
 use heidi_jwt::jwt::creator::JwtCreator;

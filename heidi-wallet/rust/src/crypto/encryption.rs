@@ -2,7 +2,6 @@ use josekit::jwk;
 
 use crate::{
     issuance::models::CredentialResponseEncryptionSpecification, jwx::EncryptionParameters,
-    log_debug,
 };
 
 pub trait ContentDecryptor: Send + Sync {
