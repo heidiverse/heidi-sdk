@@ -39,7 +39,7 @@ josekit = { git = "https://github.com/ubamrein/josekit-rs.git", default-features
     "rustcrypto",
 ] }
 
-wasmer = "5.0.4"
+wasmer = "=5.0.4"
 
 [patch.crates-io]
 wasmer = {git = "https://github.com/UbiqueInnovation/wasmer"}
