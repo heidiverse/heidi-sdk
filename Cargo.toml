@@ -38,8 +38,3 @@ ark-serialize = "0.4.2"
 josekit = { git = "https://github.com/ubamrein/josekit-rs.git", default-features = false, features = [
     "rustcrypto",
 ] }
-
-wasmer = "=5.0.4"
-
-[patch.crates-io]
-wasmer = {git = "https://github.com/UbiqueInnovation/wasmer"}
