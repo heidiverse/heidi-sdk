@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::bail;
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
-use heidi_util_rust::value::Value;
+use heidi_util_rust::{log_warn, value::Value};
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
 
@@ -256,13 +256,30 @@ pub async fn get_credential(
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
 
+    let cryptographic_binding_methods_supported = credential_issuer_metadata
+        .credential_configurations_supported
+        .get(credential_configuration_id.as_str())
+        .map(|config| config.cryptographic_binding_methods_supported.clone())
+        .unwrap_or(Vec::new());
+
+    let use_did_jwk =
+        cryptographic_binding_methods_supported.contains(&DID_JWK_BINDING_METHOD.to_string());
+
     let mut proofs = vec![];
     for subject in &subjects {
         let mut builder = KeyProofType::builder()
             .proof_type(ProofType::Jwt)
-            .signer(subject.clone());
-        // `iss` MUST not be set when in pre-authorized-flow https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#appendix-F.1-2.2.2.1
-        if !is_for_pre_authorized {
+            .signer(subject.clone())
+            .use_did_jwk(use_did_jwk);
+        if use_did_jwk {
+            let iss = format!(
+                "did:jwk:{}",
+                BASE64_URL_SAFE_NO_PAD.encode(subject.signer.public_key_jwk().as_bytes())
+            );
+            builder = builder.iss(iss)
+        } else if !is_for_pre_authorized {
+            // `iss` MUST not be set when in pre-authorized-flow
+            // https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#appendix-F.1-2.2.2.1
             builder = builder.iss(client_id.clone());
         }
         let mut kpb = builder
@@ -272,13 +289,21 @@ pub async fn get_credential(
         if let Some(nonce) = &c_nonce {
             kpb = kpb.nonce(nonce);
         }
-        let Ok(kpt) = kpb.build().await else {
-            continue;
+        let kpt = match kpb.build().await {
+            Ok(kpt) => kpt,
+            Err(e) => {
+                log_warn!(
+                    "ISSUANCE",
+                    &format!("Could not build proof for subject: {e}")
+                );
+                continue;
+            }
         };
         if let KeyProofType::Jwt { jwt } = kpt {
             proofs.push(jwt);
         }
     }
+
     get_credential_with_proofs(
         client,
         credential_issuer_metadata,

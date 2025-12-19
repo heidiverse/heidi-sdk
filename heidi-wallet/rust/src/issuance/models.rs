@@ -494,8 +494,8 @@ pub struct ProofOfPossession {
 }
 
 impl ProofBuilder {
-    pub fn build_signing_payload(&self) -> anyhow::Result<String> {
-        let jws_header = if self.use_did_jwk {
+    fn get_jws_header(&self) -> anyhow::Result<josekit::jws::JwsHeader> {
+        if self.use_did_jwk {
             use serde_json::Value as JsonValue;
             let signer = self
                 .signer
@@ -512,18 +512,21 @@ impl ProofBuilder {
                 JsonValue::String("openid4vc-proof+jwt".to_string()),
             );
             map.insert(
-                "jwk".to_string(),
-                JsonValue::String(format!("did:jwk:{encoded_jwk}:{encoded_jwk}")),
+                "kid".to_string(),
+                JsonValue::String(format!("did:jwk:{encoded_jwk}#0")),
             );
-
             josekit::jws::JwsHeader::from_map(map)
-                .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?
+                .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))
         } else {
             josekit::jws::JwsHeader::from_bytes(
                 self.signer.as_ref().unwrap().signer.jwt_header().as_bytes(),
             )
-            .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?
-        };
+            .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))
+        }
+    }
+
+    pub fn build_signing_payload(&self) -> anyhow::Result<String> {
+        let jws_header = self.get_jws_header()?;
         let pop = ProofOfPossession {
             rfc7519_claims: self.rfc7519_claims.clone(),
             nonce: self
@@ -559,10 +562,7 @@ impl ProofBuilder {
     pub async fn build(self) -> anyhow::Result<KeyProofType> {
         anyhow::ensure!(self.rfc7519_claims.aud.is_some(), "aud claim is required");
         anyhow::ensure!(self.rfc7519_claims.iat.is_some(), "iat claim is required");
-        let jws_header = josekit::jws::JwsHeader::from_bytes(
-            self.signer.as_ref().unwrap().signer.jwt_header().as_bytes(),
-        )
-        .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?;
+        let jws_header = self.get_jws_header()?;
         let pop = ProofOfPossession {
             rfc7519_claims: self.rfc7519_claims,
             nonce: self.nonce.ok_or(anyhow::anyhow!("No nonce found"))?,
