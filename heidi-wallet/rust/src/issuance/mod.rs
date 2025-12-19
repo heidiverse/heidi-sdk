@@ -576,6 +576,7 @@ mod issuance {
             let proof_bodys = get_proof_body(
                 subjects.clone(),
                 cred_issuer_meta.clone(),
+                credential_configuration_id.clone(),
                 device_bound_tokens.c_nonce.clone(),
                 self.oidc_settings.client_id.clone(),
                 is_for_pre_authorized_code,
