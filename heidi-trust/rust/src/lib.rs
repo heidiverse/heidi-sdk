@@ -49,7 +49,8 @@ pub fn oidcf_trust_chain_from_url(url: &str) -> Result<OidcfTrustChainInfo, Fede
         FederationError::FetchingFailed(anyhow::anyhow!(e))
     };
 
-    let mut trust_chain = oidcf::DefaultTrustChain::new_from_url(url).map_err(wrap_fetch_error)?;
+    let mut trust_chain =
+        oidcf::DefaultFederationRelation::new_from_url(url).map_err(wrap_fetch_error)?;
 
     validate_oidf_trust_chain(&mut trust_chain)?;
     to_oidf_trust_chain_info(trust_chain)
@@ -59,18 +60,18 @@ pub fn oidcf_trust_chain_from_url(url: &str) -> Result<OidcfTrustChainInfo, Fede
 pub fn oidcf_trust_chain_from_presentation_request(
     presentation_request_jwt: String,
 ) -> Result<OidcfTrustChainInfo, FederationError> {
-    let wrap_parse_error = |e: oidcf::models::errors::FederationError| {
+    let wrap_parse_error = |e: heidi_jwt::models::errors::JwtError| {
         FederationError::JwtParsingFailed(anyhow::anyhow!(e))
     };
     let wrap_fetch_error = |e: oidcf::models::errors::FederationError| {
         FederationError::FetchingFailed(anyhow::anyhow!(e))
     };
-    let wrap_validation_error = |e: oidcf::models::errors::FederationError| {
+    let wrap_validation_error = |e: heidi_jwt::models::errors::JwtError| {
         FederationError::ValidationFailed(anyhow::anyhow!(e))
     };
 
     let jwt = presentation_request_jwt
-        .parse::<oidcf::jwt::Jwt<serde_json::Value>>()
+        .parse::<heidi_jwt::jwt::Jwt<serde_json::Value>>()
         .map_err(wrap_parse_error)?;
 
     let oidf_trust_chain = jwt
@@ -87,11 +88,11 @@ pub fn oidcf_trust_chain_from_presentation_request(
 
     let mut trust_chain = if let Some(oidf_trust_chain) = oidf_trust_chain {
         dbg!(&oidf_trust_chain);
-        oidcf::DefaultTrustChain::from_trust_chain(&oidf_trust_chain).ok_or(
+        oidcf::DefaultFederationRelation::from_trust_cache(&oidf_trust_chain).or(Err(
             FederationError::ValidationFailed(anyhow::anyhow!("invalid trust_chain")),
-        )?
+        ))?
     } else if let Some(iss) = iss {
-        oidcf::DefaultTrustChain::new_from_url(&iss).map_err(wrap_fetch_error)?
+        oidcf::DefaultFederationRelation::new_from_url(&iss).map_err(wrap_fetch_error)?
     } else {
         return Err(FederationError::FetchingFailed(anyhow::anyhow!(
             "no trust_chain nor iss in presentation request"
@@ -115,7 +116,7 @@ pub fn oidcf_trust_chain_from_presentation_request(
 }
 
 fn validate_oidf_trust_chain(
-    trust_chain: &mut oidcf::DefaultTrustChain,
+    trust_chain: &mut oidcf::DefaultFederationRelation,
 ) -> Result<(), FederationError> {
     let wrap_validation_error = |e: oidcf::models::errors::FederationError| {
         FederationError::ValidationFailed(anyhow::anyhow!(e))
@@ -129,7 +130,7 @@ fn validate_oidf_trust_chain(
 }
 
 fn to_oidf_trust_chain_info(
-    mut trust_chain: oidcf::DefaultTrustChain,
+    mut trust_chain: oidcf::DefaultFederationRelation,
 ) -> Result<OidcfTrustChainInfo, FederationError> {
     let wrap_validation_error = |e: oidcf::models::errors::FederationError| {
         FederationError::ValidationFailed(anyhow::anyhow!(e))

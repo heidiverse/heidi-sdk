@@ -32,15 +32,23 @@ use super::auth::{build_pushed_authorization_request, ClientAttestation};
 
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
+use serde::{Deserialize, Serialize};
 
 /// Convenienve struct for easier fetching of metadata
 pub struct MetadataFetcher {
     pub client: ClientWithMiddleware,
+    pub collected_federation_metadata: heidi_util_rust::value::Value,
 }
 
 impl MetadataFetcher {
-    pub fn new(client: ClientWithMiddleware) -> Self {
-        Self { client }
+    pub fn new(
+        client: ClientWithMiddleware,
+        collected_federation_metadata: heidi_util_rust::value::Value,
+    ) -> Self {
+        Self {
+            client,
+            collected_federation_metadata: heidi_util_rust::value::Value::Null,
+        }
     }
     /// Issue a pusehd AuthroizationRequest to a issuer authorization server
     pub async fn push_authorization_request(
@@ -96,6 +104,23 @@ impl MetadataFetcher {
             Ok(response) => response.json::<AuthorizationServerMetadata>().await,
             Err(e) => Err(e),
         };
+
+        // try openid-federation
+        //
+        let res_oidf = openidconnect_federation::DefaultTrustChain::new_from_url(
+            credential_issuer_url.as_str(),
+        );
+        if let Ok(mut res_oidf) = res_oidf {
+            res_oidf.build_trust();
+            let is_valid = res_oidf.verify().is_ok();
+            res_oidf
+                .leaf
+                .entity_config
+                .unwrap()
+                .payload_unverified()
+                .insecure()
+                .metadata
+        }
         match res_oidc {
             Ok(res) => Ok(res),
             Err(err_oidc) => {
@@ -160,4 +185,21 @@ impl MetadataFetcher {
             .await
             .map_err(|e| e.into())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct UntypedMetadata {
+    authorization_server_metadata: heidi_util_rust::value::Value,
+    credential_issuer_metadata: heidi_util_rust::value::Value,
+}
+
+#[uniffi::export]
+/// Try fetching the metadata from different sources
+/// Currently we support using .well known endpoints
+/// and openid federation
+pub fn fetch_metadata_from_issuer_url(
+    url: &str,
+) -> Result<heidi_util_rust::value::Value, ApiError> {
+    todo! {}
 }

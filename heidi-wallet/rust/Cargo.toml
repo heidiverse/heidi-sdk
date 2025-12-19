@@ -67,11 +67,10 @@ next-gen-signatures = { git = "https://github.com/UbiqueInnovation/sprind-next-g
 ], optional = true }
 josekit.workspace = true
 heidi-jwt.workspace = true
-crypto-primes = { version = "=0.7.0-pre.1" }
-digest = {version = "=0.11.0-rc.0"}
 serde_with_macros.workspace = true
 jsonschema.workspace = true
 is_empty = "0.3.0"
+openidconnect-federation.workspace = true
 
 [target.'cfg(any(target_family = "wasm"))'.dependencies]
 wasm-bindgen = "0.2.93"

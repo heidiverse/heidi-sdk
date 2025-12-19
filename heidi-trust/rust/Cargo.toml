@@ -14,6 +14,7 @@ openidconnect-federation.workspace = true
 reqwest.workspace = true
 serde_json.workspace = true
 josekit.workspace = true
+heidi-jwt.workspace = true
 
 [features]
 default = ["uniffi"]
