@@ -1,6 +1,7 @@
 #![allow(async_fn_in_trait)]
 use std::{collections::HashMap, sync::Arc};
 
+use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use heidi_jwt::jwt::creator::JwtCreator;
 use heidi_util_rust::value::Value;
 use reqwest::Url;
@@ -482,6 +483,7 @@ pub struct ProofBuilder {
     nonce: Option<String>,
     signer: Option<Arc<SecureSubject>>,
     subject_syntax_type: Option<String>,
+    use_did_jwk: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -493,10 +495,35 @@ pub struct ProofOfPossession {
 
 impl ProofBuilder {
     pub fn build_signing_payload(&self) -> anyhow::Result<String> {
-        let jws_header = josekit::jws::JwsHeader::from_bytes(
-            self.signer.as_ref().unwrap().signer.jwt_header().as_bytes(),
-        )
-        .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?;
+        let jws_header = if self.use_did_jwk {
+            use serde_json::Value as JsonValue;
+            let signer = self
+                .signer
+                .as_ref()
+                .ok_or(anyhow::anyhow!("No subject found"))?;
+
+            let encoded_jwk =
+                BASE64_URL_SAFE_NO_PAD.encode(signer.signer.public_key_jwk().as_bytes());
+
+            let mut map = serde_json::Map::new();
+            map.insert("alg".to_string(), JsonValue::String(signer.signer.alg()));
+            map.insert(
+                "typ".to_string(),
+                JsonValue::String("openid4vc-proof+jwt".to_string()),
+            );
+            map.insert(
+                "jwk".to_string(),
+                JsonValue::String(format!("did:jwk:{encoded_jwk}:{encoded_jwk}")),
+            );
+
+            josekit::jws::JwsHeader::from_map(map)
+                .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?
+        } else {
+            josekit::jws::JwsHeader::from_bytes(
+                self.signer.as_ref().unwrap().signer.jwt_header().as_bytes(),
+            )
+            .or_else(|e| Err(anyhow::anyhow!("Invalid Header: {e}")))?
+        };
         let pop = ProofOfPossession {
             rfc7519_claims: self.rfc7519_claims.clone(),
             nonce: self
@@ -563,6 +590,11 @@ impl ProofBuilder {
 
     pub fn signer(mut self, signer: Arc<SecureSubject>) -> Self {
         self.signer = Some(signer);
+        self
+    }
+
+    pub fn use_did_jwk(mut self, use_did_jwk: bool) -> Self {
+        self.use_did_jwk = use_did_jwk;
         self
     }
 
