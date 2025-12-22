@@ -1835,7 +1835,10 @@ mod issuance {
                 .lock()?
                 .clone()
                 .ok_or(anyhow!("no metadata"))?;
-            log_warn!("ISSUANCE", &format!("{credential_issuer_metadata:?}"));
+            log_warn!(
+                "ISSUANCE",
+                &format!("Credential Issuer Metadata: {credential_issuer_metadata:?}")
+            );
             // Quirk: issuer.eudiw.dev does not support "proofs"
             // Request only 1 credential in each request, but make num_credentials_per_type requests for each credential config id.
             let (batch_size, cred_config_ids) = if credential_issuer_metadata
@@ -1855,7 +1858,6 @@ mod issuance {
             } else {
                 (num_credentials_per_type as usize, cred_config_ids)
             };
-            log_warn!("ISSUANCE", &format!("{batch_size:?}"));
 
             let mut credentials: Vec<CredentialResult> = vec![];
             let mut subjects = vec![];
@@ -1875,6 +1877,7 @@ mod issuance {
                 } else {
                     batch_size
                 };
+                log_warn!("ISSUANCE", &format!("batch_size: {batch_size:?}"));
                 let key_attestations_required = get_key_attestations_required(cred_config);
                 dbg!(key_attestations_required);
                 log_warn!("ISSUANCE", &format!("{key_attestations_required:?}"));

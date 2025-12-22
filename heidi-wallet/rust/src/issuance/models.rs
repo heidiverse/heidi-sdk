@@ -109,9 +109,6 @@ pub struct CredentialResponseEncryption {
 #[skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct CredentialConfigurationsSupportedObject {
-    /// This field is flattened into a `format` field and optionally extra format-specific fields.
-    #[serde(flatten)]
-    pub credential_format: Value,
     // Use `Scope` from oid4vc-core/src/scope.rs.
     pub scope: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -122,6 +119,9 @@ pub struct CredentialConfigurationsSupportedObject {
     pub proof_types_supported: HashMap<ProofType, KeyProofMetadata>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub display: Vec<Value>,
+    /// This field is flattened into a `format` field and optionally extra format-specific fields.
+    #[serde(flatten)]
+    pub credential_format: Value,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]

@@ -89,7 +89,15 @@ pub fn get_correct_credential_request(
     // No surefire way to find out which version, but draft 15 compatible issuer will very
     // likely have a nonce endpoint.
     let is_openid4vci_draft15_issuer = credential_issuer_metadata.nonce_endpoint.is_some();
-    if is_openid4vci_draft15_issuer {
+
+    // Need to add a seperate check for this issuer as there now is a nonce endpoint, but still no OID4VCI 1.0 compliance.
+    let is_swiyu = credential_issuer_metadata
+        .nonce_endpoint
+        .as_ref()
+        .map(|endpoint| endpoint.starts_with("https://bcs.admin.ch"))
+        .unwrap_or(false);
+
+    if is_openid4vci_draft15_issuer && !is_swiyu {
         // we also can use proofs ..
         return CredentialRequest {
             credential_configuration_id: Some(credential_configuration_id),
