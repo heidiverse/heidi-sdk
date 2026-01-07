@@ -9,6 +9,12 @@ plugins {
 	alias(libs.plugins.ktorfit)
 }
 
+kotlin {
+	kotlin {
+		jvmToolchain(17)
+	}
+}
+
 android {
 	namespace = "ch.ubique.heidi.sample.verifier"
 	compileSdk = libs.versions.android.compileSdk.get().toInt()

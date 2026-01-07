@@ -290,6 +290,15 @@ class BluetoothViewModel(
 			startCollectingWalletState()
 		}
 	}
+	fun startReverseEngagement() {
+		viewModelScope.launch {
+			val verifierName = "Sample Verifier"
+			verifier = ProximityVerifier.createReverse(ProximityProtocol.MDL, viewModelScope, verifierName, requester, serviceUuid = Uuid.random().toString(), peripheralServerUuid = Uuid.random().toString() )
+			verifier.startEngagement()
+			verifier.verifierState
+			startCollectingWalletState()
+		}
+	}
 
 	private fun startCollectingWalletState() {
 		viewModelScope.launch {

@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
 import ch.ubique.heidi.proximity.verifier.ProximityVerifierState
+import ch.ubique.heidi.sample.verifier.compose.components.QrCodeImage
 import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
 import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreen
 import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreenCallbacks
@@ -47,6 +48,7 @@ fun BluetoothScreen(
 	sendMessage: (String) -> Unit,
 	onStopClicked: () -> Unit,
 	onResetClicked: () -> Unit,
+	onReverseEngagmentClicked: () -> Unit
 ) {
 	Scaffold { innerPadding ->
 		Column(
@@ -56,63 +58,77 @@ fun BluetoothScreen(
 		) {
 			val bluetoothState = state.value
 			var expanded by remember { mutableStateOf(false) }
-
-			Row(
-				modifier = Modifier.fillMaxWidth(),
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				Text("Proof Template:", modifier = Modifier.weight(1f))
-				Box {
+			var reverseEngagement by remember { mutableStateOf(false) }
+			Column {
+				if (!reverseEngagement) {
 					Button(
-						onClick = { expanded = true },
+						onClick = {
+							reverseEngagement = true
+							onReverseEngagmentClicked()
+						},
 						contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
 					) {
-						Text(
-							when (proofTemplate.value) {
-								ProofTemplate.IDENTITY_CARD_CHECK -> "ID Check"
-								ProofTemplate.AGE_OVER_16 -> "Age 16+"
-								ProofTemplate.AGE_OVER_18 -> "Age 18+"
-								ProofTemplate.AGE_OVER_65 -> "Age 65+"
-							},
-							maxLines = 1
-						)
+						Text("Switch Engagement")
 					}
-					DropdownMenu(
-						expanded = expanded,
-						onDismissRequest = { expanded = false }
-					) {
-						DropdownMenuItem(
-							text = { Text("Identity Card Check (First Name)") },
-							onClick = {
-								onProofTemplateChanged(ProofTemplate.IDENTITY_CARD_CHECK)
-								expanded = false
-							}
-						)
-						DropdownMenuItem(
-							text = { Text("Age Over 16") },
-							onClick = {
-								onProofTemplateChanged(ProofTemplate.AGE_OVER_16)
-								expanded = false
-							}
-						)
-						DropdownMenuItem(
-							text = { Text("Age Over 18") },
-							onClick = {
-								onProofTemplateChanged(ProofTemplate.AGE_OVER_18)
-								expanded = false
-							}
-						)
-						DropdownMenuItem(
-							text = { Text("Age Over 65") },
-							onClick = {
-								onProofTemplateChanged(ProofTemplate.AGE_OVER_65)
-								expanded = false
-							}
-						)
+				}
+				Row(
+					modifier = Modifier.fillMaxWidth(),
+					horizontalArrangement = Arrangement.spacedBy(8.dp),
+					verticalAlignment = Alignment.CenterVertically,
+				) {
+					Text("Proof Template:", modifier = Modifier.weight(1f))
+					Box {
+						Button(
+							onClick = { expanded = true },
+							contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+						) {
+							Text(
+								when (proofTemplate.value) {
+									ProofTemplate.IDENTITY_CARD_CHECK -> "ID Check"
+									ProofTemplate.AGE_OVER_16 -> "Age 16+"
+									ProofTemplate.AGE_OVER_18 -> "Age 18+"
+									ProofTemplate.AGE_OVER_65 -> "Age 65+"
+								},
+								maxLines = 1
+							)
+						}
+						DropdownMenu(
+							expanded = expanded,
+							onDismissRequest = { expanded = false }
+						) {
+							DropdownMenuItem(
+								text = { Text("Identity Card Check (First Name)") },
+								onClick = {
+									onProofTemplateChanged(ProofTemplate.IDENTITY_CARD_CHECK)
+									expanded = false
+								}
+							)
+							DropdownMenuItem(
+								text = { Text("Age Over 16") },
+								onClick = {
+									onProofTemplateChanged(ProofTemplate.AGE_OVER_16)
+									expanded = false
+								}
+							)
+							DropdownMenuItem(
+								text = { Text("Age Over 18") },
+								onClick = {
+									onProofTemplateChanged(ProofTemplate.AGE_OVER_18)
+									expanded = false
+								}
+							)
+							DropdownMenuItem(
+								text = { Text("Age Over 65") },
+								onClick = {
+									onProofTemplateChanged(ProofTemplate.AGE_OVER_65)
+									expanded = false
+								}
+							)
+						}
 					}
 				}
 			}
+
 
 			if (bluetoothState !is ProximityVerifierState.VerificationResult<*>) {
 				Text("State: $bluetoothState")
@@ -124,6 +140,10 @@ fun BluetoothScreen(
 					qrScannerViewModel,
 					scannerCallbacks,
 				)
+			}
+
+			if (bluetoothState is ProximityVerifierState.ReadyForEngagement) {
+				QrCodeImage(bluetoothState.qrCodeData)
 			}
 
 			if (bluetoothState is ProximityVerifierState.VerificationResult<*>) {
@@ -178,7 +198,14 @@ fun BluetoothScreen(
 					}
 				}
 			}
-
+			if (bluetoothState is ProximityVerifierState.Connecting) {
+				Row(
+					verticalAlignment = Alignment.CenterVertically,
+					horizontalArrangement = Arrangement.spacedBy(4.dp),
+				) {
+					Text("Connecting")
+				}
+			}
 			if (bluetoothState is ProximityVerifierState.Connected) {
 				Row(
 					verticalAlignment = Alignment.CenterVertically,
@@ -222,7 +249,10 @@ fun BluetoothScreen(
 
 			if (bluetoothState !is ProximityVerifierState.Initial) {
 				Button(
-					onClick = onResetClicked,
+					onClick = {
+						reverseEngagement = false
+						onResetClicked()
+					},
 					modifier = Modifier.fillMaxWidth(),
 				) {
 					Text("Reset")

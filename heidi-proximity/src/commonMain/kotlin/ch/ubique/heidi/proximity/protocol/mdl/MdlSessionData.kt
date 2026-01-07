@@ -20,6 +20,7 @@ under the License.
 
 package ch.ubique.heidi.proximity.protocol.mdl
 
+import ch.ubique.heidi.util.extensions.asBoolean
 import ch.ubique.heidi.util.extensions.asBytes
 import ch.ubique.heidi.util.extensions.asLong
 import ch.ubique.heidi.util.extensions.get
@@ -29,6 +30,7 @@ data class MdlSessionData(
 	val data: ByteArray?,
 	val status : Long?,
 	val shaSum: ByteArray?,
+	val dcApiSelected: Boolean? = false
 ) {
     companion object {
         fun fromCbor(data: ByteArray) : MdlSessionData? {
@@ -36,10 +38,11 @@ data class MdlSessionData(
             val data = decoded.get("data").asBytes()
             val status = decoded.get("status").asLong()
             val shaSum = decoded.get("shaSum").asBytes()
+			val dcApiSelected = decoded.get("dcApiSelected").asBoolean()
             if(status == null && data == null) {
                 return null
             }
-            return MdlSessionData(data, status, shaSum)
+            return MdlSessionData(data, status, shaSum, dcApiSelected)
         }
     }
 }

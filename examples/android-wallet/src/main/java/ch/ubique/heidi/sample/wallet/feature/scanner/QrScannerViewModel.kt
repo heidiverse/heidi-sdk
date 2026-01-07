@@ -68,14 +68,19 @@ class QrScannerViewModel : ViewModel() {
 		viewModelScope.launch { errorMutable.emit(null) }
 		return when (decodingState) {
 			is DecodingState.Decoded -> {
-				val uri = Uri.parse(decodingState.content)
-				if (uri.scheme in supportedSchemes) {
+				if(decodingState.content.startsWith("mdoc:")) {
 					isScanning = false
-					DecodingResult.Valid(decodingState.content)
+					DecodingResult.Valid(decodingState.content.replace("mdoc:", ""))
 				} else {
-					val errorId = R.string.app_name
-					viewModelScope.launch { errorMutable.emit(errorId) }
-					DecodingResult.Nothing
+					val uri = Uri.parse(decodingState.content)
+					if (uri.scheme in supportedSchemes) {
+						isScanning = false
+						DecodingResult.Valid(decodingState.content)
+					} else {
+						val errorId = R.string.app_name
+						viewModelScope.launch { errorMutable.emit(errorId) }
+						DecodingResult.Nothing
+					}
 				}
 			}
 			else -> DecodingResult.Nothing
