@@ -87,9 +87,10 @@ class ProximityVerifier<T> private constructor(
 						-3 to publicKey.publicKey().slice(33..<65).toByteArray(),
 					).toCbor()
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, Uuid.parse(serviceUuid),  Uuid.parse(peripheralServerUuid!!), publicKey)
-					//TODO: UBPM fix unwrapping
-					val engagementBuilder = MdlEngagementBuilder("", encodeCbor(coseKey), Uuid.parse(serviceUuid), Uuid.parse(peripheralServerUuid!!), true, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
+					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, Uuid.parse(serviceUuid),   peripheralServerUuid?.let { Uuid.parse(it)}, publicKey)
+					val engagementBuilder = MdlEngagementBuilder("", encodeCbor(coseKey), Uuid.parse(serviceUuid),  peripheralServerUuid?.let {
+						Uuid.parse(it)
+					}, true, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
 						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
 					)))
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester, readerKey = coseKey, isDcApi = preferDcApi)
@@ -109,7 +110,7 @@ class ProximityVerifier<T> private constructor(
 			requester: DocumentRequester<T>,
 			qrcodeData: String? = null,
 			preferDcApi: Boolean = true,
-		): ProximityVerifier<T> {
+		): ProximityVerifier<T>? {
 			val publicKey = EphemeralKey(Role.SK_READER)
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
@@ -123,7 +124,8 @@ class ProximityVerifier<T> private constructor(
 						//y
 						-3 to publicKey.publicKey().slice(33..<65).toByteArray(),
 					).toCbor()
-					val deviceEngagement = MdlEngagement.fromQrCode(qrcodeData!!)
+					val engagementData = qrcodeData ?: return null
+					val deviceEngagement = MdlEngagement.fromQrCode(engagementData)
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid,  deviceEngagement?.peripheralServerUuid, publicKey)
 					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester, readerKey = coseKey, isDcApi = preferDcApi)
 				}
@@ -141,7 +143,7 @@ class ProximityVerifier<T> private constructor(
 			protocol: ProximityProtocol,
 			verifierName: String,
 			requester: DocumentRequester<T>,
-		): ProximityVerifier<T> {
+		): ProximityVerifier<T>? {
 			return create(protocol, GlobalScope, verifierName, requester)
 		}
 	}

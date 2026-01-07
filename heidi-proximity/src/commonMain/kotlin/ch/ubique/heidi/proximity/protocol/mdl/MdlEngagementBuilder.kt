@@ -53,17 +53,25 @@ class MdlEngagementBuilder(
             ),
         )
         //TODO: UBAM make allow to have either/or
-        if(centralClientUuid != null && peripheralServerUuid != null) {
+        if(centralClientUuid != null || peripheralServerUuid != null) {
+            val bleTransportOptions = mutableMapOf<Int, Any>()
+            bleTransportOptions.put(0, peripheralServerModeSupported)
+            if(peripheralServerModeSupported) {
+                peripheralServerUuid?.let {
+                    bleTransportOptions.put(10, it)
+                }
+            }
+            bleTransportOptions.put(1, centralClientModeSupported)
+            if(centralClientModeSupported) {
+                centralClientUuid?.let {
+                    bleTransportOptions.put(11, it)
+                }
+            }
             deviceEngagement.put(2, listOf(
                     listOf(
                         2,
                         1,
-                        mapOf(
-                            0 to peripheralServerModeSupported,
-                            1 to centralClientModeSupported,
-                            10 to peripheralServerUuid.toByteArray(),
-                            11 to centralClientUuid.toByteArray()
-                        )
+                       bleTransportOptions
                     )
                 )
             )

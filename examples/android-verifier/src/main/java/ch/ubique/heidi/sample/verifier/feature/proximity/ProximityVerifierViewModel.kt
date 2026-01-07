@@ -30,6 +30,7 @@ import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.verifier.ProximityVerifier
+import ch.ubique.heidi.proximity.verifier.ProximityVerifierState
 import ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult
 import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
 import ch.ubique.heidi.sample.verifier.feature.network.VerifierRepository
@@ -103,11 +104,11 @@ class ProximityVerifierViewModel(
 		requester
 	)
 
-	val proximityState = verifier.verifierState
+	val proximityState = verifier?.verifierState ?: MutableStateFlow(ProximityVerifierState.Initial)
 
 	override fun onCleared() {
 		super.onCleared()
-		verifier.disconnect()
+		verifier?.disconnect()
 	}
 
 	fun setProofTemplate(template: ProofTemplate) {
@@ -115,11 +116,11 @@ class ProximityVerifierViewModel(
 	}
 
 	fun startEngagement() {
-		verifier.startEngagement()
+		verifier?.startEngagement()
 	}
 
 	fun reset() {
-		verifier.reset()
+		verifier?.reset()
 	}
 
 }

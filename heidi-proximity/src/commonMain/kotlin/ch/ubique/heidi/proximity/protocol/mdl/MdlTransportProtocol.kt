@@ -117,14 +117,11 @@ internal class MdlTransportProtocol(
         engagementBytes: ByteArray,
         eReaderKeyBytes: ByteArray,
         peerCoseKey: ByteArray?
-    ): SessionCipher {
-//        if(centralClientModeTransportProtocol?.isConnected == true) {
-//            return centralClientModeTransportProtocol!!.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
-//        }
+    ): SessionCipher? {
         if(centralClientModeTransportProtocol != null) {
-            return centralClientModeTransportProtocol!!.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
+            return centralClientModeTransportProtocol?.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
         }
-        return peripheralServerModeTransportProtocol!!.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
+        return peripheralServerModeTransportProtocol?.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
     }
 
 }

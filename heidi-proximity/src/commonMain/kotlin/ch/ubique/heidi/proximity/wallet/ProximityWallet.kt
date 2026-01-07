@@ -200,7 +200,6 @@ class ProximityWallet private constructor(
 				override fun onConnected() {
 					walletStateMutable.update { ProximityWalletState.Connected(verifierName ?: "Unknown verifier") }
 					this@ProximityWallet.scope.launch {
-						delay(500)
 						if(protocol == ProximityProtocol.MDL) {
 							if(isReverse && !deviceEngagementSent) {
 								sendDeviceEngagement()
@@ -208,7 +207,6 @@ class ProximityWallet private constructor(
 							}
 						}
 					}
-
 				}
 
 				override fun onDisconnected() {
