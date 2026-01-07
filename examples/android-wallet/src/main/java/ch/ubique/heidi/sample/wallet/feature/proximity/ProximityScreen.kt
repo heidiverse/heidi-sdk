@@ -62,27 +62,38 @@ fun ProximityScreen(
 		) { state ->
 			var reverseEngagement by remember { mutableStateOf(false) }
 
-			Box(Modifier.fillMaxSize()) {
+			Column(Modifier.fillMaxSize()) {
+				Row {
+					Button(onClick = {
+						reverseEngagement = !reverseEngagement
+					}) {
+						Text("switch engagement")
+					}
+					Button(onClick = {
+						reverseEngagement = false
+						onResetState()
+					}){
+						Text("Reset")
+					}
+					if(!reverseEngagement) {
+						Button(onClick = {
+							onStartEngagementClicked()
+						}) {
+							Text("Start")
+						}
+					}
+
+				}
+
 				when (state) {
 					is ProximityWalletState.Initial, ProximityWalletState.Disconnected -> {
-						Row{
-							Button(onClick = {
-								reverseEngagement = !reverseEngagement
-							}) {
-								Text("switch engagement")
-							}
-						}
 						if(reverseEngagement) {
 							QrScannerScreen(
 								qrScannerViewModel,
 								scannerCallbacks,
 							)
 						} else {
-							Button(onClick = {
-								onStartEngagementClicked()
-							}) {
-								Text("Start")
-							}
+							Text("Waiting to start engagement")
 						}
 					}
 					is ProximityWalletState.ReadyForEngagement -> {
@@ -111,20 +122,9 @@ fun ProximityScreen(
 					}
 					is ProximityWalletState.PresentationCompleted -> {
 						Text("Verification completed")
-						Button(onClick = {
-							reverseEngagement = false
-							onResetState()
-						}){
-							Text("Reset")
-						}
 					}
 					is ProximityWalletState.Disconnected -> {
 						Text("Disconnected")
-						Button(onClick = {
-							onStartEngagementClicked()
-						}) {
-							Text("Start")
-						}
 					}
 					is ProximityWalletState.Error -> {
 						Text(state.throwable.stackTraceToString())

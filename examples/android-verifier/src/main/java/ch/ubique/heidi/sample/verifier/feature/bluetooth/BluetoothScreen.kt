@@ -143,7 +143,7 @@ fun BluetoothScreen(
 			}
 
 			if (bluetoothState is ProximityVerifierState.ReadyForEngagement) {
-				QrCodeImage(bluetoothState.qrCodeData)
+				QrCodeImage(bluetoothState.qrCodeData, modifier = Modifier.fillMaxWidth())
 			}
 
 			if (bluetoothState is ProximityVerifierState.VerificationResult<*>) {
