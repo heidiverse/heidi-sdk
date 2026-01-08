@@ -250,8 +250,14 @@ class ProximityWallet private constructor(
 		scope.launch(Dispatchers.IO) {
 			when (protocol) {
 				ProximityProtocol.MDL -> {
-					walletStateMutable.update {
-						ProximityWalletState.ReadyForEngagement(engagementBuilder!!.createQrCodeForEngagement())
+					if(!this@ProximityWallet.isReverse) {
+						walletStateMutable.update {
+							ProximityWalletState.ReadyForEngagement(engagementBuilder!!.createQrCodeForEngagement())
+						}
+					} else {
+						walletStateMutable.update {
+							ProximityWalletState.Connecting(verifierName)
+						}
 					}
 					transportProtocol.connect()
 				}

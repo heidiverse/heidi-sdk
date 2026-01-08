@@ -197,7 +197,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 		}
 
 		override fun onPeerConnected() {
-			reportConnected()
+//			reportConnected()
 			gattServer?.stopAdvertising()
 		}
 
@@ -225,6 +225,10 @@ internal class MdlPeripheralServerModeTransportProtocol(
 						reportTransportSpecificSessionTermination()
 						GattRequestResult(isSuccessful = true)
 					}
+					value[0] == 0x01.toByte() -> {
+						reportConnected()
+						GattRequestResult(isSuccessful = true)
+					}
 					else -> {
 						reportError(Error("Invalid value for state characteristic"))
 						GattRequestResult(isSuccessful = false)
@@ -245,6 +249,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 
 		override fun onPeerConnected() {
 			reportConnected()
+			gattClient?.writeCharacteristicNonChunked(characteristicStateUuid, byteArrayOf(0x01));
 		}
 
 		override fun onPeerDisconnected() {

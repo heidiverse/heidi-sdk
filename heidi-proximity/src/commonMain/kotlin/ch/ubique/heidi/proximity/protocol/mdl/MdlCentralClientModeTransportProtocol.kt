@@ -260,7 +260,8 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onPeerConnected() {
-			reportConnected()
+			// We report connected as soon as we start writing
+			// the on the state characteristic (or rather when we receive the callback)
 			gattClient?.writeCharacteristicNonChunked(characteristicStateUuid, byteArrayOf(0x01));
 		}
 

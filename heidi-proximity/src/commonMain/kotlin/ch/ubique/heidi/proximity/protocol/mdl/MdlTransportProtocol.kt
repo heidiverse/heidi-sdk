@@ -60,7 +60,7 @@ internal class MdlTransportProtocol(
             peripheralServerModeTransportProtocol = null
         }
         if (peripheralServerModeTransportProtocol != null && centralClientModeTransportProtocol != null) {
-            peripheralServerModeTransportProtocol = null
+            centralClientModeTransportProtocol = null
         }
     }
 

@@ -38,6 +38,7 @@ import ch.ubique.heidi.proximity.wallet.ProximityWalletState
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -85,6 +86,7 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 
 			wallet = ProximityWallet.createReverse(ProximityProtocol.MDL, viewModelScope, qrCodeData)
 			wallet.startEngagement("Blub")
+
 			startCollectingWalletState()
 		}
 	}
@@ -150,8 +152,9 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 		}
 	}
 	var dcqlQuery : DcqlQuery? = null
+	var collectingJob : Job? = null
 	private fun startCollectingWalletState() {
-		viewModelScope.launch {
+		collectingJob = viewModelScope.launch {
 			wallet.walletState.collect { state ->
 				proximityStateMutable.value = state
 				if (state is ProximityWalletState.RequestingDocuments) {
@@ -170,8 +173,13 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 		}
 	}
 	fun reset() {
-		wallet.disconnect()
+		if(::wallet.isInitialized) {
+			wallet.disconnect()
+			collectingJob?.cancel()
+		}
+
 	}
+
 }
 
 class TestSigner(private val kp : SoftwareKeyPair) : SignatureCreator {
