@@ -49,12 +49,16 @@ data class MdlEngagement(val coseKey: ByteArray,
 			val peripheralServerModeSupported = bleOptions[Value.Number(JsonNumber.Integer(0))]
 			centralClientModeSupported = bleOptions[Value.Number(JsonNumber.Integer(1))]
 			centralClientUuid = if (centralClientModeSupported?.asBoolean() == true) {
-				Uuid.fromByteArray(bleOptions[Value.Number(JsonNumber.Integer(11))]?.asBytes()!!)
+				bleOptions[Value.Number(JsonNumber.Integer(11))]?.asBytes()?.let {
+					Uuid.fromByteArray(it)
+				}
 			} else {
 				null
 			}
 			peripheralServerUuid = if (peripheralServerModeSupported?.asBoolean() == true) {
-				Uuid.fromByteArray(bleOptions[Value.Number(JsonNumber.Integer(10))]?.asBytes()!!)
+				bleOptions[Value.Number(JsonNumber.Integer(10))]?.asBytes()?.let {
+					Uuid.fromByteArray(it)
+				}
 			} else {
 				null
 			}
