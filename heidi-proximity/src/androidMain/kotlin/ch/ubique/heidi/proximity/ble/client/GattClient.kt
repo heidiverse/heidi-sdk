@@ -364,7 +364,7 @@ internal class GattClient(
             reportError(Error("Error changing MTU, status: $status"))
             return
         }
-
+        Logger(TAG).debug("Successfully changed MTU, reporting to listeners")
         negotiatedMtu = mtu
         requireListener().onMtuChanged(mtu)
 
@@ -529,6 +529,7 @@ internal class GattClient(
     }
 
     private fun drainWritingQueue(charUuid: UUID) {
+        Logger(TAG).debug("Some commands are not finished yet:  ${cccdCoordinator.hasPendingDescriptors()}")
         val chunk = writeQueues.poll(charUuid) ?: return
 
         if (chunk.isShutdownMessage()) {
