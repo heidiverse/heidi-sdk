@@ -9,7 +9,7 @@ members = [
     "heidi-trust/rust",
     "heidi-util/rust",
     "heidi-wallet/rust",
-    "heidi-pdf/rust"
+    "heidi-pdf/rust",
 ]
 [workspace.dependencies]
 serde_json = "1.0.133"

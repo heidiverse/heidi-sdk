@@ -26,6 +26,8 @@ use std::ops::Add;
 #[cfg(feature = "bbs")]
 pub mod bbs;
 pub mod claims_pointer;
+pub mod json_ld;
+pub mod ldp;
 pub mod mdoc;
 pub mod models;
 pub mod sdjwt;
