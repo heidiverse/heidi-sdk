@@ -118,11 +118,18 @@ pub struct CredentialConfigurationsSupportedObject {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub cryptographic_binding_methods_supported: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub credential_signing_alg_values_supported: Vec<String>,
+    pub credential_signing_alg_values_supported: Vec<StringOrLong>,
     #[serde(skip_serializing_if = "HashMap::is_empty", default)]
     pub proof_types_supported: HashMap<ProofType, KeyProofMetadata>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub display: Vec<Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum StringOrLong {
+    Long(i64),
+    String(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]

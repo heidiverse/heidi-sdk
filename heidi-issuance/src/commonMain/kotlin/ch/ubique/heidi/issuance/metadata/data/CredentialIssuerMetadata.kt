@@ -20,9 +20,19 @@ under the License.
 
 package ch.ubique.heidi.issuance.metadata.data
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /**
  * Credential Issuer Metadata as described in https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-credential-issuer-metadata-p
@@ -153,7 +163,7 @@ sealed interface CredentialConfiguration {
 	val format: String
 	val scope: String?
 	val cryptographicBindingMethodsSupported: List<String>?
-	val credentialSigningAlgValuesSupported: List<String>?
+	val credentialSigningAlgValuesSupported: List<StringOrLong>?
 	val proofTypesSupported: Map<String, ProofType>?
 	val display: List<Display>?
 
@@ -172,7 +182,7 @@ sealed interface CredentialConfiguration {
 		override val cryptographicBindingMethodsSupported: List<String>? = null,
 
 		@SerialName("credential_signing_alg_values_supported")
-		override val credentialSigningAlgValuesSupported: List<String>? = null,
+		override val credentialSigningAlgValuesSupported: List<StringOrLong>? = null,
 
 		@SerialName("proof_types_supported")
 		override val proofTypesSupported: Map<String, ProofType>? = null,
@@ -202,7 +212,7 @@ sealed interface CredentialConfiguration {
 		override val cryptographicBindingMethodsSupported: List<String>? = null,
 
 		@SerialName("credential_signing_alg_values_supported")
-		override val credentialSigningAlgValuesSupported: List<String>? = null,
+		override val credentialSigningAlgValuesSupported: List<StringOrLong>? = null,
 
 		@SerialName("proof_types_supported")
 		override val proofTypesSupported: Map<String, ProofType>? = null,
@@ -229,7 +239,7 @@ sealed interface CredentialConfiguration {
 		override val cryptographicBindingMethodsSupported: List<String>? = null,
 
 		@SerialName("credential_signing_alg_values_supported")
-		override val credentialSigningAlgValuesSupported: List<String>? = null,
+		override val credentialSigningAlgValuesSupported: List<StringOrLong>? = null,
 
 		@SerialName("proof_types_supported")
 		override val proofTypesSupported: Map<String, ProofType>? = null,
@@ -259,7 +269,7 @@ sealed interface CredentialConfiguration {
 		override val cryptographicBindingMethodsSupported: List<String>? = null,
 
 		@SerialName("credential_signing_alg_values_supported")
-		override val credentialSigningAlgValuesSupported: List<String>? = null,
+		override val credentialSigningAlgValuesSupported: List<StringOrLong>? = null,
 
 		@SerialName("proof_types_supported")
 		override val proofTypesSupported: Map<String, ProofType>? = null,
@@ -293,3 +303,55 @@ data class VcdmCredentialDefinition(
 	@SerialName("type")
 	val type: List<String>? = null
 )
+
+@Serializable(with = StringOrLongSerializer::class)
+sealed class StringOrLong {
+    data class StrValue(val value: String) : StringOrLong()
+    data class LongValue(val value: Long) : StringOrLong()
+
+    fun asString(): String? = when(this) {
+        is StrValue -> value
+        else -> null
+    }
+
+    fun asLong(): Long? = when(this) {
+        is LongValue -> value
+        else -> null
+    }
+
+    override fun toString(): String = when(this) {
+        is StrValue -> value
+        is LongValue -> value.toString()
+    }
+}
+
+object StringOrLongSerializer : KSerializer<StringOrLong> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("StringOrLong", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): StringOrLong {
+        val input = decoder as? JsonDecoder
+            ?: throw SerializationException("This class can be loaded only by Json")
+
+        val element = input.decodeJsonElement()
+
+        if (element is JsonPrimitive) {
+            if (element.isString) {
+                return StringOrLong.StrValue(element.content)
+            }
+            val longValue = element.longOrNull
+            if (longValue != null) {
+                return StringOrLong.LongValue(longValue)
+            }
+        }
+
+        throw SerializationException("Expected String or Long, but got $element")
+    }
+
+    override fun serialize(encoder: Encoder, value: StringOrLong) {
+        when (value) {
+            is StringOrLong.LongValue -> encoder.encodeLong(value.value)
+            is StringOrLong.StrValue -> encoder.encodeString(value.value)
+        }
+    }
+}
