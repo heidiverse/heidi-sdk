@@ -30,6 +30,8 @@ import io.ktor.http.URLBuilder
 import io.ktor.http.appendPathSegments
 import org.koin.core.module.dsl.factoryOf
 import org.koin.dsl.module
+import uniffi.heidi_util_rust.FederationResult
+import uniffi.heidi_util_rust.fetchMetadataFromIssuerUrl
 
 internal class MetadataService(
 	private val httpClient: HttpClient,
@@ -71,6 +73,11 @@ internal class MetadataService(
 		}.build()
 
 		return httpClient.get(credentialIssuerMetadataUrl).body<CredentialIssuerMetadata>()
+	}
+
+	//TODO: UBAM make it async
+	suspend fun resolveOpenIdFederation(baseUrl: String) : FederationResult {
+		return fetchMetadataFromIssuerUrl(baseUrl, null)
 	}
 
 }

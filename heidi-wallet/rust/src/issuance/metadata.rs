@@ -168,7 +168,7 @@ impl MetadataFetcher {
             credential_issuer_url.as_str(),
         );
         if let Ok(mut res_oidf) = res_oidf {
-            res_oidf.build_trust();
+            let _ = res_oidf.build_trust();
             let is_valid = res_oidf.verify().is_ok();
             // TODO: we should pass a trust store here, so we can resolve the correct path
             let metdata = res_oidf.resolve_metadata(None);
@@ -221,49 +221,4 @@ impl MetadataFetcher {
 pub struct UntypedMetadata {
     authorization_server_metadata: heidi_util_rust::value::Value,
     credential_issuer_metadata: heidi_util_rust::value::Value,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-pub struct FederationResult {
-    is_valid: bool,
-    metadata: HashMap<String, heidi_util_rust::value::Value>,
-}
-
-#[uniffi::export]
-/// Use openid-federation to fetch a certain entity types
-pub fn fetch_metadata_from_issuer_url(
-    url: &str,
-    trust_store: Option<Vec<String>>,
-) -> Result<FederationResult, ApiError> {
-    let mut res_oidf = match openidconnect_federation::DefaultFederationRelation::new_from_url(url)
-    {
-        Ok(res_oidf) => res_oidf,
-        Err(e) => {
-            return Err(ApiError::from(anyhow::anyhow!(format!(
-                "Federation failed with: {e}"
-            ))))
-        }
-    };
-    res_oidf
-        .build_trust()
-        .map_err(|e| ApiError::from(anyhow::anyhow!(format!("Failed to construct trust: {e}"))))?;
-    let is_valid = res_oidf.verify().is_ok();
-    let trust_store = trust_store.map(|a| {
-        TrustStore(
-            a.into_iter()
-                .map(|sub| TrustAnchor::Subject(sub))
-                .collect::<Vec<_>>(),
-        )
-    });
-    let metadata = res_oidf.resolve_metadata(trust_store.as_ref());
-    let mut new_metadata = HashMap::new();
-    for (k, data) in metadata {
-        let intermediate: serde_json::Value = data.into();
-        new_metadata.insert(k, intermediate.into());
-    }
-    Ok(FederationResult {
-        is_valid,
-        metadata: new_metadata,
-    })
 }
