@@ -374,7 +374,7 @@ pub enum ClientMetadataResource {
     // TODO: Add all fields described in https://www.rfc-editor.org/rfc/rfc7591.html#section-2
     ClientMetadata {
         client_name: Option<String>,
-        logo_uri: Option<Url>,
+        logo_uri: Option<String>,
         /// As described in [RFC7591](https://www.rfc-editor.org/rfc/rfc7591.html#section-2), the client metadata can be
         /// expanded with Extensions and profiles.
         #[serde(flatten)]

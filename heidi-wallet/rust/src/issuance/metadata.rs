@@ -20,8 +20,6 @@ under the License.
 
 //! This module contains structs/methods to fetch metadata from OID4VCI endpoints.
 
-use std::collections::HashMap;
-
 use crate::{
     issuance::models::{
         AuthorizationRequestReference, AuthorizationServerMetadata, CredentialIssuerMetadata,
@@ -32,7 +30,6 @@ use crate::{
 
 use super::auth::{build_pushed_authorization_request, ClientAttestation};
 
-use openidconnect_federation::models::trust_chain::{TrustAnchor, TrustStore};
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
@@ -107,7 +104,7 @@ impl MetadataFetcher {
             credential_issuer_url.as_str(),
         );
         if let Ok(mut res_oidf) = res_oidf {
-            res_oidf.build_trust();
+            let _ = res_oidf.build_trust();
             let is_valid = res_oidf.verify().is_ok();
             // TODO: we should pass a trust store here, so we can resolve the correct path
             let metdata = res_oidf.resolve_metadata(None);
