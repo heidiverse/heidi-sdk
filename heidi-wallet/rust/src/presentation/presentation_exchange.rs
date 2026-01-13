@@ -4,7 +4,6 @@ use is_empty::IsEmpty;
 use jsonpath_lib as jsonpath;
 use jsonschema::JSONSchema;
 use monostate::MustBe;
-use reqwest::Url;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with_macros::skip_serializing_none;
 use std::collections::HashMap;
