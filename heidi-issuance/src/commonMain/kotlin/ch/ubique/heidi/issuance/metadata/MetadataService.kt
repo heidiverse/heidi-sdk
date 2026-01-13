@@ -75,7 +75,6 @@ internal class MetadataService(
 		return httpClient.get(credentialIssuerMetadataUrl).body<CredentialIssuerMetadata>()
 	}
 
-	//TODO: UBAM make it async
 	suspend fun resolveOpenIdFederation(baseUrl: String) : FederationResult {
 		return fetchMetadataFromIssuerUrl(baseUrl, null)
 	}
