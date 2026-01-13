@@ -36,7 +36,7 @@ impl LdpVC {
 
 const CONTEXT_W3C: &'static str = include_str!("../jsonld/www.w3.org/ns/credentials/v2");
 
-fn test(credential: String) -> Pin<Box<dyn Future<Output = ()>>> {
+fn test(credential: String) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
         let loader = ChainLoader::new(
             StaticLoader::new().with_document("https://www.w3.org/ns/credentials/v2", CONTEXT_W3C),
