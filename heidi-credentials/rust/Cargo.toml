@@ -26,6 +26,7 @@ next-gen-signatures = { git = "https://github.com/UbiqueInnovation/sprind-next-g
 rand_core.workspace = true
 ark-serialize.workspace = true
 num-bigint = "0.4.6"
+curve25519-dalek = {version = "=4.1.2", features = ["rand_core", "digest"] }
 
 [features]
 default = ["bbs"]

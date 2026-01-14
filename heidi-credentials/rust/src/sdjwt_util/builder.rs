@@ -27,7 +27,7 @@ use std::{
 
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 use heidi_util_rust::{log::log, value::Value};
-use sha2::{digest::DynDigest, Digest, Sha256};
+use sha2::{Digest, Sha256};
 
 use crate::{
     claims_pointer::Selector,
@@ -35,7 +35,8 @@ use crate::{
     models::{Pointer, PointerPart, SignatureCreator, SpecVersion},
     sdjwt::SdJwtRust,
     sdjwt_util::{
-        base64_hash, Disclosure, DisclosureIndex, DisclosureNode, DisclosureTree, Header,
+        base64_hash, hash_algs::SdJwtHasher, Disclosure, DisclosureIndex, DisclosureNode,
+        DisclosureTree, Header,
     },
     w3c::W3CSdJwt,
 };
@@ -211,10 +212,14 @@ impl BuilderImpl {
                         .and_then(|s| s.as_str())
                         .unwrap_or("sha-256");
 
-                    let mut digest: Box<dyn DynDigest> = match hash_alg {
-                        "sha-256" | "SHA-256" => Box::new(Sha256::new()),
-                        _ => return Err(BuilderError::InvalidHashAlg),
+                    let Ok(mut digest) = hash_alg.parse::<SdJwtHasher>() else {
+                        return Err(BuilderError::InvalidHashAlg);
                     };
+
+                    if let Some(params) = self.claims.get("_sd_alg_param") {
+                        let param: serde_json::Value = params.into();
+                        digest.0.update_params(&param);
+                    }
 
                     let header = {
                         let mut header = Header::new(signer.alg().as_str());
@@ -231,7 +236,7 @@ impl BuilderImpl {
                             .unwrap()
                             .as_secs();
 
-                        let sd_hash = base64_hash(digest.as_mut(), &presentation);
+                        let sd_hash = digest.0.sd_hash(presentation.as_bytes());
 
                         let mut claims = serde_json::json!({
                             "nonce": nonce,
