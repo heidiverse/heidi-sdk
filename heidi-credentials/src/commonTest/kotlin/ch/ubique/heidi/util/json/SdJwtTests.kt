@@ -66,6 +66,27 @@ class SdJwtTests {
         }
     }
     @Test
+    fun testCommitments() {
+        val jsonString = "{" +
+                "\"dob\" : 1958,\n" +
+                "\"test\" : \"terstValue\"\n" +
+                "}"
+        val claims : Value = Json.decodeFromString(jsonString)
+        val o = claims.asObject()!!
+        val disclosures = mutableListOf<ClaimsPointer>()
+        val alwaysVisible = listOf("sub", "iss", "exp", "cnf", "updated_at")
+        for(k in o) {
+            if(k.key in alwaysVisible) {
+                continue
+            }
+            disclosures.add(listOf(k.key).toClaimsPointer()!!)
+        }
+        val kb = SoftwareKeyPair()
+        val kbValue : Value = Json.decodeFromString(kb.jwkString())
+        val sdjwt = SdJwt.create(claims, disclosures, "123", TestSigner(SoftwareKeyPair()), kbValue, "ec_pedersen")!!
+        val sd = sdjwt.get("_sd".asSelector())[0]
+    }
+    @Test
     // Issuance following https://www.ietf.org/archive/id/draft-ietf-oauth-selective-disclosure-jwt-14.html#name-example-sd-jwt
     fun testIssuance() {
         val jsonString = "{\n" +
@@ -103,7 +124,7 @@ class SdJwtTests {
         }
         val kb = SoftwareKeyPair()
         val kbValue : Value = Json.decodeFromString(kb.jwkString())
-        val sdjwt = SdJwt.create(claims, disclosures, "123", TestSigner(SoftwareKeyPair()), kbValue)!!
+        val sdjwt = SdJwt.create(claims, disclosures, "123", TestSigner(SoftwareKeyPair()), kbValue, "ec_pedersen")!!
         val sd = sdjwt.get("_sd".asSelector())[0]
         val nationalities = sdjwt.get("nationalities".asSelector())[0]
         assertIs<Value.Array>(sd)
