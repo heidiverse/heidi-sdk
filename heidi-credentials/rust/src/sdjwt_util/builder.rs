@@ -35,8 +35,8 @@ use crate::{
     models::{Pointer, PointerPart, SignatureCreator, SpecVersion},
     sdjwt::SdJwtRust,
     sdjwt_util::{
-        base64_hash, hash_algs::SdJwtHasher, Disclosure, DisclosureIndex, DisclosureNode,
-        DisclosureTree, Header,
+        base64_hash, hash_algs::SdJwtHasher, zkp::ZkProof, Disclosure, DisclosureIndex,
+        DisclosureNode, DisclosureTree, Header,
     },
     w3c::W3CSdJwt,
 };
@@ -70,6 +70,7 @@ pub struct BuilderImpl {
     nonce: Option<String>,
     aud: Option<String>,
     transaction_data: Option<(Vec<String>, SpecVersion)>,
+    zk_proofs: Vec<ZkProof>,
 
     is_w3c: bool,
 }
@@ -148,6 +149,10 @@ impl BuilderImpl {
         }
         self.disclosures.sort();
         self.disclosures.dedup();
+        Ok(self)
+    }
+    pub fn add_zkp(&mut self, zkp: &ZkProof) -> Result<&mut Self, BuilderError> {
+        self.zk_proofs.push(zkp.clone());
         Ok(self)
     }
 
@@ -248,6 +253,10 @@ impl BuilderImpl {
                             claims["aud"] = serde_json::json!(aud);
                         }
 
+                        if !self.zk_proofs.is_empty() {
+                            claims["zk_proofs"] = serde_json::json!(self.zk_proofs);
+                        }
+
                         if let Some((transaction_data, spec_version)) = &self.transaction_data {
                             match spec_version {
                                 SpecVersion::PotentialUc5 => {
@@ -312,6 +321,7 @@ impl SdJwtBuilder {
                 nonce: None,
                 aud: None,
                 transaction_data: None,
+                zk_proofs: vec![],
                 is_w3c: false,
             })),
         }
@@ -328,6 +338,7 @@ impl SdJwtBuilder {
                 disclosures: vec![],
                 nonce: None,
                 aud: None,
+                zk_proofs: vec![],
                 transaction_data: None,
                 is_w3c: true,
             })),
