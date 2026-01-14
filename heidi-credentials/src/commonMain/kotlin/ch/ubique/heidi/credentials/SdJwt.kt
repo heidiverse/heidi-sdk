@@ -31,6 +31,7 @@ import uniffi.heidi_util_rust.Value
 import kotlin.collections.set
 import ch.ubique.heidi.util.extensions.*
 import io.ktor.client.request.invoke
+import uniffi.heidi_util_rust.JsonNumber
 
 sealed interface SdJwtErrors {
     data class InvalidFormat(val msg: String) : SdJwtErrors, Throwable(msg)
@@ -100,6 +101,7 @@ fun createDisclosureForObject(claims: Value.Object, objectDisclosures: List<Clai
             }
         }
 //    }
+    var comLinks = mutableMapOf<String, Value>()
     for (to in thisObject) {
         val nestedDislcosure = objectDisclosures.filter { to.isSubPath(it) && to != it }
         // we have nested disclosures, so do that first
@@ -146,6 +148,8 @@ fun createDisclosureForObject(claims: Value.Object, objectDisclosures: List<Clai
         // add it to this obejcts sd array
         sd.add(Value.String(hash))
         disclosures.add(disclosure)
+        val index = sd.size - 1
+        comLinks.put(key.v1, Value.Number(JsonNumber.Integer(index.toLong())))
         if(replace) {
             obj.put(key.v1, d)
         } else {
@@ -160,6 +164,10 @@ fun createDisclosureForObject(claims: Value.Object, objectDisclosures: List<Clai
     }
     if(currentDepth == 1) {
         obj["_sd_alg"] = sdJwtHasher.sdAlg()
+    }
+    // for ec_pedersen we also need com_link
+    if(sdJwtHasher.sdAlg() == Value.String("ec_pedersen")) {
+        obj["com_link"] = Value.Object(comLinks)
     }
     return Result.success(SdjwtDisclosure(Value.Object(obj), disclosures))
 }

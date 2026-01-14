@@ -68,8 +68,8 @@ class SdJwtTests {
     @Test
     fun testCommitments() {
         val jsonString = "{" +
-                "\"dob\" : 1958,\n" +
-                "\"test\" : \"terstValue\"\n" +
+                "\"dob\" : 1959,\n" +
+                "\"test\" : \"otherValue\"\n" +
                 "}"
         val claims : Value = Json.decodeFromString(jsonString)
         val o = claims.asObject()!!
