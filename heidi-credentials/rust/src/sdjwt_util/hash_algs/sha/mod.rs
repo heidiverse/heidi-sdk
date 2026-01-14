@@ -9,12 +9,18 @@ impl SdJwtHashAlgorithm for Sha256 {
         BASE64_URL_SAFE_NO_PAD.encode(Sha256::digest(data))
     }
 
-    fn disclosure_hash(&self, d: (&crate::sdjwt_util::Disclosure, &str)) -> String {
-        BASE64_URL_SAFE_NO_PAD.encode(Sha256::digest(d.1.as_bytes()))
+    fn disclosure_hash(&self, d: &crate::sdjwt_util::Disclosure) -> String {
+        BASE64_URL_SAFE_NO_PAD.encode(Sha256::digest(d.enc.as_bytes()))
     }
 
     fn update_params(&mut self, _params: &serde_json::Value) {
         // No parameters to update for SHA-256
+    }
+    fn sd_alg_params(&self) -> serde_json::Value {
+        serde_json::Value::Null
+    }
+    fn sd_alg(&self) -> serde_json::Value {
+        serde_json::json!("sha-256")
     }
 }
 impl SdJwtHashAlgorithm for Sha384 {
@@ -22,11 +28,17 @@ impl SdJwtHashAlgorithm for Sha384 {
         BASE64_URL_SAFE_NO_PAD.encode(Sha384::digest(data))
     }
 
-    fn disclosure_hash(&self, d: (&crate::sdjwt_util::Disclosure, &str)) -> String {
-        BASE64_URL_SAFE_NO_PAD.encode(Sha384::digest(d.1.as_bytes()))
+    fn disclosure_hash(&self, d: &crate::sdjwt_util::Disclosure) -> String {
+        BASE64_URL_SAFE_NO_PAD.encode(Sha384::digest(d.enc.as_bytes()))
     }
     fn update_params(&mut self, _params: &serde_json::Value) {
         // No parameters to update for SHA-384
+    }
+    fn sd_alg_params(&self) -> serde_json::Value {
+        serde_json::Value::Null
+    }
+    fn sd_alg(&self) -> serde_json::Value {
+        serde_json::json!("sha-384")
     }
 }
 impl SdJwtHashAlgorithm for Sha512 {
@@ -34,10 +46,16 @@ impl SdJwtHashAlgorithm for Sha512 {
         BASE64_URL_SAFE_NO_PAD.encode(Sha512::digest(data))
     }
 
-    fn disclosure_hash(&self, d: (&crate::sdjwt_util::Disclosure, &str)) -> String {
-        BASE64_URL_SAFE_NO_PAD.encode(Sha512::digest(d.1.as_bytes()))
+    fn disclosure_hash(&self, d: &crate::sdjwt_util::Disclosure) -> String {
+        BASE64_URL_SAFE_NO_PAD.encode(Sha512::digest(d.enc.as_bytes()))
     }
     fn update_params(&mut self, _params: &serde_json::Value) {
         // No parameters to update for SHA-512
+    }
+    fn sd_alg_params(&self) -> serde_json::Value {
+        serde_json::Value::Null
+    }
+    fn sd_alg(&self) -> serde_json::Value {
+        serde_json::json!("sha-512")
     }
 }
