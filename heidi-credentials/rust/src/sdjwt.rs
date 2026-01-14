@@ -187,4 +187,105 @@ mod tests {
         challenge_bytes.extend_from_slice(&vec![0xde, 0xad]);
         assert!(deserialized_proof.verify(challenge_bytes, "dob", &sdjwt1, &sdjwt2));
     }
+
+    #[test]
+    fn test_kmp_issued_zkp() {
+        let sd_jwt1 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoielI2anZwa0tDR2toREk2YURsZVJSSFRwT3gxT0c4eF9yV1Z2R01CQTlXRSIsInkiOiJYd1RUUlU5SmdzVEk4SDlmWWk1UmRKUVhxeU9aYTE0U2JCVWc4NGVzYWNvIn19LCJfc2QiOlsiem5EVi1WVl80YXRqSTNwSlNoTndwVENuT0MwbGN6bnViTGFJam5DNFdEZyIsImxwaGIyMzJDbDVJZ3puajBfcEYwS2QxRmZJZTRhX2VXYXI1eTNjOUd0VUUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJnIjoiMEktZUV0cVRPRHNzUXUyT2xZT1V3M3hrTllERDZlU0RNaW1MQ3B3bUZuQSIsImgiOiJPbVE4Sm9ZVU5WMFlpOU5hMXR2Q1BscE5RVDhSalpZZ2llWmNvUkUycVVRIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.YQ-_KQe2m6bymG1k1Vh2xHHECz507Zj2ZpZ6rw3Dv-KKW-rbQXqFK1Uq8yMQjjuOeTZfsaAYw3mz2Ojqi50Lmg~WyJDdmtNdkJNdFlaTDVwUUJnUjdTUTBXUDlTb0ZnUnc0TDBXemctNXRzZndvIiwiZG9iIiwxOTU4XQ~WyJlWEotU3htWnVCY0xpRWhPb1NXcWVZYVJpV0tLeEpIMGJLY1B4bHZFNWdrIiwidGVzdCIsInRlc3RWYWx1ZSJd~";
+        let sd_jwt2 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoiNDBxYURZQVFnTTJ6cENjLXVRMHc2cVFKRnd1ZG9VSS1YVVFmZE9STTVpYyIsInkiOiJSX3I2ZXpfXzN1VzVlUUplRWIyOEhiT0E0alQ3TVBqYUpjUThGN2NkQmVnIn19LCJfc2QiOlsiQ0ZLQjRIQUVVX1BxSDF1d0FrY2ZLbl9FZW5wYko4RnpKRXJNTDZXMFBRUSIsImhDV0V0ako2cWlTMFl0ZFhHa3NXVHFqWllReDM4amVldlpuVTdYRno4bVUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiaUI5ckVWYjgtdklDS2dBOWU2aU14T3M1NGQ1aXN1MGNHdFhZQzVJZXdYWSIsImciOiJZaDViVGs5WHFfeWxGNVBpbmM1cm9zd2ZyaDJ2a3dDaWhpYm1aS2NfOURBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.HaRrZuVl3wrbTzzzrxF7AA9OczjCWwRyM0X7dXUoDdiGKtg0JDBHQScbwthedXNXkB-7nuK-y6qMaawIoUrXMQ~WyJjdjFGQ2Zua1Azbm5RWjgtRWpVU3R5blE0RXFqNzg1R0Q1b0JHTXZzb0E0IiwiZG9iIiwxOTU4XQ~WyJUQkV6aXhfUG4zLTA3anM2bUxVUGVUcnpHQlhMSXZmWkxUaVA3c2liS1FJIiwidGVzdCIsIm90aGVyVmFsdWUiXQ~";
+        // sdjwt3 has another dob
+        let sd_jwt3 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoieUZoOWFMY25QcTZtamJWemhoVWxxbW1VaTh4alBRd29UTlBINHdBSmNFTSIsInkiOiJFR2JqY0lueW5hRkQ2emcydXlsUFlkbW1RdC1Gb2Nsd1pFRDFMUFhiekNZIn19LCJfc2QiOlsiVk9QaDdDQU5fSVdWeV9tOURUQjZsaWNIUS13RFBScmRwM0l6Ykp1dG9VMCIsIl9LRFRsT0VDN3lFUlZfZlVJbGhockZWV0ZjWnJ3QThSWGZPN1NPQ05uem8iXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJnIjoic0RVZTk2V1hfVFdTVnpndTVLQW9GUDNuZHprNzFrbGhfV2NwblltdGRGUSIsImgiOiJ5UHBaV3JpRGJqemtOcjV1VXlLTk5XVTJTRFVRakxUb3hTaUxxWV8zMlZ3In19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.hrwcpzg5mNAe1EnxlYcKlZMKxIZLueJKurk6JFQjDYoS0xkovidbCo-8INN-2tI_C24Tgw4kg0nt7jo6Dv37MA~WyJtd3FTZlNYQ3plZVUxWWV6SXRObVptaU50YS1GRm5CNHBfVUVfMExObXdRIiwiZG9iIiwxOTU5XQ~WyJ2MFh0QUg0MXEtMkMxdlRRcmVtN1dKNERJTGxYX2pkYmNudDJsTXJXOHdZIiwidGVzdCIsIm90aGVyVmFsdWUiXQ~";
+        let sd_jwt1 = decode_sdjwt(&sd_jwt1).unwrap();
+        let sd_jwt2 = decode_sdjwt(&sd_jwt2).unwrap();
+        let sd_jwt3 = decode_sdjwt(&sd_jwt3).unwrap();
+
+        assert_eq!(
+            sd_jwt1.claims.as_object().unwrap().get("dob"),
+            sd_jwt2.claims.as_object().unwrap().get("dob")
+        );
+        assert_ne!(
+            sd_jwt1.claims.as_object().unwrap().get("dob"),
+            sd_jwt3.claims.as_object().unwrap().get("dob")
+        );
+
+        let equality_proof =
+            EqualityProof::from_sdjwts("dob", &sd_jwt1, &sd_jwt2, vec![0xde, 0xad]).unwrap();
+        let serialized_proof = equality_proof.as_bytes();
+
+        let wrong_proof = EqualityProof::from_sdjwts("dob", &sd_jwt1, &sd_jwt3, vec![0xde, 0xad]);
+        assert!(wrong_proof.is_none());
+
+        // remove disclosures
+        let sd_jwt1 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoielI2anZwa0tDR2toREk2YURsZVJSSFRwT3gxT0c4eF9yV1Z2R01CQTlXRSIsInkiOiJYd1RUUlU5SmdzVEk4SDlmWWk1UmRKUVhxeU9aYTE0U2JCVWc4NGVzYWNvIn19LCJfc2QiOlsiem5EVi1WVl80YXRqSTNwSlNoTndwVENuT0MwbGN6bnViTGFJam5DNFdEZyIsImxwaGIyMzJDbDVJZ3puajBfcEYwS2QxRmZJZTRhX2VXYXI1eTNjOUd0VUUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJnIjoiMEktZUV0cVRPRHNzUXUyT2xZT1V3M3hrTllERDZlU0RNaW1MQ3B3bUZuQSIsImgiOiJPbVE4Sm9ZVU5WMFlpOU5hMXR2Q1BscE5RVDhSalpZZ2llWmNvUkUycVVRIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.YQ-_KQe2m6bymG1k1Vh2xHHECz507Zj2ZpZ6rw3Dv-KKW-rbQXqFK1Uq8yMQjjuOeTZfsaAYw3mz2Ojqi50Lmg~";
+        let sd_jwt2 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoiNDBxYURZQVFnTTJ6cENjLXVRMHc2cVFKRnd1ZG9VSS1YVVFmZE9STTVpYyIsInkiOiJSX3I2ZXpfXzN1VzVlUUplRWIyOEhiT0E0alQ3TVBqYUpjUThGN2NkQmVnIn19LCJfc2QiOlsiQ0ZLQjRIQUVVX1BxSDF1d0FrY2ZLbl9FZW5wYko4RnpKRXJNTDZXMFBRUSIsImhDV0V0ako2cWlTMFl0ZFhHa3NXVHFqWllReDM4amVldlpuVTdYRno4bVUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiaUI5ckVWYjgtdklDS2dBOWU2aU14T3M1NGQ1aXN1MGNHdFhZQzVJZXdYWSIsImciOiJZaDViVGs5WHFfeWxGNVBpbmM1cm9zd2ZyaDJ2a3dDaWhpYm1aS2NfOURBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.HaRrZuVl3wrbTzzzrxF7AA9OczjCWwRyM0X7dXUoDdiGKtg0JDBHQScbwthedXNXkB-7nuK-y6qMaawIoUrXMQ~";
+
+        let sd_jwt1 = decode_sdjwt(&sd_jwt1).unwrap();
+        let sd_jwt2 = decode_sdjwt(&sd_jwt2).unwrap();
+
+        let deserialized_proof = EqualityProof::from_bytes(&serialized_proof);
+        let g1 = sd_jwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h1 = sd_jwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g2 = sd_jwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h2 = sd_jwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g1 = BASE64_URL_SAFE_NO_PAD.decode(g1).unwrap();
+        let h1 = BASE64_URL_SAFE_NO_PAD.decode(h1).unwrap();
+        let g2 = BASE64_URL_SAFE_NO_PAD.decode(g2).unwrap();
+        let h2 = BASE64_URL_SAFE_NO_PAD.decode(h2).unwrap();
+        let mut challenge_bytes = vec![];
+        challenge_bytes.extend_from_slice("dob".as_bytes());
+        challenge_bytes.extend_from_slice(&g1);
+        challenge_bytes.extend_from_slice(&h1);
+        challenge_bytes.extend_from_slice(&g2);
+        challenge_bytes.extend_from_slice(&h2);
+        challenge_bytes.extend_from_slice(&vec![0xde, 0xad]);
+        assert!(deserialized_proof.verify(challenge_bytes.clone(), "dob", &sd_jwt1, &sd_jwt2));
+        assert!(!deserialized_proof.verify(challenge_bytes, "dob", &sd_jwt1, &sd_jwt3))
+    }
 }

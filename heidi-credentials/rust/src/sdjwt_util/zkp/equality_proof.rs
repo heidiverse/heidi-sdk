@@ -173,6 +173,10 @@ impl EqualityProof {
         let s2 = rand_x1 - challenge * value2;
         let r2 = rand_y2 - challenge * blinding2;
 
+        if s1 != s2 {
+            return None;
+        }
+
         Some(EqualityProof {
             s1,
             r1,
