@@ -12,9 +12,10 @@ pub struct EcPedersenX25519 {
 
 impl Default for EcPedersenX25519 {
     fn default() -> Self {
+        let mut rng = rand::thread_rng();
         Self {
-            g: RistrettoPoint::default(),
-            h: RistrettoPoint::default(),
+            g: RistrettoPoint::random(&mut rng),
+            h: RistrettoPoint::random(&mut rng),
         }
     }
 }
@@ -27,12 +28,12 @@ impl SdJwtHashAlgorithm for EcPedersenX25519 {
         BASE64_URL_SAFE_NO_PAD.encode(&scalar_bytes)
     }
     /// For the disclosures, we use (blinded) Ristretto points.
-    fn disclosure_hash(&self, d: (&crate::sdjwt_util::Disclosure, &str)) -> String {
-        let blinding = BASE64_URL_SAFE_NO_PAD.decode(&d.0.salt).unwrap();
+    fn disclosure_hash(&self, d: &crate::sdjwt_util::Disclosure) -> String {
+        let blinding = BASE64_URL_SAFE_NO_PAD.decode(&d.salt).unwrap();
         let mut blinding_bytes = [0u8; 32];
         blinding_bytes.copy_from_slice(&blinding);
         let blinding = Scalar::from_bytes_mod_order(blinding_bytes);
-        let v: serde_json::Value = (&d.0.value).into();
+        let v: serde_json::Value = (&d.value).into();
         match v {
             serde_json::Value::Number(number) => {
                 let scalar_number = number.as_i64().unwrap();
@@ -55,12 +56,15 @@ impl SdJwtHashAlgorithm for EcPedersenX25519 {
     }
 
     fn update_params(&mut self, params: &serde_json::Value) {
+        println!("{:?}", params);
         let Some(commitment_scheme) = params.get("commitment_scheme") else {
             return;
         };
         let Some(public_params) = commitment_scheme.get("public_params") else {
             return;
         };
+        println!("set g to: {:?}", public_params.get("g"));
+        println!("set h to: {:?}", public_params.get("h"));
         let Some(g) = public_params
             .get("g")
             .and_then(|a| a.as_str())
@@ -89,5 +93,20 @@ impl SdJwtHashAlgorithm for EcPedersenX25519 {
             return;
         };
         self.h = h;
+    }
+    fn sd_alg_params(&self) -> serde_json::Value {
+        serde_json::json!({
+            "commitment_scheme": {
+                "public_params": {
+                    "g": BASE64_URL_SAFE_NO_PAD.encode(self.g.compress().as_bytes()),
+                    "h": BASE64_URL_SAFE_NO_PAD.encode(self.h.compress().as_bytes())
+                },
+                "crv" : "ed25519"
+            }
+        })
+    }
+
+    fn sd_alg(&self) -> serde_json::Value {
+        serde_json::json!("ec_pedersen")
     }
 }
