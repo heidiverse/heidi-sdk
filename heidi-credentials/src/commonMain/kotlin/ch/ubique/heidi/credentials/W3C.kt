@@ -77,7 +77,8 @@ sealed class W3C {
                 disclosures: List<ClaimsPointer>,
                 keyId: String,
                 key: SignatureCreator,
-                pubKeyJwk: Value?
+                pubKeyJwk: Value?,
+                hashAlg: String = "sha-256"
             ): SdJwt? {
                 if (claims !is Value.Object) {
                     return null;
@@ -92,7 +93,7 @@ sealed class W3C {
 
                 val claimObject = Value.Object(keyClaims)
 
-                val sdJwt = createDisclosureForObject(claimObject, disclosures, 1)
+                val sdJwt = createDisclosureForObject(claimObject, disclosures, 1, sdJwtHasher = SdJwtHasher.fromStr(hashAlg))
 
                 val headerEncoded = base64UrlEncode(
                     Json.encodeToString(Header.serializer(), header).encodeToByteArray()

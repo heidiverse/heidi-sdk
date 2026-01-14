@@ -2,8 +2,11 @@ use base64::Engine;
 use curve25519_dalek::{ristretto::CompressedRistretto, RistrettoPoint, Scalar};
 use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
 use sha2::Sha512;
+pub mod canonicalize;
 
-use crate::sdjwt_util::hash_algs::SdJwtHashAlgorithm;
+use crate::sdjwt_util::hash_algs::{
+    ec_pedersen::canonicalize::canonicalize_object, SdJwtHashAlgorithm,
+};
 
 pub struct EcPedersenX25519 {
     g: RistrettoPoint,
@@ -47,7 +50,7 @@ impl SdJwtHashAlgorithm for EcPedersenX25519 {
                 BASE64_URL_SAFE_NO_PAD.encode(commitment.compress().as_bytes())
             }
             _ => {
-                let serialized_value = serde_json::to_string(&v).unwrap();
+                let serialized_value = canonicalize_object(&d.value);
                 let scalar_hash = Scalar::hash_from_bytes::<Sha512>(serialized_value.as_bytes());
                 let commitment = scalar_hash * self.g + blinding * self.h;
                 BASE64_URL_SAFE_NO_PAD.encode(commitment.compress().as_bytes())
