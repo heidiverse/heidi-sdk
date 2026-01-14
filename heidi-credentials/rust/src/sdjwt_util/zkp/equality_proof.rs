@@ -6,8 +6,6 @@ use sha2::Sha512;
 use crate::sdjwt::SdJwtRust;
 
 pub struct EqualityProof {
-    g: RistrettoPoint,
-    h: RistrettoPoint,
     s1: Scalar,
     r1: Scalar,
     s2: Scalar,
@@ -79,7 +77,7 @@ impl EqualityProof {
             }
         };
 
-        let g = sd_jwt1
+        let g1 = sd_jwt1
             .claims
             .get("_sd_alg_param")
             .unwrap()
@@ -92,7 +90,7 @@ impl EqualityProof {
             .as_str()
             .unwrap()
             .to_string();
-        let h = sd_jwt1
+        let h1 = sd_jwt1
             .claims
             .get("_sd_alg_param")
             .unwrap()
@@ -105,28 +103,69 @@ impl EqualityProof {
             .as_str()
             .unwrap()
             .to_string();
-        let g = BASE64_URL_SAFE_NO_PAD.decode(g).unwrap();
-        let h = BASE64_URL_SAFE_NO_PAD.decode(h).unwrap();
+
+        let g1 = BASE64_URL_SAFE_NO_PAD.decode(g1).unwrap();
+        let h1 = BASE64_URL_SAFE_NO_PAD.decode(h1).unwrap();
+
+        let g2 = sd_jwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h2 = sd_jwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let g2 = BASE64_URL_SAFE_NO_PAD.decode(g2).unwrap();
+        let h2 = BASE64_URL_SAFE_NO_PAD.decode(h2).unwrap();
         let mut challenge_bytes = vec![];
         challenge_bytes.extend_from_slice(attr.as_bytes());
-        challenge_bytes.extend_from_slice(&g);
-        challenge_bytes.extend_from_slice(&h);
+        challenge_bytes.extend_from_slice(&g1);
+        challenge_bytes.extend_from_slice(&h1);
+        challenge_bytes.extend_from_slice(&g2);
+        challenge_bytes.extend_from_slice(&h2);
         challenge_bytes.extend_from_slice(&nonce);
 
-        let g = CompressedRistretto::from_slice(&g)
+        let g1 = CompressedRistretto::from_slice(&g1)
             .unwrap()
             .decompress()
             .unwrap();
-        let h = CompressedRistretto::from_slice(&h)
+        let h1 = CompressedRistretto::from_slice(&h1)
+            .unwrap()
+            .decompress()
+            .unwrap();
+        let g2 = CompressedRistretto::from_slice(&g2)
+            .unwrap()
+            .decompress()
+            .unwrap();
+        let h2 = CompressedRistretto::from_slice(&h2)
             .unwrap()
             .decompress()
             .unwrap();
         let rand_x1 = Scalar::random(&mut rng);
         let rand_y1 = Scalar::random(&mut rng);
-        let random_com1 = rand_x1 * g + rand_y1 * h;
+        let random_com1 = rand_x1 * g1 + rand_y1 * h1;
 
         let rand_y2 = Scalar::random(&mut rng);
-        let random_com2 = rand_x1 * g + rand_y2 * h;
+        let random_com2 = rand_x1 * g2 + rand_y2 * h2;
         let challenge = Scalar::hash_from_bytes::<Sha512>(&challenge_bytes);
 
         let s1 = rand_x1 - challenge * value1;
@@ -135,8 +174,6 @@ impl EqualityProof {
         let r2 = rand_y2 - challenge * blinding2;
 
         Some(EqualityProof {
-            g,
-            h,
             s1,
             r1,
             s2,
@@ -188,10 +225,78 @@ impl EqualityProof {
             .decompress()
             .unwrap();
 
+        let g1 = sd_jwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h1 = sd_jwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g1 = CompressedRistretto::from_slice(&BASE64_URL_SAFE_NO_PAD.decode(&g1).unwrap())
+            .unwrap()
+            .decompress()
+            .unwrap();
+        let h1 = CompressedRistretto::from_slice(&BASE64_URL_SAFE_NO_PAD.decode(&h1).unwrap())
+            .unwrap()
+            .decompress()
+            .unwrap();
+        let g2 = sd_jwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h2 = sd_jwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g2 = CompressedRistretto::from_slice(&BASE64_URL_SAFE_NO_PAD.decode(&g2).unwrap())
+            .unwrap()
+            .decompress()
+            .unwrap();
+        let h2 = CompressedRistretto::from_slice(&BASE64_URL_SAFE_NO_PAD.decode(&h2).unwrap())
+            .unwrap()
+            .decompress()
+            .unwrap();
         let challenge = Scalar::hash_from_bytes::<Sha512>(&context);
 
-        let verify1 = self.s1 * self.g + self.r1 * self.h + challenge * c1;
-        let verify2 = self.s2 * self.g + self.r2 * self.h + challenge * c2;
+        let verify1 = self.s1 * g1 + self.r1 * h1 + challenge * c1;
+        let verify2 = self.s2 * g2 + self.r2 * h2 + challenge * c2;
         println!("{}", verify1 == self.com1);
         println!("{}", verify2 == self.com2);
         println!("{}", self.s1 == self.s2);
@@ -206,8 +311,6 @@ impl EqualityProof {
         bytes.extend_from_slice(&self.r2.to_bytes());
         bytes.extend_from_slice(self.com1.compress().as_bytes());
         bytes.extend_from_slice(self.com2.compress().as_bytes());
-        bytes.extend_from_slice(self.g.compress().as_bytes());
-        bytes.extend_from_slice(self.h.compress().as_bytes());
         bytes
     }
     pub fn from_bytes(bytes: &[u8]) -> Self {
@@ -223,17 +326,8 @@ impl EqualityProof {
             .unwrap()
             .decompress()
             .unwrap();
-        let g = CompressedRistretto::from_slice(bytes[192..224].try_into().unwrap())
-            .unwrap()
-            .decompress()
-            .unwrap();
-        let h = CompressedRistretto::from_slice(bytes[224..256].try_into().unwrap())
-            .unwrap()
-            .decompress()
-            .unwrap();
+
         EqualityProof {
-            g,
-            h,
             s1,
             r1,
             s2,

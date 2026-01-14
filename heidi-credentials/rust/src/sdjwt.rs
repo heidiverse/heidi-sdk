@@ -74,6 +74,12 @@ pub fn decode_sdjwt(payload: &str) -> Result<SdJwtRust, SdJwtDecodeError> {
 
 #[cfg(test)]
 mod tests {
+
+    use base64::Engine;
+    use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
+
+    use crate::sdjwt_util::zkp::equality_proof::EqualityProof;
+
     use super::decode_sdjwt;
 
     #[test]
@@ -95,5 +101,82 @@ mod tests {
         let parsed_jwt = decode_sdjwt(jwt_str).unwrap();
         println!("{:?}", parsed_jwt.disclosures_map);
         assert_eq!(parsed_jwt.disclosures_map.len(), 2);
+    }
+    #[test]
+    pub fn test_equality_proof() {
+        let jwt_str1 = "eyJhbGciOiJFUzI1NiJ9.eyJfc2QiOlsiX0tkcnVIUkZlTlVIZTNnajJNUXZ1WTdhV08wQ3pDUENVaUJoTG15M3B6cyIsIi11Um9TNzNER3AzRjB0RFVBNFNsNkp4azhnNXBCRXpxWDJqci02MWVzbDAiXSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJwdWJsaWNfcGFyYW1zIjp7ImciOiJBaTJpcWlFX3paMVRHYWVfRzBDOUhKZTE0aThoTWx3M3hwcFVuZjhPcUI0IiwiaCI6Im5PblFYeEZQV0UyX3k0NnJoVm81UTUtNXNGYWJFNEgtc21oLTBQeTBqVVkifSwiY3J2IjoiZWQyNTUxOSJ9fSwiY29tX2xpbmsiOnsidGVzdCI6MCwiZG9iIjoxfSwiaXNzIjoic2FtcGxlX2lzc3VlciIsImlhdCI6MTc2ODM4NTA4NiwibmJmIjoxNzY4Mzg0Nzg2LCJleHAiOjE3NjgzODU0NDZ9.6E4YLwsTJrSuZ3MM9VKjuwHPGhzSMd9cVFHDoHQKrysbuEL01VNRUXpiRYzV7STwbkFTVtt7WsR6sTE81BBqOw~WyItNllMWjhoeUtCbU91VkxmT0NsdnhKM2w0bUNNNVJhUjdTRmVMenpLUVFNIiwidGVzdCIsImFiYyJd~WyJmeF9wSkdtSHlHS0dWVS1SdmFyX19JT1FadF9LejRycm11ejhCenZWYkE0IiwiZG9iIiwxOTU4XQ~";
+        let jwt_str2 = "eyJhbGciOiJFUzI1NiJ9.eyJfc2QiOlsiTXUwajFIamJ2UnpTWEFLUWxlQ3I4NVkxOTZqdTEwTUNaSzdCRHgyRHZVNCIsImtQN21OZTBLRnJlc25KMjYxaDIxM1lvZ1NqX196dHVQZDQ3c3ByU2V4V1UiXSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJwdWJsaWNfcGFyYW1zIjp7ImciOiJxa2IxX1daRnNLVFY4QW1RRkVaRDNvOUl1UnJ2NkNoMTZucFgxb1pDTDBBIiwiaCI6IjlQVGQ3dFdVR3JROElMUkhKY0NKUDVPMjBjUkpXOXpmaG00VmZHV2hzSEkifSwiY3J2IjoiZWQyNTUxOSJ9fSwiY29tX2xpbmsiOnsidGVzdCI6MCwiZG9iIjoxfSwiaXNzIjoic2FtcGxlX2lzc3VlciIsImlhdCI6MTc2ODM4NjgwMSwibmJmIjoxNzY4Mzg2NTAxLCJleHAiOjE3NjgzODcxNjF9.tp2wQQYsoRxK5lVtvtTQ6tvC9GAjcazQgbARA16CdP00EYXGdYRsnPShbBbB_1UYLJmvT_513nV46ZLewAvxvQ~WyJpRlFUak83RlVwYWNBeHVkWTFaaDNuUlNIVlBQNGRISTY5bk4zc2UzOEEwIiwidGVzdCIsImFiY2UiXQ~WyJ5MEctTnFNU3c1RDY5VUIzSmxCU0llcGhnU0EwOHdjN2hqckszOGpuYndRIiwiZG9iIiwxOTU4XQ~";
+        let sdjwt1 = decode_sdjwt(jwt_str1).unwrap();
+        println!("{:?}", sdjwt1.disclosures_map);
+        let sdjwt2 = decode_sdjwt(jwt_str2).unwrap();
+        let equality_proof =
+            EqualityProof::from_sdjwts("dob", &sdjwt1, &sdjwt2, vec![0xde, 0xad]).unwrap();
+        let serialized = equality_proof.as_bytes();
+        let deserialized_proof = EqualityProof::from_bytes(&serialized);
+
+        let g1 = sdjwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h1 = sdjwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g2 = sdjwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h2 = sdjwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g1 = BASE64_URL_SAFE_NO_PAD.decode(g1).unwrap();
+        let h1 = BASE64_URL_SAFE_NO_PAD.decode(h1).unwrap();
+        let g2 = BASE64_URL_SAFE_NO_PAD.decode(g2).unwrap();
+        let h2 = BASE64_URL_SAFE_NO_PAD.decode(h2).unwrap();
+        let mut challenge_bytes = vec![];
+        challenge_bytes.extend_from_slice("dob".as_bytes());
+        challenge_bytes.extend_from_slice(&g1);
+        challenge_bytes.extend_from_slice(&h1);
+        challenge_bytes.extend_from_slice(&g2);
+        challenge_bytes.extend_from_slice(&h2);
+        challenge_bytes.extend_from_slice(&vec![0xde, 0xad]);
+        assert!(deserialized_proof.verify(challenge_bytes, "dob", &sdjwt1, &sdjwt2));
     }
 }
