@@ -217,13 +217,14 @@ impl BuilderImpl {
                         .and_then(|s| s.as_str())
                         .unwrap_or("sha-256");
 
-                    let Ok(mut digest) = hash_alg.parse::<SdJwtHasher>() else {
+                    let Ok(digest) = hash_alg.parse::<SdJwtHasher>() else {
                         return Err(BuilderError::InvalidHashAlg);
                     };
 
                     if let Some(params) = self.claims.get("_sd_alg_param") {
                         let param: serde_json::Value = params.into();
-                        digest.0.update_params(&param);
+                        let mut mut_digest = digest.0.lock().unwrap();
+                        mut_digest.update_params(&param);
                     }
 
                     let header = {
@@ -241,7 +242,7 @@ impl BuilderImpl {
                             .unwrap()
                             .as_secs();
 
-                        let sd_hash = digest.0.sd_hash(presentation.as_bytes());
+                        let sd_hash = digest.0.lock().unwrap().sd_hash(presentation.as_bytes());
 
                         let mut claims = serde_json::json!({
                             "nonce": nonce,
