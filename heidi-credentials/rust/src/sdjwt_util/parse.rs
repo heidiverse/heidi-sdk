@@ -335,11 +335,11 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
             .and_then(|a| a.as_str())
             .unwrap_or("sha-256")
             .to_string();
-        let Ok(mut digest) = digest_alg.parse::<SdJwtHasher>() else {
+        let Ok(digest) = digest_alg.parse::<SdJwtHasher>() else {
             return Err(SdJwtDecodeError::InvalidJwt);
         };
         if let Some(params) = claims.get("_sd_alg_param") {
-            digest.0.update_params(params);
+            digest.0.lock().unwrap().update_params(params);
         }
         digest
     };
@@ -347,7 +347,11 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
     let disclosure_map = disclosures
         .into_iter()
         .map(|(enc, val)| {
-            let hash = digest.0.disclosure_hash((&val, enc.as_str()));
+            let hash = digest
+                .0
+                .lock()
+                .unwrap()
+                .disclosure_hash((&val, enc.as_str()));
             (hash, val)
         })
         .collect::<HashMap<_, _>>();
