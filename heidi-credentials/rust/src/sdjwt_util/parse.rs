@@ -28,7 +28,8 @@ use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_util_rust::value::Value;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use sha2::{Digest, Sha256, digest::DynDigest};
+
+use crate::sdjwt_util::hash_algs::SdJwtHasher;
 
 const UNDISCLOSABLE_CLAIMS: [&str; 10] = [
     // Regular JWT claims
@@ -404,24 +405,25 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
     };
 
     // Get the digest algorithm, default to SHA-256
-    let mut digest: Box<dyn DynDigest> = {
+    let digest: SdJwtHasher = {
         let digest_alg = claims
             .get("_sd_alg")
             .and_then(|a| a.as_str())
             .unwrap_or("sha-256")
             .to_string();
-
-        match digest_alg.as_str() {
-            "sha-256" | "SHA-256" => Box::new(Sha256::new()),
-            _ => return Err(SdJwtDecodeError::InvalidJwt),
+        let Ok(mut digest) = digest_alg.parse::<SdJwtHasher>() else {
+            return Err(SdJwtDecodeError::InvalidJwt);
+        };
+        if let Some(params) = claims.get("_sd_alg_param") {
+            digest.0.update_params(params);
         }
+        digest
     };
 
     let mut disclosure_map = disclosures
         .into_iter()
         .map(|(enc, val)| {
-            digest.update(enc.as_bytes());
-            let hash = BASE64_URL_SAFE_NO_PAD.encode(digest.finalize_reset());
+            let hash = digest.0.disclosure_hash((&val, enc.as_str()));
             (hash, val)
         })
         .collect::<HashMap<_, _>>();
