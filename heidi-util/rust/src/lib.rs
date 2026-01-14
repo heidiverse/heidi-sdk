@@ -27,6 +27,7 @@ use std::{
     io::Read,
 };
 pub mod log;
+pub mod metadata;
 pub mod value;
 
 #[derive(Debug, Clone, uniffi::Error)]

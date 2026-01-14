@@ -4,7 +4,6 @@ use is_empty::IsEmpty;
 use jsonpath_lib as jsonpath;
 use jsonschema::JSONSchema;
 use monostate::MustBe;
-use reqwest::Url;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with_macros::skip_serializing_none;
 use std::collections::HashMap;
@@ -374,7 +373,7 @@ pub enum ClientMetadataResource {
     // TODO: Add all fields described in https://www.rfc-editor.org/rfc/rfc7591.html#section-2
     ClientMetadata {
         client_name: Option<String>,
-        logo_uri: Option<Url>,
+        logo_uri: Option<String>,
         /// As described in [RFC7591](https://www.rfc-editor.org/rfc/rfc7591.html#section-2), the client metadata can be
         /// expanded with Extensions and profiles.
         #[serde(flatten)]

@@ -32,6 +32,7 @@ use super::auth::{build_pushed_authorization_request, ClientAttestation};
 
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
+use serde::{Deserialize, Serialize};
 
 /// Convenienve struct for easier fetching of metadata
 pub struct MetadataFetcher {
@@ -96,6 +97,31 @@ impl MetadataFetcher {
             Ok(response) => response.json::<AuthorizationServerMetadata>().await,
             Err(e) => Err(e),
         };
+
+        // try openid-federation
+        //
+        let res_oidf = openidconnect_federation::DefaultFederationRelation::new_from_url(
+            credential_issuer_url.as_str(),
+        );
+        if let Ok(mut res_oidf) = res_oidf {
+            let _ = res_oidf.build_trust();
+            let is_valid = res_oidf.verify().is_ok();
+            // TODO: we should pass a trust store here, so we can resolve the correct path
+            let metdata = res_oidf.resolve_metadata(None);
+            if is_valid {
+                if let Some(authorization_server_metadata) =
+                    metdata.get("oauth_authorization_server")
+                {
+                    let authorization_server_metadata: serde_json::Value =
+                        authorization_server_metadata.clone().into();
+                    if let Ok(auth_md) = serde_json::from_value::<AuthorizationServerMetadata>(
+                        authorization_server_metadata,
+                    ) {
+                        return Ok(auth_md);
+                    }
+                }
+            }
+        }
         match res_oidc {
             Ok(res) => Ok(res),
             Err(err_oidc) => {
@@ -133,6 +159,31 @@ impl MetadataFetcher {
             .push(".well-known")
             .push("openid-credential-issuer");
 
+        // try openid-federation
+        //
+        let res_oidf = openidconnect_federation::DefaultFederationRelation::new_from_url(
+            credential_issuer_url.as_str(),
+        );
+        if let Ok(mut res_oidf) = res_oidf {
+            let _ = res_oidf.build_trust();
+            let is_valid = res_oidf.verify().is_ok();
+            // TODO: we should pass a trust store here, so we can resolve the correct path
+            let metdata = res_oidf.resolve_metadata(None);
+            if is_valid {
+                if let Some(credential_issuer_metadata) = metdata.get("openid_credential_issuer") {
+                    let credential_issuer_metadata: serde_json::Value =
+                        credential_issuer_metadata.clone().into();
+                    if let Ok(credential_issuer_metadata) =
+                        serde_json::from_value::<CredentialIssuerMetadata>(
+                            credential_issuer_metadata,
+                        )
+                    {
+                        return Ok(credential_issuer_metadata);
+                    }
+                }
+            }
+        }
+
         self.client
             .get(openid_credential_issuer_endpoint)
             .send()
@@ -160,4 +211,11 @@ impl MetadataFetcher {
             .await
             .map_err(|e| e.into())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct UntypedMetadata {
+    authorization_server_metadata: heidi_util_rust::value::Value,
+    credential_issuer_metadata: heidi_util_rust::value::Value,
 }

@@ -22,6 +22,7 @@ package ch.ubique.heidi.issuance.metadata
 
 import ch.ubique.heidi.issuance.credential.offer.CredentialOfferParameters
 import ch.ubique.heidi.issuance.di.HeidiIssuanceKoinComponent
+import ch.ubique.heidi.util.extensions.transform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
@@ -34,10 +35,26 @@ class MetadataRepository: HeidiIssuanceKoinComponent {
 	// TODO UBMW: Keep a cache of the metadata
 
 	suspend fun getAuthorizationServerMetadata(baseUrl: String) = withContext(Dispatchers.IO) {
+		val result = runCatching {   metadataService.resolveOpenIdFederation(baseUrl) }.getOrNull()
+		result?.let {
+			val metadata = it.metadata.get("oauth_authorization_server")
+			metadata?.let {
+				//TODO UBAM: remove force unwrap
+				return@withContext metadata.transform()!!
+			}
+		}
 		metadataService.doAuthorizationServerMetadataRequest(baseUrl)
 	}
 
 	suspend fun getCredentialIssuerMetadata(baseUrl: String) = withContext(Dispatchers.IO) {
+		val result = runCatching {   metadataService.resolveOpenIdFederation(baseUrl) }.getOrNull()
+		result?.let {
+			//TODO UBAM: remove force unwrap
+			val metadata = it.metadata.get("openid_credential_issuer")
+			metadata?.let {
+				return@withContext metadata.transform()!!
+			}
+		}
 		metadataService.doCredentialIssuerMetadataRequest(baseUrl)
 	}
 
