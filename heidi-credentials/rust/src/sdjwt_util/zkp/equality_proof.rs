@@ -3,7 +3,7 @@ use curve25519_dalek::{ristretto::CompressedRistretto, RistrettoPoint, Scalar};
 use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
 use sha2::Sha512;
 
-use crate::sdjwt::SdJwtRust;
+use crate::{sdjwt::SdJwtRust, sdjwt_util::hash_algs::ec_pedersen::canonicalize::stringify_value};
 
 pub struct EqualityProof {
     s1: Scalar,
@@ -20,7 +20,7 @@ impl EqualityProof {
         sd_jwt1: &SdJwtRust,
         sd_jwt2: &SdJwtRust,
         nonce: Vec<u8>,
-    ) -> Option<Self> {
+    ) -> Option<(Self, Vec<u8>)> {
         let mut rng = rand::thread_rng();
 
         let Some((_, dis1)) = sd_jwt1
@@ -37,6 +37,8 @@ impl EqualityProof {
         else {
             return None;
         };
+
+        println!("proving equality of {:?} and {:?}", dis1.value, dis2.value);
         let disclosure1_value = (&dis1.value).into();
         let disclosure2_value = (&dis2.value).into();
 
@@ -57,7 +59,7 @@ impl EqualityProof {
                 }
             }
             _ => {
-                let serialized_value = serde_json::to_string(&dis1.value).unwrap();
+                let serialized_value = stringify_value(&dis1.value);
                 Scalar::hash_from_bytes::<Sha512>(serialized_value.as_bytes())
             }
         };
@@ -72,7 +74,7 @@ impl EqualityProof {
                 }
             }
             _ => {
-                let serialized_value = serde_json::to_string(&dis2.value).unwrap();
+                let serialized_value = stringify_value(&dis2.value);
                 Scalar::hash_from_bytes::<Sha512>(serialized_value.as_bytes())
             }
         };
@@ -177,14 +179,17 @@ impl EqualityProof {
             return None;
         }
 
-        Some(EqualityProof {
-            s1,
-            r1,
-            s2,
-            r2,
-            com1: random_com1,
-            com2: random_com2,
-        })
+        Some((
+            EqualityProof {
+                s1,
+                r1,
+                s2,
+                r2,
+                com1: random_com1,
+                com2: random_com2,
+            },
+            challenge_bytes,
+        ))
     }
     pub fn verify(
         &self,
@@ -193,7 +198,7 @@ impl EqualityProof {
         sd_jwt1: &SdJwtRust,
         sd_jwt2: &SdJwtRust,
     ) -> bool {
-        let relevant_commitment = sd_jwt1
+        let relevant_commitment1 = sd_jwt1
             .claims
             .get("com_link")
             .unwrap()
@@ -206,16 +211,26 @@ impl EqualityProof {
             .claims
             .get("_sd")
             .unwrap()
-            .get(relevant_commitment as usize)
+            .get(relevant_commitment1 as usize)
             .unwrap()
             .as_str()
             .unwrap()
             .to_string();
+        let relevant_commitment2 = sd_jwt2
+            .claims
+            .get("com_link")
+            .unwrap()
+            .get(attr)
+            .unwrap()
+            .as_i64()
+            .cloned()
+            .unwrap();
+
         let c2 = sd_jwt2
             .claims
             .get("_sd")
             .unwrap()
-            .get(relevant_commitment as usize)
+            .get(relevant_commitment2 as usize)
             .unwrap()
             .as_str()
             .unwrap()

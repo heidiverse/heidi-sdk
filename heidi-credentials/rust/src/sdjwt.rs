@@ -75,10 +75,22 @@ pub fn decode_sdjwt(payload: &str) -> Result<SdJwtRust, SdJwtDecodeError> {
 #[cfg(test)]
 mod tests {
 
+    use std::sync::Arc;
+
     use base64::Engine;
     use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
+    use p256::ecdsa::{signature::Signer, Signature, SigningKey};
 
-    use crate::sdjwt_util::zkp::equality_proof::EqualityProof;
+    use crate::{
+        claims_pointer::{selector, Selector},
+        models::{Pointer, PointerPart, SignatureCreator, SigningError},
+        pointer,
+        sdjwt::SdJwtRust,
+        sdjwt_util::{
+            zkp::{equality_proof::EqualityProof, Input, ZkProof},
+            SdJwtBuilder,
+        },
+    };
 
     use super::decode_sdjwt;
 
@@ -119,7 +131,7 @@ mod tests {
         let sdjwt2 = decode_sdjwt(jwt_str2).unwrap();
         let equality_proof =
             EqualityProof::from_sdjwts("dob", &sdjwt1, &sdjwt2, vec![0xde, 0xad]).unwrap();
-        let serialized = equality_proof.as_bytes();
+        let serialized = equality_proof.0.as_bytes();
         let deserialized_proof = EqualityProof::from_bytes(&serialized);
 
         let g1 = sdjwt1
@@ -186,6 +198,7 @@ mod tests {
         challenge_bytes.extend_from_slice(&h2);
         challenge_bytes.extend_from_slice(&vec![0xde, 0xad]);
         assert!(deserialized_proof.verify(challenge_bytes, "dob", &sdjwt1, &sdjwt2));
+        assert!(deserialized_proof.verify(equality_proof.1.clone(), "dob", &sdjwt1, &sdjwt2));
     }
 
     #[test]
@@ -209,7 +222,7 @@ mod tests {
 
         let equality_proof =
             EqualityProof::from_sdjwts("dob", &sd_jwt1, &sd_jwt2, vec![0xde, 0xad]).unwrap();
-        let serialized_proof = equality_proof.as_bytes();
+        let serialized_proof = equality_proof.0.as_bytes();
 
         let wrong_proof = EqualityProof::from_sdjwts("dob", &sd_jwt1, &sd_jwt3, vec![0xde, 0xad]);
         assert!(wrong_proof.is_none());
@@ -287,5 +300,175 @@ mod tests {
         challenge_bytes.extend_from_slice(&vec![0xde, 0xad]);
         assert!(deserialized_proof.verify(challenge_bytes.clone(), "dob", &sd_jwt1, &sd_jwt2));
         assert!(!deserialized_proof.verify(challenge_bytes, "dob", &sd_jwt1, &sd_jwt3))
+    }
+
+    struct TestSigner(p256::SecretKey);
+    impl TestSigner {
+        pub fn new(jwk_key: &str) -> Self {
+            let key = p256::SecretKey::from_jwk_str(jwk_key).unwrap();
+            Self(key)
+        }
+    }
+    impl SignatureCreator for TestSigner {
+        fn alg(&self) -> String {
+            "ES256".to_string()
+        }
+
+        fn sign(&self, bytes: Vec<u8>) -> Result<Vec<u8>, SigningError> {
+            let key: SigningKey = (&self.0).into();
+            let signature: Signature = key.sign(&bytes);
+            Ok(signature.to_vec())
+        }
+    }
+
+    #[test]
+    fn tests_for_rfc_draft() {
+        let identity_holder_key = TestSigner::new(
+            r#"{"kty":"EC","crv":"P-256","x":"Oq1azTI-nfXRjxeoxqwktbSayE7Sd-2S0kp2MdCXdJM","y":"Xz4eqZG6bq017tCtqsx97KiJzgLzbSQvOzQJBFasXKE","d":"dbUsHxvpAb_D26ok8T2D5EugxWfUu0faPU9ueYhc56k"}"#,
+        );
+
+        let identity_jwt = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwidXBkYXRlZF9hdCI6MTU3MDAwMDAwMCwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6Ik9xMWF6VEktbmZYUmp4ZW94cXdrdGJTYXlFN1NkLTJTMGtwMk1kQ1hkSk0iLCJ5IjoiWHo0ZXFaRzZicTAxN3RDdHFzeDk3S2lKemdMemJTUXZPelFKQkZhc1hLRSJ9fSwiX3NkIjpbImpsLXh6a0ZlQUhjeHloTkFwR1dHQkxlZHhmamhabWtpcTRmank1VEpQRkUiLCJHRFV1OWtmUWxISVV5bXhOaEdQZEhLeXBQWUUwY3ZURmFuekcxZHduUkJJIiwiWkVRT0NZMEhYNC0yZzhvU2tSN1lfV204NnFVVU9sZDNBOFFTT1k4U0FUbyIsImVOd0F4WnQ3UHhVMVQxbmhPYlhTbkRMU2s3MXk3Y2pfakNHcDlYSDZTUTQiLCI0Z0tkSGZCclFXUWdZRzdDT1hWMUl6SThBeDlrOE5XQ0xnUzBYSFFFRWt3IiwiZG9VZFRRM1pJZ25YODlacUlzLWk4MWNiRnZtOGJrSERjUU9heTZ6dFJnYyIsImtPNTZjY3V1aHFlclpYdGpNeE1QNWNwZDFac2V1RVZKOUY0N25lOHBUSGMiLCJkc1hNTVVsRFZwMTBjdkdLeXAtbDc1R1VJRkVjUGhwZ0hXN1VmVElNem04Il0sIl9zZF9hbGdfcGFyYW0iOnsiY29tbWl0bWVudF9zY2hlbWUiOnsicHVibGljX3BhcmFtcyI6eyJnIjoiNUFsOUJCRTdOU2pacXhRSktrQjF4bnZCM2t4R1FHdm1fbHBpNW1uQUlWVSIsImgiOiJqa3hldk50SlY0X2FRS1pxSUZSYUl1allpSk92VFZSOW5hb1NPdWVmalFJIn0sImNydiI6ImVkMjU1MTkifX0sIl9zZF9hbGciOiJlY19wZWRlcnNlbiIsImNvbV9saW5rIjp7ImdpdmVuX25hbWUiOjAsImZhbWlseV9uYW1lIjoxLCJlbWFpbCI6MiwicGhvbmVfbnVtYmVyIjozLCJwaG9uZV9udW1iZXJfdmVyaWZpZWQiOjQsImFkZHJlc3MiOjUsImJpcnRoZGF0ZSI6NiwibmF0aW9uYWxpdGllcyI6N319.GkA6zkXjYPhjtppnBGEKAvrHLUVUbR4JnkPI4qe4h1oKCxh6RfgRZAFLjYU3BmMM2do3Ooz_SXQi18wIr7Ulcw~WyJPV2lTX05sTEFCRVVLRFhZX2ZDWm1HRU5DSkliOVQ0b3M4eDVxTUpRc2drIiwiZ2l2ZW5fbmFtZSIsIkpvaG4iXQ~WyJyVXo3emJFZGVYR1Q3VGZqRzRnRk9DWU1uOVAyZ3p2eHBGSUVuQjRhaXdZIiwiZmFtaWx5X25hbWUiLCJEb2UiXQ~WyJzUjlNX0JCYzFyVzB0Mi1ZUDdJcE5BQXRiXzlEMHN3aHlMUC1LZlcwQXdvIiwiZW1haWwiLCJqb2huZG9lQGV4YW1wbGUuY29tIl0~WyJYdVB0UjEzSVhXSERLNURKMkV3cVQ5ZGNqWmRBTV9JYm9zWmxZekJTS3dBIiwicGhvbmVfbnVtYmVyIiwiKzEtMjAyLTU1NS0wMTAxIl0~WyIxTFk0ZTJWS21kUHF0M25oYk1kemhzY3RoRDZrWXQ1djhvZjRQeXlnMmdRIiwicGhvbmVfbnVtYmVyX3ZlcmlmaWVkIix0cnVlXQ~WyJHQ0pOSExTdzRrU2JoaUR3ZEVPQjVlS01uU3kxeFRVb0lTT3NtZzdHdWdFIiwiYWRkcmVzcyIseyJzdHJlZXRfYWRkcmVzcyI6IjEyMyBNYWluIFN0IiwibG9jYWxpdHkiOiJBbnl0b3duIiwicmVnaW9uIjoiQW55c3RhdGUiLCJjb3VudHJ5IjoiVVMifV0~WyJxNVpCM29Fa0lib2NBT0tneTlDOWJUaW4wN0ZULVlBanNJdHh1TmRGZ1E4IiwiYmlydGhkYXRlIiwxOTQwMDEwMV0~WyJXZDZVS29GeVZFSngxRmZGZGNjWnJCdDYwLXYtbVBORlRFV3VrM3U3U0EwIiwibmF0aW9uYWxpdGllcyIsWyJVUyIsIkRFIl1d~";
+        let diploma_jwt = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwiX3NkIjpbImhwLUtzX3o4RjB4UV80TUFybEpMbjIzZ1VVdktZaXZwT3c1Y3dWb3pIQ1kiLCJKQ0pUdXozTHNleUd5WHBsYUhMRVprZVVNMEwzNV93T3NLR2xFaWJxb2x3IiwiTmkyVENVTVVwMTQ1cWFsYW0tVmVPQWdOYmdtdDQtTF9fc3ZBRU45SGN4QSIsIm5KLVBIUldmbmU5Sk9PeDBZNnNiQjNkUnlfR0pmVnprV3FXcWd6ZlVfQ0EiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiWmd2SVJPNHZpUlJVMGhCWFh2WEM2c2lfaWhsQmhoTVAxTW9VZFJIb3VIayIsImciOiIzUGVPSmwxZ1RHQTd4SC1jV0ZwaENURERtdDcwUDZORld0Y295aVVoQWxBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZ2l2ZW5fbmFtZSI6MCwiZmFtaWx5X25hbWUiOjEsInN1YmplY3QiOjIsImZpbmFsX2dyYWRlIjozfX0.gDs0zxTqgJKMuBujv1UvSC8R_tshugj3-HpwVO62H2wrvnos1kDwMtUknCSnNPLEQdVloMpl3sSZ0hZVbcJBZQ~WyJYTWpmTXdjUWw0czZMNkdZYVFFM1lHMlZMZTg0VXFVdGlQTUEtanNpUlEwIiwiZ2l2ZW5fbmFtZSIsIkpvaG4iXQ~WyJEMl9Oc1NtNzYxQzc0RDhyQWNHaExhb1dVb3JaUFpkbTBRVmJNbEp2QndzIiwiZmFtaWx5X25hbWUiLCJEb2UiXQ~WyJ2MXl1akU5bDloYmxsRllnY3hPaUlWS19jcUZfUGYyR0dHTUhpVkxaZGc0Iiwic3ViamVjdCIsIkNvbXB1dGVyIFNjaWVuY2UiXQ~WyIwWW9tWldPRmU1V0o0OGF1Z2FZMjR3MlR1UGhha2Z5NGt5V2x6aENSNXdBIiwiZmluYWxfZ3JhZGUiLDQuOF0~";
+
+        let identity = decode_sdjwt(&identity_jwt).unwrap();
+        let diploma = decode_sdjwt(&diploma_jwt).unwrap();
+
+        let given_name_equality =
+            EqualityProof::from_sdjwts("given_name", &identity, &diploma, vec![1, 2, 3]).unwrap();
+
+        println!(
+            "proof correct: {}",
+            given_name_equality.0.verify(
+                given_name_equality.1.clone(),
+                "given_name",
+                &identity,
+                &diploma
+            )
+        );
+        let family_name_equality =
+            EqualityProof::from_sdjwts("family_name", &identity, &diploma, vec![1, 2, 3]).unwrap();
+
+        fn get_commitment(attr_name: &str, sdjwt: &SdJwtRust) -> String {
+            let sd_index = pointer!("com_link", attr_name)
+                .select(sdjwt.claims.clone())
+                .unwrap()
+                .first()
+                .unwrap()
+                .as_i64()
+                .unwrap()
+                .to_owned() as usize;
+            pointer!("_sd", sd_index)
+                .select(sdjwt.claims.clone())
+                .unwrap()
+                .first()
+                .unwrap()
+                .clone()
+                .as_str()
+                .unwrap()
+                .to_string()
+        }
+
+        let identity_presentation = SdJwtBuilder::from_sdjwt(&identity);
+
+        identity_presentation
+            .add_zkp(ZkProof {
+                inputs: vec![
+                    Input::Private {
+                        path: pointer!("com_link", "given_name"),
+                        value: get_commitment("given_name", &identity),
+                    },
+                    Input::Private {
+                        path: pointer!("com_link", "given_name"),
+                        value: get_commitment("given_name", &diploma),
+                    },
+                ],
+                system: vec![1, -1],
+                context: BASE64_URL_SAFE_NO_PAD.encode(&given_name_equality.1),
+                proof: BASE64_URL_SAFE_NO_PAD.encode(given_name_equality.0.as_bytes()),
+                proof_type: crate::sdjwt_util::zkp::ProofType::Equality,
+            })
+            .unwrap();
+        identity_presentation
+            .add_zkp(ZkProof {
+                inputs: vec![
+                    Input::Private {
+                        path: pointer!("com_link", "family_name"),
+                        value: get_commitment("family_name", &identity),
+                    },
+                    Input::Private {
+                        path: pointer!("com_link", "family_name"),
+                        value: get_commitment("family_name", &diploma),
+                    },
+                ],
+                system: vec![1, -1],
+                context: BASE64_URL_SAFE_NO_PAD.encode(&family_name_equality.1),
+                proof: BASE64_URL_SAFE_NO_PAD.encode(family_name_equality.0.as_bytes()),
+                proof_type: crate::sdjwt_util::zkp::ProofType::Equality,
+            })
+            .unwrap();
+
+        let presentation = identity_presentation
+            .build(Some(Arc::new(identity_holder_key)))
+            .unwrap();
+        let diploma_builder = SdJwtBuilder::from_sdjwt(&diploma);
+        diploma_builder.add_disclosure(pointer!("subject")).unwrap();
+        diploma_builder
+            .add_disclosure(pointer!("final_grade"))
+            .unwrap();
+        let diploma_presentation = diploma_builder.build(None).unwrap();
+
+        println!("{}", presentation);
+        println!("{}", diploma_presentation);
+    }
+
+    #[test]
+    fn verify_tests_for_rfc_draft() {
+        let identity_presentation = r#"eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwidXBkYXRlZF9hdCI6MTU3MDAwMDAwMCwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6Ik9xMWF6VEktbmZYUmp4ZW94cXdrdGJTYXlFN1NkLTJTMGtwMk1kQ1hkSk0iLCJ5IjoiWHo0ZXFaRzZicTAxN3RDdHFzeDk3S2lKemdMemJTUXZPelFKQkZhc1hLRSJ9fSwiX3NkIjpbImpsLXh6a0ZlQUhjeHloTkFwR1dHQkxlZHhmamhabWtpcTRmank1VEpQRkUiLCJHRFV1OWtmUWxISVV5bXhOaEdQZEhLeXBQWUUwY3ZURmFuekcxZHduUkJJIiwiWkVRT0NZMEhYNC0yZzhvU2tSN1lfV204NnFVVU9sZDNBOFFTT1k4U0FUbyIsImVOd0F4WnQ3UHhVMVQxbmhPYlhTbkRMU2s3MXk3Y2pfakNHcDlYSDZTUTQiLCI0Z0tkSGZCclFXUWdZRzdDT1hWMUl6SThBeDlrOE5XQ0xnUzBYSFFFRWt3IiwiZG9VZFRRM1pJZ25YODlacUlzLWk4MWNiRnZtOGJrSERjUU9heTZ6dFJnYyIsImtPNTZjY3V1aHFlclpYdGpNeE1QNWNwZDFac2V1RVZKOUY0N25lOHBUSGMiLCJkc1hNTVVsRFZwMTBjdkdLeXAtbDc1R1VJRkVjUGhwZ0hXN1VmVElNem04Il0sIl9zZF9hbGdfcGFyYW0iOnsiY29tbWl0bWVudF9zY2hlbWUiOnsicHVibGljX3BhcmFtcyI6eyJnIjoiNUFsOUJCRTdOU2pacXhRSktrQjF4bnZCM2t4R1FHdm1fbHBpNW1uQUlWVSIsImgiOiJqa3hldk50SlY0X2FRS1pxSUZSYUl1allpSk92VFZSOW5hb1NPdWVmalFJIn0sImNydiI6ImVkMjU1MTkifX0sIl9zZF9hbGciOiJlY19wZWRlcnNlbiIsImNvbV9saW5rIjp7ImdpdmVuX25hbWUiOjAsImZhbWlseV9uYW1lIjoxLCJlbWFpbCI6MiwicGhvbmVfbnVtYmVyIjozLCJwaG9uZV9udW1iZXJfdmVyaWZpZWQiOjQsImFkZHJlc3MiOjUsImJpcnRoZGF0ZSI6NiwibmF0aW9uYWxpdGllcyI6N319.GkA6zkXjYPhjtppnBGEKAvrHLUVUbR4JnkPI4qe4h1oKCxh6RfgRZAFLjYU3BmMM2do3Ooz_SXQi18wIr7Ulcw~~eyJ0eXAiOiJrYitqd3QiLCJhbGciOiJFUzI1NiJ9.eyJub25jZSI6IjFWMTNRRXJQYjhqRlNpSU5kR2RnWUV1OWU2bHhVU09nIiwiaWF0IjoxNzY4NDc2NjU3LCJzZF9oYXNoIjoiQXBZd2FGNlM4VHk1VWFLa2h1cXFvYzdMTnlQUllJaTl3RlVNZ2hGRDlnOCIsInprX3Byb29mcyI6W3siaW5wdXRzIjpbeyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJnaXZlbl9uYW1lIl0sInZhbHVlIjoiamwteHprRmVBSGN4eWhOQXBHV0dCTGVkeGZqaFpta2lxNGZqeTVUSlBGRSJ9fSx7IlByaXZhdGUiOnsicGF0aCI6WyJjb21fbGluayIsImdpdmVuX25hbWUiXSwidmFsdWUiOiJocC1Lc196OEYweFFfNE1BcmxKTG4yM2dVVXZLWWl2cE93NWN3Vm96SENZIn19XSwic3lzdGVtIjpbMSwtMV0sImNvbnRleHQiOiJaMmwyWlc1ZmJtRnRaZVFKZlFRUk96VW8yYXNVQ1NwQWRjWjd3ZDVNUmtCcjV2NWFZdVpwd0NGVmpreGV2TnRKVjRfYVFLWnFJRlJhSXVqWWlKT3ZUVlI5bmFvU091ZWZqUUxjOTQ0bVhXQk1ZRHZFZjV4WVdtRUpNTU9hM3ZRX28wVmExeWpLSlNFQ1VHWUx5RVR1TDRrVVZOSVFWMTcxd3VySXY0b1pRWVlURDlUS0ZIVVI2TGg1QVFJRCIsInByb29mIjoid0RMQlYyX2NaeTBqSVFrSlhfVVdFeE5oSlJwN2JWd2s1VXdhNS1KWGFBM1E3U3lHRk4yMk9iTzJfa01MbjNHMk04V2dCeEk3QkhkdzlsN0pld2xRQjhBeXdWZHYzR2N0SXlFSkNWXzFGaE1UWVNVYWUyMWNKT1ZNR3VmaVYyZ05VM2xadWdrenBTMmd1N0VXV2c2VjdxZk5QT3JHc21iWjZudmdPdFc5bmd6eVpZTmFTS3RmeDJWazJELUg2YllDQjIyY1I5YXNqSjhaZ0RCdy1TWWhKUTZOSmFGNjRhamgwRDdmZHZtN1Jfb1BfcGZJeDFqRTYxQWtnYlBBdzlkVCIsInByb29mX3R5cGUiOiJlcXVhbGl0eV9wcm9vZiJ9LHsiaW5wdXRzIjpbeyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJmYW1pbHlfbmFtZSJdLCJ2YWx1ZSI6IkdEVXU5a2ZRbEhJVXlteE5oR1BkSEt5cFBZRTBjdlRGYW56RzFkd25SQkkifX0seyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJmYW1pbHlfbmFtZSJdLCJ2YWx1ZSI6IkpDSlR1ejNMc2V5R3lYcGxhSExFWmtlVU0wTDM1X3dPc0tHbEVpYnFvbHcifX1dLCJzeXN0ZW0iOlsxLC0xXSwiY29udGV4dCI6IlptRnRhV3g1WDI1aGJXWGtDWDBFRVRzMUtObXJGQWtxUUhYR2U4SGVURVpBYS1iLVdtTG1hY0FoVlk1TVhyemJTVmVQMmtDbWFpQlVXaUxvMklpVHIwMVVmWjJxRWpybm40MEMzUGVPSmwxZ1RHQTd4SC1jV0ZwaENURERtdDcwUDZORld0Y295aVVoQWxCbUM4aEU3aS1KRkZUU0VGZGU5Y0xxeUwtS0dVR0dFd19VeWhSMUVlaTRlUUVDQXciLCJwcm9vZiI6IlpDWGZ3VGhRTTBtTnk1Zk0tX05uV09yZGIxdkFPcWJ5eG44NDNrcjIxd0ZleE8tNEtzYUtEYUVQNDJOSGZSSnNrTU9mU1h1aFp5ZTk0R0FBX1FVSkFHUWwzOEU0VUROSmpjdVh6UHZ6WjFqcTNXOWJ3RHFtOHNaX09ONUs5dGNCaFVXSlhVdjFDcUt6UC1BNEMyVEI1S1FFaVJWZHQxRFlJa1NZQWRhdWdnS015VVhwbE5sSWRxcVRjN203OE0yd1dVaWdBbWZ1eTVlYnVVUTFQNkRRUkdKMTZoVll4emdXRXA2SnhzTHpTSHRiZl8yZzlpLTJ6MFlmaXV2SWhkZ0kiLCJwcm9vZl90eXBlIjoiZXF1YWxpdHlfcHJvb2YifV19.uIYkpRJttXimLtWssxpnZYTMPpg73QUUpDJNw72CJoeRyikJYJaa6Dw5pQ0xNE5yPUIbnGZ80DFWG36yg7TCEg"#;
+        let diploma_presentation = r#"eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwiX3NkIjpbImhwLUtzX3o4RjB4UV80TUFybEpMbjIzZ1VVdktZaXZwT3c1Y3dWb3pIQ1kiLCJKQ0pUdXozTHNleUd5WHBsYUhMRVprZVVNMEwzNV93T3NLR2xFaWJxb2x3IiwiTmkyVENVTVVwMTQ1cWFsYW0tVmVPQWdOYmdtdDQtTF9fc3ZBRU45SGN4QSIsIm5KLVBIUldmbmU5Sk9PeDBZNnNiQjNkUnlfR0pmVnprV3FXcWd6ZlVfQ0EiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiWmd2SVJPNHZpUlJVMGhCWFh2WEM2c2lfaWhsQmhoTVAxTW9VZFJIb3VIayIsImciOiIzUGVPSmwxZ1RHQTd4SC1jV0ZwaENURERtdDcwUDZORld0Y295aVVoQWxBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZ2l2ZW5fbmFtZSI6MCwiZmFtaWx5X25hbWUiOjEsInN1YmplY3QiOjIsImZpbmFsX2dyYWRlIjozfX0.gDs0zxTqgJKMuBujv1UvSC8R_tshugj3-HpwVO62H2wrvnos1kDwMtUknCSnNPLEQdVloMpl3sSZ0hZVbcJBZQ~WyIwWW9tWldPRmU1V0o0OGF1Z2FZMjR3MlR1UGhha2Z5NGt5V2x6aENSNXdBIiwiZmluYWxfZ3JhZGUiLDQuOF0~WyJ2MXl1akU5bDloYmxsRllnY3hPaUlWS19jcUZfUGYyR0dHTUhpVkxaZGc0Iiwic3ViamVjdCIsIkNvbXB1dGVyIFNjaWVuY2UiXQ~"#;
+        let identity = decode_sdjwt(identity_presentation).unwrap();
+        let diploma = decode_sdjwt(diploma_presentation).unwrap();
+        let keybinding = identity.keybinding_jwt.as_ref().unwrap();
+        let &[_, body, _] = keybinding.split('.').collect::<Vec<&str>>().as_slice() else {
+            panic!("");
+        };
+        let body: heidi_util_rust::value::Value =
+            serde_json::from_slice(&BASE64_URL_SAFE_NO_PAD.decode(body).unwrap()).unwrap();
+        let proofs = body
+            .get("zk_proofs")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|a| a.transform::<ZkProof>().unwrap())
+            .collect::<Vec<ZkProof>>();
+        for p in proofs {
+            println!("verifying proof for inputs: {:?}", p.inputs);
+            let equality_proof =
+                EqualityProof::from_bytes(&BASE64_URL_SAFE_NO_PAD.decode(&p.proof).unwrap());
+            let input = p.inputs[0].clone();
+            let name = match input {
+                Input::Private { path, value } => {
+                    let PointerPart::String(s) = path.last().unwrap() else {
+                        unreachable!()
+                    };
+                    s.to_string()
+                }
+                _ => unreachable!(),
+            };
+            let result = equality_proof.verify(
+                BASE64_URL_SAFE_NO_PAD.decode(&p.context).unwrap(),
+                &name,
+                &identity,
+                &diploma,
+            );
+            println!("Equality of {name} is statisfied? {result}");
+            assert!(result);
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&identity.claims).unwrap()
+        );
+        println!("{}", serde_json::to_string_pretty(&diploma.claims).unwrap());
     }
 }

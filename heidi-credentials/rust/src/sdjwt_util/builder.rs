@@ -308,6 +308,18 @@ pub struct SdJwtBuilder {
     inner: Arc<Mutex<BuilderImpl>>,
 }
 
+//TODO: UBAM figure out how to expose this to kmp
+impl SdJwtBuilder {
+    pub fn add_zkp(&self, zkp: ZkProof) -> Result<(), BuilderError> {
+        let Ok(mut this) = self.inner.lock() else {
+            return Err(BuilderError::Lock);
+        };
+
+        this.zk_proofs.push(zkp);
+        Ok(())
+    }
+}
+
 #[uniffi::export]
 impl SdJwtBuilder {
     #[uniffi::constructor]

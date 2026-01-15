@@ -44,7 +44,7 @@ fn canonicalize_primitive(v: &Value) -> String {
         .to_string()
 }
 
-fn stringify_value(value: &heidi_util_rust::value::Value) -> String {
+pub fn stringify_value(value: &heidi_util_rust::value::Value) -> String {
     match value {
         Value::Array(_) => canonicalize_array(value),
         Value::Object(_) => canonicalize_object(value),

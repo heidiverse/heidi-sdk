@@ -28,6 +28,8 @@ ark-serialize.workspace = true
 num-bigint = "0.4.6"
 curve25519-dalek = {version = "=4.1.2", features = ["rand_core", "digest"] }
 
+[dev-dependencies]
+p256 = {version = "0.13.2", features = ["jwk", "ecdsa"]}
 [features]
 default = ["bbs"]
 bbs = ["next-gen-signatures", "zkp-util", "rdf-util"]
