@@ -34,7 +34,7 @@ json-syntax = "0.12.5"
 static-iref = "3.0.0"
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["full"] }
 
 [features]
 default = ["bbs", "uniffi"]
