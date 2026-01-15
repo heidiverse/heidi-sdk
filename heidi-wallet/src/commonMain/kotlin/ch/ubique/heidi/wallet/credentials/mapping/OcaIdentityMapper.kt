@@ -106,7 +106,9 @@ class OcaIdentityMapper(
 					return null
 				}
 			}
-		}
+
+            is OcaType.Json -> ocaType.json
+        }
 
 		val processor = OcaProcessor(languageKey, payload, ocaBundle)
 		val cardData = processor.process(LayoutType.CARD) as LayoutData.Card

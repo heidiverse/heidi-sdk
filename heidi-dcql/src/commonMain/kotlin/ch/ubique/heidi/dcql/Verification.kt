@@ -235,6 +235,13 @@ private fun checkMetaW3C(
     return Result.failure(InvalidCredentialQueryMetaException("W3C", meta.toString()))
 }
 
+private fun checkMetaOpenBadges(
+    meta: Meta
+): Result<Unit> {
+    // TODO: OpenBadges Metadata
+    return Result.success(Unit)
+}
+
 
 private fun getCredentialType(vpToken: String, expectedFormat: String): Result<CredentialType> {
     // BBS term-wise has unique formats
@@ -355,6 +362,23 @@ private fun checkCredentialQuery(
 
             checkCredentialQuery(
                 query, w3c.asJson(), w3c.getOriginalNumClaims(), w3c.getNumDisclosed()
+            ).map { result }
+        }
+
+        CredentialType.OpenBadge303 -> {
+            val result = runCatching {
+                checkVpToken(CredentialType.OpenBadge303, vpToken, query.id)
+            }.getOrElse { return Result.failure(it) }
+            val vpJson = Json.decodeFromString<Value>(vpToken)
+            val vcJson = vpJson["verifiableCredential"][0]
+            val vc = W3C.OpenBadge303.parseCompacted(Json.encodeToString(vcJson))
+
+            query.meta?.let {
+                checkMetaOpenBadges(it).exceptionOrNull()?.let { e -> return Result.failure(e) }
+            }
+
+            checkCredentialQuery(
+                query, vc.asJson(), vc.getOriginalNumClaims(), vc.getNumDisclosed()
             ).map { result }
         }
 

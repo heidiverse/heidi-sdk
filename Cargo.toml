@@ -28,6 +28,7 @@ tokio = { version = "1.38.0" }
 reqwest = { version = "0.11", default-features = false, features = [
     "rustls-tls",
     "cookies",
+    "json",
 ] }
 heidi-jwt = { git = "https://github.com/heidiverse/heidi-jwt" }
 serde_with_macros = "3.16.1"

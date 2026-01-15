@@ -20,7 +20,10 @@ under the License.
 
 #[cfg(feature = "bbs")]
 use heidi_credentials_rust::bbs::{decode_bbs, BbsRust};
-use heidi_credentials_rust::sdjwt::{decode_sdjwt, SdJwtRust};
+use heidi_credentials_rust::{
+    ldp::{parse_ldp_vc_compacted, LdpVC},
+    sdjwt::{decode_sdjwt, SdJwtRust},
+};
 use heidi_credentials_rust::{
     mdoc::{decode_mdoc, MdocRust},
     w3c::W3CSdJwt,
@@ -72,6 +75,7 @@ pub enum Credential {
     #[cfg(feature = "bbs")]
     BbsCredential(BbsRust),
     W3CCredential(W3CSdJwt),
+    OpenBadgeCredential(LdpVC),
 }
 
 #[derive(Clone, Debug, uniffi::Record, Serialize)]
@@ -126,6 +130,10 @@ impl FromStr for Credential {
             // Fallthrough to other formats
             _ => (),
         };
+
+        if let Ok(ldp_vc) = parse_ldp_vc_compacted(s.to_string()) {
+            return Ok(Credential::OpenBadgeCredential(ldp_vc));
+        }
 
         if let Ok(mdoc) = decode_mdoc(s) {
             return Ok(Credential::MdocCredential(mdoc));

@@ -1,8 +1,10 @@
 use std::{fmt::Display, sync::Arc};
 
+use heidi_crypto_rust::crypto::{eddsa::EdDsaPublicKey, sha256};
 use heidi_util_rust::value::Value;
 use iref::IriBuf;
 use json_ld::{ChainLoader, ReqwestLoader};
+use serde::Serialize;
 use static_iref::iri;
 use tokio::{runtime::Handle, task::LocalSet};
 
@@ -14,6 +16,7 @@ use crate::{
 #[derive(Debug, Clone, uniffi::Error)]
 pub enum ParseError {
     JoinError(String),
+    JsonError(String),
 }
 
 impl Display for ParseError {
@@ -22,7 +25,7 @@ impl Display for ParseError {
     }
 }
 
-#[derive(Debug, Clone, uniffi::Record)]
+#[derive(Debug, Clone, uniffi::Record, Serialize)]
 pub struct LdpVC {
     /// The credential document type
     pub doctype: Vec<String>,
@@ -106,6 +109,168 @@ pub async fn parse_ldp_vc(
         data: vc.into(),
         original,
     })
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn parse_ldp_vc_compacted(credential: String) -> Result<LdpVC, ParseError> {
+    let original = credential.clone();
+    let vc = serde_json::from_str::<Value>(&credential)
+        .map_err(|e| ParseError::JsonError(e.to_string()))?;
+
+    // Both "type" and "@type" are valid keys for the credential type
+    let doctype = vc
+        .get("type")
+        .or_else(|| vc.get("@type"))
+        .and_then(|value| {
+            value.as_array().map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>()
+            })
+        })
+        .unwrap_or_default();
+
+    Ok(LdpVC {
+        doctype,
+        data: vc.into(),
+        original,
+    })
+}
+
+async fn canonicalize_eddsa_rdfc_2022(document: String) -> Result<String, ParseError> {
+    let Ok(canonical_rdf) = tokio::task::spawn_blocking(move || {
+        let handle = Handle::current();
+        let local = LocalSet::new();
+
+        // Use the handle to block, and let the local set run the future
+        handle.block_on(local.run_until(async move {
+            let loader = ChainLoader::new(
+                StaticLoader::new()
+                    .with_document("https://www.w3.org/ns/credentials/v2", CONTEXT_W3C),
+                ReqwestLoader::new(),
+            );
+            JsonLdDocument::new(&document, &loader)
+                .to_canonical_rdf()
+                .await
+        }))
+    })
+    .await
+    else {
+        return Err(ParseError::JoinError(
+            "Failed to join canonicalization task".to_string(),
+        ));
+    };
+    Ok(canonical_rdf)
+}
+
+// Apply the proof options transformations
+
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+pub async fn ldp_verify_proof(vc: LdpVC) -> bool {
+    let Ok(original) = serde_json::from_str::<serde_json::Value>(&vc.original) else {
+        return false;
+    };
+    let unsecured_document = {
+        let Some(mut doc) = original.as_object().map(|d| d.clone()) else {
+            return false;
+        };
+        doc.remove("proof");
+        serde_json::Value::Object(doc)
+    };
+    let proof = original
+        .get("proof")
+        .and_then(|p| p.as_array())
+        .and_then(|a| a.first())
+        .cloned()
+        .or_else(|| original.get("proof").cloned());
+    let proof_options = {
+        let Some(mut proof) = proof.as_ref().and_then(|p| p.as_object()).cloned() else {
+            return false;
+        };
+        proof.remove("proofValue");
+        serde_json::Value::Object(proof)
+    };
+    let Some(proof_value) = proof
+        .and_then(|p| p.get("proofValue").cloned())
+        .and_then(|v| v.as_str().map(|v| v.to_string()))
+    else {
+        return false;
+    };
+
+    let cryptosuite = proof_options.get("cryptosuite").and_then(|v| v.as_str());
+
+    let unsecured_document_string = serde_json::to_string(&unsecured_document).unwrap();
+    let transformed_data = match cryptosuite {
+        Some("eddsa-rdfc-2022") => {
+            let Ok(canonical_rdf) = canonicalize_eddsa_rdfc_2022(unsecured_document_string).await
+            else {
+                return false;
+            };
+            canonical_rdf
+        }
+        _ => return false,
+    };
+    let proof_config = match cryptosuite {
+        Some("eddsa-rdfc-2022") => {
+            let mut proof_config = proof_options.clone();
+            proof_config["@context"] = original["@context"].clone();
+            let proof_config_string = serde_json::to_string(&proof_config).unwrap();
+            let Ok(canonical_rdf) = canonicalize_eddsa_rdfc_2022(proof_config_string).await else {
+                return false;
+            };
+            canonical_rdf
+        }
+        _ => return false,
+    };
+
+    let proof_config_hash = match cryptosuite {
+        Some("eddsa-rdfc-2022") => sha256(&proof_config.as_bytes()),
+        _ => return false,
+    };
+    let transformed_document_hash = match cryptosuite {
+        Some("eddsa-rdfc-2022") => sha256(&transformed_data.as_bytes()),
+        _ => return false,
+    };
+
+    let hash_data = match cryptosuite {
+        Some("eddsa-rdfc-2022") => {
+            let mut data = vec![];
+            data.extend_from_slice(&proof_config_hash);
+            data.extend_from_slice(&transformed_document_hash);
+            data
+        }
+        _ => return false,
+    };
+
+    let verified = match cryptosuite {
+        Some("eddsa-rdfc-2022") => {
+            let verification_method = proof_options
+                .get("verificationMethod")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let Ok(response) = reqwest::get(verification_method).await else {
+                return false;
+            };
+            let Ok(verification_method_doc) = response.json::<serde_json::Value>().await else {
+                return false;
+            };
+            let Some(public_key_multibase) = verification_method_doc
+                .get("verificationMethod")
+                .and_then(|vm| vm.get("publicKeyMultibase"))
+                .and_then(|v| v.as_str())
+            else {
+                return false;
+            };
+            let Ok(public_key) = EdDsaPublicKey::from_multibase(public_key_multibase) else {
+                return false;
+            };
+            public_key.verify(hash_data, &proof_value).unwrap_or(false)
+        }
+        _ => return false,
+    };
+
+    verified
 }
 
 #[cfg(test)]
@@ -214,5 +379,7 @@ mod tests {
                 .and_then(|v| v.get("name"))
                 .and_then(|v| v.as_str())
         );
+
+        assert!(super::ldp_verify_proof(ldp_vc).await);
     }
 }

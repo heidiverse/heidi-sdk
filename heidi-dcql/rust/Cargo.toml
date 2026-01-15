@@ -18,4 +18,4 @@ heidi-credentials-rust = { path = "../../heidi-credentials/rust", default-featur
 
 [features]
 default = ["bbs"]
-bbs = ["heidi-credentials-rust/bbs"]
+bbs = ["heidi-credentials-rust/bbs", "heidi-credentials-rust/uniffi"]

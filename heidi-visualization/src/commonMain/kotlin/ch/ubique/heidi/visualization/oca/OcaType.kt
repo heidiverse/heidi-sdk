@@ -20,6 +20,8 @@ under the License.
 
 package ch.ubique.heidi.visualization.oca
 
+import ch.ubique.heidi.visualization.oca.model.OcaBundleJson
+
 sealed interface OcaType {
 	data class Reference(val url: String) : OcaType
 
@@ -28,4 +30,6 @@ sealed interface OcaType {
 		data object SwissBetaId : BuiltIn
 		data class FromMetadata(val url: String) : BuiltIn
 	}
+
+    data class Json(val json: OcaBundleJson) : OcaType
 }

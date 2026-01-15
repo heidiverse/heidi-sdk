@@ -69,7 +69,8 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 			CredentialType.Mdoc -> mdocAsJsonRepresentation((credential.credential as CredentialFormat.Mdoc).v1) ?: return null
 			CredentialType.BbsTermwise -> return null
 			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse((credential.credential as CredentialFormat.W3c).v1).asJson())
-			CredentialType.Unknown -> return null
+            CredentialType.OpenBadge303 -> TODO("Alexey: OpenBadge")
+            CredentialType.Unknown -> return null
 		}
 
 		val credentialPayload = when(credential.credential) {
@@ -84,7 +85,8 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 			CredentialType.Mdoc -> MdocUtils.getDocType(credentialPayload)
 			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
 			CredentialType.BbsTermwise -> return null
-			CredentialType.Unknown -> {
+            CredentialType.OpenBadge303 -> TODO("Alexey: OpenBadge")
+            CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null
 			}

@@ -10,6 +10,7 @@ use json_ld::{
 };
 use mime::Mime;
 use serde_json::Value as JsonValue;
+use std::fmt::Write;
 
 use frame::FramingOptions;
 
@@ -77,6 +78,24 @@ impl<L: Loader> JsonLdDocument<L> {
         .unwrap();
 
         framed
+    }
+
+    pub async fn to_canonical_rdf(&self) -> String {
+        let mut generator = BlankGenerator::new();
+
+        let mut rdf = self
+            .document
+            .to_rdf(&mut generator, &self.loader)
+            .await
+            .unwrap();
+
+        let rdf = rdf.cloned_quads().fold(String::new(), |mut output, q| {
+            let _ = writeln!(output, "{q} .");
+            output
+        });
+
+        let dataset = rdf_util::dataset_from_str(&rdf).unwrap();
+        rdf_util::canon::canonicalize(&dataset).unwrap()
     }
 }
 
