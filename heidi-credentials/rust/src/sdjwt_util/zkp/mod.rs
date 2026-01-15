@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
 
+use crate::models::Pointer;
+
 pub mod equality_proof;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ZkProof {
-    inputs: Vec<Input>,
-    system: Vec<i8>,
-    context: String,
-    proof: String,
-    proof_type: ProofType,
+    pub inputs: Vec<Input>,
+    pub system: Vec<i8>,
+    pub context: String,
+    pub proof: String,
+    pub proof_type: ProofType,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -19,6 +21,11 @@ pub enum ProofType {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Input {
-    Public { public_value: serde_json::Value },
-    Private { path: String, value: String },
+    Public {
+        public_value: heidi_util_rust::value::Value,
+    },
+    Private {
+        path: Pointer,
+        value: String,
+    },
 }
