@@ -297,8 +297,6 @@ class ProximityWallet private constructor(
 				markSubmissionCompleted()
 			}
 		}
-		// Fallback completion in case progress callbacks do not hit exactly 1.0
-		markSubmissionCompleted()
 
 		return true
 	}
