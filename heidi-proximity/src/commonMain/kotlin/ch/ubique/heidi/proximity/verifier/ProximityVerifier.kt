@@ -45,7 +45,6 @@ import kotlinx.coroutines.flow.update
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
-import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.encodeCbor
@@ -196,9 +195,7 @@ class ProximityVerifier<T> private constructor(
 				}
 				return@launch
 			}
-			val sessionTranscriptBytes = encodeCbor (sessionTranscript)
-			val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
-			val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
+			val origin = ProximityMdlUtils.buildIsoOriginFromSessionTranscript(sessionTranscript)
 			var documentRequest = documentRequester.createDocumentRequest(origin)
 			when(documentRequest) {
 				is DocumentRequest.Mdl -> {

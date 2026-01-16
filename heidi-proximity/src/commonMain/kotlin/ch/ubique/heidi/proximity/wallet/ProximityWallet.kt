@@ -58,7 +58,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
-import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.decodeCbor
@@ -339,9 +338,9 @@ class ProximityWallet private constructor(
 						// The reader selected dcAPI
 						if(sessionEstablishment.dcApiSelected == true) {
 							isDcApi = true
-							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
-							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
-							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
+							val origin = ProximityMdlUtils.buildIsoOriginFromSessionTranscript(
+								(transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!
+							)
 							//TODO: handle multiple requests and such
 							//TODO: we should choose which protocols we support and wish (e.g .signed not signed)
 							val dcRequest = Json.decodeFromString<JsonObject>(result.decodeToString())
@@ -437,9 +436,9 @@ class ProximityWallet private constructor(
 						if(isDcApi) {
 							isDcApi = true
 
-							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
-							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
-							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
+							val origin = ProximityMdlUtils.buildIsoOriginFromSessionTranscript(
+								(transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!
+							)
 							//TODO: handle multiple requests and such
 							//TODO: we should choose which protocols we support and wish (e.g .signed not signed)
 							val dcRequest = Json.decodeFromString<JsonObject>(data.decodeToString())

@@ -21,6 +21,10 @@ package ch.ubique.heidi.proximity.util
 
 import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
+import uniffi.heidi_crypto_rust.base64UrlEncode
+import uniffi.heidi_crypto_rust.sha256Rs
+import uniffi.heidi_util_rust.Value
+import uniffi.heidi_util_rust.encodeCbor
 
 object ProximityMdlUtils {
 	fun defaultDcApiCapabilities(): MdlCapabilities {
@@ -31,5 +35,11 @@ object ProximityMdlUtils {
 				)
 			)
 		)
+	}
+
+	fun buildIsoOriginFromSessionTranscript(sessionTranscript: Value): String {
+		val sessionTranscriptBytes = encodeCbor(sessionTranscript)
+		val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
+		return "iso-18013-5://${sessionTranscriptBytesHash}"
 	}
 }
