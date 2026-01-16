@@ -23,6 +23,7 @@ import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.ble.gatt.BleGattService
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
 import platform.CoreBluetooth.*
@@ -63,6 +64,8 @@ internal class PeripheralDelegate(
 //		val descriptors = didDiscoverDescriptorsForCharacteristic.descriptors?.map { it as CBDescriptor } ?: emptyList()
 //		gattClient.characteristicDescriptors[BleGattCharacteristic(didDiscoverDescriptorsForCharacteristic)] = descriptors
 //	}
+
+	@ObjCSignatureOverride
 	override fun peripheral(peripheral: CBPeripheral, didUpdateValueForCharacteristic: CBCharacteristic, error: NSError?) {
 		val value = didUpdateValueForCharacteristic.value()?.toByteArray()
 		val characteristic = BleGattCharacteristic(didUpdateValueForCharacteristic)
@@ -100,7 +103,7 @@ internal class PeripheralDelegate(
 }
 
 @OptIn(ExperimentalForeignApi::class)
-fun NSData.toByteArray(): ByteArray {
+internal fun NSData.toByteArray(): ByteArray {
 	return ByteArray(length.toInt()).apply {
 		usePinned {
 			memcpy(it.addressOf(0), bytes, length)
