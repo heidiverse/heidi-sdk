@@ -26,11 +26,8 @@ import ch.ubique.heidi.proximity.protocol.TransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCoseKey
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCentralClientModeTransportProtocol
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCharacteristicsFactory
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
-import ch.ubique.heidi.proximity.protocol.mdl.MdlPeripheralServerModeTransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionData
 import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionEstablishment
 import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocol
@@ -50,7 +47,6 @@ import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -63,7 +59,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
-import uniffi.heidi_crypto_rust.SoftwareKeyPair
 import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
