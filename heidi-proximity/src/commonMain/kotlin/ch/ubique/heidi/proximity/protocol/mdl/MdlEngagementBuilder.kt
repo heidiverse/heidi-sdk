@@ -30,8 +30,8 @@ import kotlin.uuid.Uuid
 class MdlEngagementBuilder(
     private val verifierName: String,
     private val coseKey: ByteArray,
-    private val centralClientUuid: Uuid,
-    private val peripheralServerUuid: Uuid,
+    private val centralClientUuid: Uuid?,
+    private val peripheralServerUuid: Uuid?,
     private val centralClientModeSupported: Boolean,
     private val peripheralServerModeSupported: Boolean,
     private val capabilities: MdlCapabilities? = null,
@@ -51,19 +51,31 @@ class MdlEngagementBuilder(
                 1,
                 24 to coseKey.toCbor()
             ),
-            2 to listOf(
-                listOf(
-                    2,
-                    1,
-                    mapOf(
-                        0 to peripheralServerModeSupported,
-                        1 to centralClientModeSupported,
-                        10 to peripheralServerUuid.toByteArray(),
-                        11 to centralClientUuid.toByteArray()
+        )
+        //TODO: UBAM make allow to have either/or
+        if(centralClientUuid != null || peripheralServerUuid != null) {
+            val bleTransportOptions = mutableMapOf<Int, Any>()
+            bleTransportOptions.put(0, peripheralServerModeSupported)
+            if(peripheralServerModeSupported) {
+                peripheralServerUuid?.let {
+                    bleTransportOptions.put(10, it.toByteArray())
+                }
+            }
+            bleTransportOptions.put(1, centralClientModeSupported)
+            if(centralClientModeSupported) {
+                centralClientUuid?.let {
+                    bleTransportOptions.put(11, it.toByteArray())
+                }
+            }
+            deviceEngagement.put(2, listOf(
+                    listOf(
+                        2,
+                        1,
+                       bleTransportOptions
                     )
                 )
             )
-        )
+        }
         capabilities?.let {
             deviceEngagement.put(6, capabilities.getValue())
         }

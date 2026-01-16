@@ -19,7 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.sample.verifier.di
 
-import ch.ubique.heidi.sample.verifier.BuildConfig
+
 import ch.ubique.heidi.sample.verifier.feature.network.createVerifierService
 import de.jensklingenberg.ktorfit.Ktorfit
 import de.jensklingenberg.ktorfit.converter.FlowConverterFactory
@@ -42,7 +42,7 @@ val networkModule = module {
 	single {
 		val httpClient: HttpClient = get()
 		ktorfitBuilder {
-			baseUrl(BuildConfig.BASE_URL)
+
 			httpClient(httpClient)
 			converterFactories(
 				FlowConverterFactory(),

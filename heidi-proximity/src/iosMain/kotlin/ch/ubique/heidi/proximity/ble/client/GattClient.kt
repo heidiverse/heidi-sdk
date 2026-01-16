@@ -225,6 +225,10 @@ internal class GattClient (
 			pendingWrites.removeFirst()
 			peripheral.writeValue(next.payload.toData(), next.characteristic, CBCharacteristicWriteWithoutResponse)
 			next.progress?.advance(next.payloadSize)
+
+			if (pendingWrites.isEmpty()) {
+				listener?.onCharacteristicWrite(BleGattCharacteristic(next.characteristic))
+			}
 		}
 	}
 

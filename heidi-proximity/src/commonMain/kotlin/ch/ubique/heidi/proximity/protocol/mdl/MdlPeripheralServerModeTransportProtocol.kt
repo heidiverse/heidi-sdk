@@ -76,17 +76,17 @@ internal class MdlPeripheralServerModeTransportProtocol(
 		return true
 	}
 
-	override fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?) : SessionCipher {
+	override fun getSessionCipher(engagementBytes: ByteArray ,eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?) : SessionCipher? {
 		sessionTranscript = listOf(24 to engagementBytes, 24 to eReaderKeyBytes, Value.Null).toCbor()
 		val sessionTranscriptBs = encodeCbor(sessionTranscript!!)
 		val sessionTranscriptBytes = encodeCbor(
 			(24 to sessionTranscriptBs).toCbor()
 		)
-		val coseKey = decodeCbor(peerCoseKey?: eReaderKeyBytes)
-		val x = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes()!!
-		val y = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes()!!
+		val coseKey = runCatching { decodeCbor(peerCoseKey?: eReaderKeyBytes) }.getOrNull()
+		val x = coseKey?.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-2)))?.asBytes() ?: return null
+		val y = coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-3)))?.asBytes() ?: return null
 		val publicKey = byteArrayOf(0x04) + x + y
-		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes,publicKey)!!
+		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes,publicKey)
 	}
 
 	override suspend fun connect() {
@@ -197,7 +197,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 		}
 
 		override fun onPeerConnected() {
-			reportConnected()
+//			reportConnected()
 			gattServer?.stopAdvertising()
 		}
 
@@ -225,6 +225,10 @@ internal class MdlPeripheralServerModeTransportProtocol(
 						reportTransportSpecificSessionTermination()
 						GattRequestResult(isSuccessful = true)
 					}
+					value[0] == 0x01.toByte() -> {
+						reportConnected()
+						GattRequestResult(isSuccessful = true)
+					}
 					else -> {
 						reportError(Error("Invalid value for state characteristic"))
 						GattRequestResult(isSuccessful = false)
@@ -245,6 +249,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 
 		override fun onPeerConnected() {
 			reportConnected()
+			gattClient?.writeCharacteristicNonChunked(characteristicStateUuid, byteArrayOf(0x01));
 		}
 
 		override fun onPeerDisconnected() {

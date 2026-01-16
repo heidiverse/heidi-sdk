@@ -79,7 +79,7 @@ internal class MdlCentralClientModeTransportProtocol(
 	* as they are part of the session transcript and also the peer public key.
 	* For the mDl reader we need the public key, which was presented in the QR-Code.
 	* */
-	override fun getSessionCipher(engagementBytes: ByteArray, eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?): SessionCipher {
+	override fun getSessionCipher(engagementBytes: ByteArray, eReaderKeyBytes: ByteArray, peerCoseKey: ByteArray?): SessionCipher? {
 		sessionTranscript = listOf(24 to engagementBytes, 24 to eReaderKeyBytes, Value.Null).toCbor()
 		val sessionTranscriptBs = encodeCbor(sessionTranscript!!)
 		val sessionTranscriptBytes = encodeCbor(
@@ -87,10 +87,10 @@ internal class MdlCentralClientModeTransportProtocol(
 		)
 		// Use the peerKey if we are the mdl reader
 		val coseKey = decodeCbor(peerCoseKey ?: eReaderKeyBytes)
-		val x = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes()!!
-		val y = coseKey.asOrderedObject()!!.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes()!!
+		val x = coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes() ?: return null
+		val y = coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes() ?: return null
 		val publicKey = byteArrayOf(0x04) + x + y
-		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes, publicKey)!!
+		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes, publicKey)
 	}
 
 	override suspend fun connect() {
@@ -260,7 +260,8 @@ internal class MdlCentralClientModeTransportProtocol(
 		}
 
 		override fun onPeerConnected() {
-			reportConnected()
+			// We report connected as soon as we start writing
+			// the on the state characteristic (or rather when we receive the callback)
 			gattClient?.writeCharacteristicNonChunked(characteristicStateUuid, byteArrayOf(0x01));
 		}
 

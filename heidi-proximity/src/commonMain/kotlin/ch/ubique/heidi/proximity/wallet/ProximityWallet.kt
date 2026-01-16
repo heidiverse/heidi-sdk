@@ -23,12 +23,9 @@ import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
-import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCentralClientModeTransportProtocol
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCharacteristicsFactory
+import ch.ubique.heidi.proximity.protocol.mdl.MdlCoseKey
+import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
-import ch.ubique.heidi.proximity.protocol.mdl.MdlPeripheralServerModeTransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionData
 import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionEstablishment
 import ch.ubique.heidi.proximity.protocol.mdl.MdlTransportProtocol
@@ -43,6 +40,7 @@ import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
 import ch.ubique.heidi.proximity.verifier.TerminationReason
+import ch.ubique.heidi.proximity.util.ProximityMdlUtils
 import ch.ubique.heidi.proximity.util.logPayloadDebug
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -60,8 +58,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
-import uniffi.heidi_crypto_rust.SoftwareKeyPair
-import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.decodeCbor
@@ -74,9 +70,41 @@ class ProximityWallet private constructor(
 	private val engagementBuilder: EngagementBuilder?,
 	private val transportProtocol: TransportProtocol,
 	private var sessionCipher: SessionCipher? = null,
-	var isDcApi: Boolean = false
+	var isDcApi: Boolean = false,
+	var isReverse : Boolean = false
 ) {
 	companion object {
+		fun createReverse(	protocol: ProximityProtocol,
+							  scope: CoroutineScope,
+						   readerEngagement: String
+						   ) : ProximityWallet {
+			return when (protocol) {
+				ProximityProtocol.MDL -> {
+					val keypair = EphemeralKey(Role.SK_DEVICE)
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
+					val readerEngagement = MdlEngagement.fromQrCode(readerEngagement)
+
+					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, readerEngagement?.centralClientUuid,  readerEngagement?.peripheralServerUuid, keypair)
+					val engagementBuilder = MdlEngagementBuilder(
+						"",
+						coseKey,
+						null,
+						null,
+						false,
+						transportProtocol.peripheralServerModeTransportProtocol != null,
+						capabilities = ProximityMdlUtils.defaultDcApiCapabilities()
+					)
+					// derive session key
+					val eReaderKey = readerEngagement!!.coseKey
+					val sessionCipher = (transportProtocol as MdlTransportProtocolExtensions).getSessionCipher(engagementBuilder.getEngagementBytes(), eReaderKey)
+
+					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol, sessionCipher, isReverse = true)
+				}
+				ProximityProtocol.OPENID4VP -> {
+					throw NotImplementedError("Openid4VP cannot use reverse iso engagement")
+				}
+			}
+		}
 		fun create(
 			protocol: ProximityProtocol,
 			scope: CoroutineScope,
@@ -86,21 +114,18 @@ class ProximityWallet private constructor(
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
 					val keypair = EphemeralKey(Role.SK_DEVICE)
-					val coseKey = encodeCbor(mapOf(
-						//ECDH
-						-1 to 1,
-						// EC
-						1 to 2,
-						//x
-						-2 to keypair.publicKey().slice(1..<33).toByteArray(),
-						//y
-						-3 to keypair.publicKey().slice(33..<65).toByteArray(),
-					).toCbor())
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, Uuid.parse(serviceUuid),  Uuid.parse(peripheralServerUuid!!), keypair)
-					val engagementBuilder = MdlEngagementBuilder("", coseKey, Uuid.parse(serviceUuid), Uuid.parse(peripheralServerUuid!!), false, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
-						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
-					)))
+					val engagementBuilder = MdlEngagementBuilder(
+						"",
+						coseKey,
+						Uuid.parse(serviceUuid),
+						Uuid.parse(peripheralServerUuid!!),
+						false,
+						transportProtocol.peripheralServerModeTransportProtocol != null,
+						capabilities = ProximityMdlUtils.defaultDcApiCapabilities()
+					)
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
@@ -119,23 +144,20 @@ class ProximityWallet private constructor(
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
 					val keypair = EphemeralKey(Role.SK_DEVICE)
-					val coseKey = encodeCbor(mapOf(
-						//ECDH
-						-1 to 1,
-						// EC
-						1 to 2,
-						//x
-						-2 to keypair.publicKey().slice(1..<33).toByteArray(),
-						//y
-						-3 to keypair.publicKey().slice(33..<65).toByteArray(),
-					).toCbor())
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET,serviceUuid, peripheralServerUuid!!, keypair)
 					//TODO: we probably should expose the lis of capabilities somehow to the constructor, or at least let the constructor
 					// choose, which protocols we wish to support.
-					val engagementBuilder = MdlEngagementBuilder("", coseKey, serviceUuid, peripheralServerUuid!!, transportProtocol.centralClientModeTransportProtocol != null, transportProtocol.peripheralServerModeTransportProtocol != null,capabilities = MdlCapabilities(mapOf(
-						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
-					)))
+					val engagementBuilder = MdlEngagementBuilder(
+						"",
+						coseKey,
+						serviceUuid,
+						peripheralServerUuid!!,
+						transportProtocol.centralClientModeTransportProtocol != null,
+						transportProtocol.peripheralServerModeTransportProtocol != null,
+						capabilities = ProximityMdlUtils.defaultDcApiCapabilities()
+					)
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
@@ -151,6 +173,8 @@ class ProximityWallet private constructor(
 
 	private var verifierName: String? = null
 
+	private var deviceEngagementSent = false
+
 	init {
 		transportProtocol.setListener(
 			object : TransportProtocol.Listener {
@@ -160,6 +184,14 @@ class ProximityWallet private constructor(
 
 				override fun onConnected() {
 					walletStateMutable.update { ProximityWalletState.Connected(verifierName ?: "Unknown verifier") }
+					this@ProximityWallet.scope.launch {
+						if(protocol == ProximityProtocol.MDL) {
+							if(isReverse && !deviceEngagementSent) {
+								sendDeviceEngagement()
+								deviceEngagementSent = true
+							}
+						}
+					}
 				}
 
 				override fun onDisconnected() {
@@ -203,14 +235,30 @@ class ProximityWallet private constructor(
 		scope.launch(Dispatchers.IO) {
 			when (protocol) {
 				ProximityProtocol.MDL -> {
-					walletStateMutable.update {
-						ProximityWalletState.ReadyForEngagement(engagementBuilder!!.createQrCodeForEngagement())
+					if(!this@ProximityWallet.isReverse) {
+						walletStateMutable.update {
+							ProximityWalletState.ReadyForEngagement(engagementBuilder!!.createQrCodeForEngagement())
+						}
+					} else {
+						walletStateMutable.update {
+							ProximityWalletState.Connecting(verifierName)
+						}
 					}
 					transportProtocol.connect()
 				}
 				ProximityProtocol.OPENID4VP -> transportProtocol.connect()
 			}
 		}
+	}
+
+	fun sendDeviceEngagement(): Boolean {
+		val engagementData = (engagementBuilder as MdlEngagementBuilder).getEngagementBytes()
+		transportProtocol.sendMessage(engagementData) { sent, total ->
+			val progress = if (total > 0) sent.toDouble() / total.toDouble() else null
+			Logger("BT").debug("$progress %")
+		}
+
+		return true
 	}
 
 	fun submitDocument(data: ByteArray): Boolean {
@@ -234,8 +282,6 @@ class ProximityWallet private constructor(
 				markSubmissionCompleted()
 			}
 		}
-		// Fallback completion in case progress callbacks do not hit exactly 1.0
-		markSubmissionCompleted()
 
 		return true
 	}
@@ -292,9 +338,9 @@ class ProximityWallet private constructor(
 						// The reader selected dcAPI
 						if(sessionEstablishment.dcApiSelected == true) {
 							isDcApi = true
-							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
-							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
-							val origin = "iso-18013-5://${sessionTranscriptBytesHash}"
+							val origin = ProximityMdlUtils.buildIsoOriginFromSessionTranscript(
+								(transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!
+							)
 							//TODO: handle multiple requests and such
 							//TODO: we should choose which protocols we support and wish (e.g .signed not signed)
 							val dcRequest = Json.decodeFromString<JsonObject>(result.decodeToString())
@@ -344,6 +390,11 @@ class ProximityWallet private constructor(
 							disconnect()
 							return@launch
 						}
+						// if session data contains the dcApiSelected flag
+						// we set isDcApi to true.
+						sessionData.dcApiSelected?.let {
+							isDcApi = it
+						}
 						if (sessionData.status != null) {
 							Logger.debug("Wallet received terminal status=${sessionData.status}, disconnecting")
 							if (!markSubmissionCompleted()) {
@@ -358,39 +409,47 @@ class ProximityWallet private constructor(
 							disconnect()
 							return@launch
 						}
-						sessionData.shaSum?.let { expectedSha ->
-							val actualSha = sha256Rs(encryptedPayload)
-							if (!expectedSha.contentEquals(actualSha)) {
-								Logger.debug(
-									"Wallet received session data sha mismatch expected=${base64UrlEncode(expectedSha)} actual=${base64UrlEncode(actualSha)}"
-								)
-								walletStateMutable.update { ProximityWalletState.Error(Error("MDL payload hash mismatch")) }
+						val data = when (val result = ProximityMdlUtils.decryptAndValidatePayload(
+							encryptedPayload,
+							sessionData.shaSum,
+							sessionCipher,
+						)) {
+							is ProximityMdlUtils.PayloadDecryptResult.Success -> result.data
+							is ProximityMdlUtils.PayloadDecryptResult.Failure -> {
+								Logger.debug("Wallet received session data ${result.debugMessage}")
+								val errorMessage = when (result.type) {
+									ProximityMdlUtils.PayloadDecryptFailureType.SHA_MISMATCH -> "MDL payload hash mismatch"
+									ProximityMdlUtils.PayloadDecryptFailureType.MISSING_CIPHER -> "Missing session cipher"
+									ProximityMdlUtils.PayloadDecryptFailureType.DECRYPT_FAILED -> "Failed to decrypt session data"
+								}
+								walletStateMutable.update { ProximityWalletState.Error(Error(errorMessage)) }
 								disconnect()
 								return@launch
 							}
 						}
-						val currentCipher = sessionCipher ?: run {
-							Logger.debug("Wallet missing session cipher while processing message, disconnecting")
-							walletStateMutable.update { ProximityWalletState.Error(Error("Missing session cipher")) }
-							disconnect()
-							return@launch
-						}
-						val data = currentCipher.decrypt(encryptedPayload) ?: run {
-							Logger.debug("Wallet failed to decrypt payload of size ${encryptedPayload.size}")
-							walletStateMutable.update { ProximityWalletState.Error(Error("Failed to decrypt session data")) }
-							disconnect()
-							return@launch
-						}
 
 						if(isDcApi) {
 							isDcApi = true
-							val sessionTranscriptBytes = encodeCbor ((transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!)
-							val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
 
-							val vpRequest = data.decodeToString()
-							walletStateMutable.update {
-								ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(vpRequest, origin = "iso-18013-5://${sessionTranscriptBytesHash}"))
-							}
+							val origin = ProximityMdlUtils.buildIsoOriginFromSessionTranscript(
+								(transportProtocol as MdlTransportProtocolExtensions).sessionTranscript!!
+							)
+							//TODO: handle multiple requests and such
+							//TODO: we should choose which protocols we support and wish (e.g .signed not signed)
+							val dcRequest = Json.decodeFromString<JsonObject>(data.decodeToString())
+							// we just use the first request
+							runCatching {  dcRequest["requests"]!!.jsonArray.getOrNull(0)!!.jsonObject["data"]!!.jsonObject["request"]!!.jsonPrimitive.content }
+								.onFailure { error ->
+									walletStateMutable.update {
+										ProximityWalletState.Error(error)
+									}
+								}
+								.onSuccess { result ->
+									// Update our state to openid4vp document selection (and set the origin to the session transcript hash)
+									walletStateMutable.update {
+										ProximityWalletState.RequestingDocuments(DocumentRequest.OpenId4Vp(result, origin = origin))
+									}
+								}
 						} else {
 							val request = decodeCbor(data)
 							if(request.get("docRequests") != Value.Null) {

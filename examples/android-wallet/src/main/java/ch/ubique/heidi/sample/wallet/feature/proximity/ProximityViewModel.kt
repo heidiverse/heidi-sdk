@@ -24,6 +24,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ch.ubique.heidi.credentials.ClaimsPointer
 import ch.ubique.heidi.credentials.SdJwt
+import ch.ubique.heidi.credentials.get
 import ch.ubique.heidi.credentials.toClaimsPointer
 import ch.ubique.heidi.dcql.Attribute
 import ch.ubique.heidi.dcql.AttributeType
@@ -35,7 +36,9 @@ import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.wallet.ProximityWallet
 import ch.ubique.heidi.proximity.wallet.ProximityWalletState
 import ch.ubique.heidi.util.extensions.asString
+import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -76,13 +79,14 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 
 	fun startEngagement(qrCodeData: String) {
 		viewModelScope.launch {
-			val qrCodeUri = Uri.parse(qrCodeData)
-			val verifierName = qrCodeUri.getQueryParameter("name")!!
-			val publicKey = qrCodeUri.getQueryParameter("key")
-			val serviceUuid = Uuid.parse(qrCodeUri.getQueryParameter("uuid")!!)
+//			val qrCodeUri = Uri.parse(qrCodeData)
+//			val verifierName = qrCodeUri.getQueryParameter("name")!!
+//			val publicKey = qrCodeUri.getQueryParameter("key")
+//			val serviceUuid = Uuid.parse(qrCodeUri.getQueryParameter("uuid")!!)
 
-			wallet = ProximityWallet.create(ProximityProtocol.OPENID4VP, viewModelScope, serviceUuid)
-			wallet.startEngagement(verifierName)
+			wallet = ProximityWallet.createReverse(ProximityProtocol.MDL, viewModelScope, qrCodeData)
+			wallet.startEngagement("Blub")
+
 			startCollectingWalletState()
 		}
 	}
@@ -148,8 +152,9 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 		}
 	}
 	var dcqlQuery : DcqlQuery? = null
+	var collectingJob : Job? = null
 	private fun startCollectingWalletState() {
-		viewModelScope.launch {
+		collectingJob = viewModelScope.launch {
 			wallet.walletState.collect { state ->
 				proximityStateMutable.value = state
 				if (state is ProximityWalletState.RequestingDocuments) {
@@ -168,8 +173,13 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 		}
 	}
 	fun reset() {
-		wallet.disconnect()
+		if(::wallet.isInitialized) {
+			wallet.disconnect()
+			collectingJob?.cancel()
+		}
+
 	}
+
 }
 
 class TestSigner(private val kp : SoftwareKeyPair) : SignatureCreator {

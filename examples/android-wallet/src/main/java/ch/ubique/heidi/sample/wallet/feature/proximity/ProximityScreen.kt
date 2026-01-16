@@ -22,6 +22,7 @@ package ch.ubique.heidi.sample.wallet.feature.proximity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +34,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import ch.ubique.heidi.proximity.wallet.ProximityWalletState
 import ch.ubique.heidi.sample.wallet.compose.components.QrCodeImage
@@ -55,18 +60,40 @@ fun ProximityScreen(
 			targetState = proximityState.value,
 			contentKey = { it.javaClass.simpleName },
 		) { state ->
+			var reverseEngagement by remember { mutableStateOf(false) }
 
-			Box(Modifier.fillMaxSize()) {
-				when (state) {
-					is ProximityWalletState.Initial -> {
-//						QrScannerScreen(
-//							qrScannerViewModel,
-//							scannerCallbacks,
-//						)
+			Column(Modifier.fillMaxSize()) {
+				Row {
+					Button(onClick = {
+						reverseEngagement = !reverseEngagement
+					}) {
+						Text("switch engagement")
+					}
+					Button(onClick = {
+						reverseEngagement = false
+						onResetState()
+					}){
+						Text("Reset")
+					}
+					if(!reverseEngagement) {
 						Button(onClick = {
 							onStartEngagementClicked()
 						}) {
 							Text("Start")
+						}
+					}
+
+				}
+
+				when (state) {
+					is ProximityWalletState.Initial, ProximityWalletState.Disconnected -> {
+						if(reverseEngagement) {
+							QrScannerScreen(
+								qrScannerViewModel,
+								scannerCallbacks,
+							)
+						} else {
+							Text("Waiting to start engagement")
 						}
 					}
 					is ProximityWalletState.ReadyForEngagement -> {
@@ -95,19 +122,9 @@ fun ProximityScreen(
 					}
 					is ProximityWalletState.PresentationCompleted -> {
 						Text("Verification completed")
-						Button(onClick = {
-							onResetState()
-						}){
-							Text("Reset")
-						}
 					}
 					is ProximityWalletState.Disconnected -> {
 						Text("Disconnected")
-						Button(onClick = {
-							onStartEngagementClicked()
-						}) {
-							Text("Start")
-						}
 					}
 					is ProximityWalletState.Error -> {
 						Text(state.throwable.stackTraceToString())

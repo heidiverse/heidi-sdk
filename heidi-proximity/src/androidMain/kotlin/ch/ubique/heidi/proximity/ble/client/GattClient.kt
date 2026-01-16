@@ -29,7 +29,6 @@ import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.ble.gatt.BleGattService
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCentralClientModeTransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlPeripheralServerModeTransportProtocol
 import ch.ubique.heidi.proximity.ble.server.ChunkAccumulator
 import ch.ubique.heidi.proximity.ble.server.ChunkProcessingResult
@@ -269,7 +268,7 @@ internal class GattClient(
             BluetoothProfile.STATE_DISCONNECTED -> {
                 chunkAccumulator.clear()
                 writeQueues.clear()
-                cccdCoordinator.reset()
+                coordinator.reset()
                 mtuRequested = false
                 cachedCharacteristicValueSize = 0
                 reportPeerDisconnected()
@@ -277,7 +276,7 @@ internal class GattClient(
         }
     }
 
-    private val cccdCoordinator = CccdCoordinator { gatt -> requestMtuSafely(gatt) }
+    private val coordinator = Coordinator { gatt -> requestMtuSafely(gatt) }
     private var mtuRequested = false
 
     // Start by bumping MTU, callback in onMtuChanged()...
@@ -324,7 +323,7 @@ internal class GattClient(
 
         characteristics = requireListener().onServicesDiscovered(gatt.services.map { BleGattService(it) })
 
-        cccdCoordinator.reset()
+        coordinator.reset()
 
         characteristics.forEach { c ->
             val characteristic = c.characteristic
@@ -344,13 +343,13 @@ internal class GattClient(
                 } else {
                     BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 }
-                cccdCoordinator.enqueue(cccd, value)
+                coordinator.enqueue(cccd, value)
             }
         }
 
-        if (cccdCoordinator.hasPendingDescriptors()) {
-            cccdCoordinator.deferMtuUntilComplete()
-            cccdCoordinator.flush(gatt)
+        if (coordinator.hasPendingDescriptors()) {
+            coordinator.deferMtuUntilComplete()
+            coordinator.flush(gatt)
         } else {
             requestMtuSafely(gatt)
         }
@@ -364,7 +363,7 @@ internal class GattClient(
             reportError(Error("Error changing MTU, status: $status"))
             return
         }
-
+        Logger(TAG).debug("Successfully changed MTU, reporting to listeners")
         negotiatedMtu = mtu
         requireListener().onMtuChanged(mtu)
 
@@ -458,7 +457,7 @@ internal class GattClient(
 
     override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
         requireListener().onDescriptorWrite(descriptor)
-        cccdCoordinator.onDescriptorWriteComplete(gatt)
+        coordinator.onDescriptorWriteComplete(gatt)
     }
 
     private fun reportPeerConnecting() {
@@ -529,6 +528,7 @@ internal class GattClient(
     }
 
     private fun drainWritingQueue(charUuid: UUID) {
+        Logger(TAG).debug("Some commands are not finished yet:  ${coordinator.hasPendingDescriptors()}")
         val chunk = writeQueues.poll(charUuid) ?: return
 
         if (chunk.isShutdownMessage()) {
@@ -552,7 +552,7 @@ internal class GattClient(
                 gatt = null
                 chunkAccumulator.clear()
                 writeQueues.clear()
-                cccdCoordinator.reset()
+                coordinator.reset()
                 mtuRequested = false
                 cachedCharacteristicValueSize = 0
             }
@@ -664,7 +664,7 @@ internal class GattClient(
         val value: ByteArray
     )
 
-    private inner class CccdCoordinator(
+    private inner class Coordinator(
         private val onAllDescriptorsWritten: (BluetoothGatt) -> Unit
     ) {
         private val queue = ArrayDeque<PendingDescriptor>()

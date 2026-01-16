@@ -60,7 +60,7 @@ internal class MdlTransportProtocol(
             peripheralServerModeTransportProtocol = null
         }
         if (peripheralServerModeTransportProtocol != null && centralClientModeTransportProtocol != null) {
-            peripheralServerModeTransportProtocol = null
+            centralClientModeTransportProtocol = null
         }
     }
 
@@ -117,11 +117,11 @@ internal class MdlTransportProtocol(
         engagementBytes: ByteArray,
         eReaderKeyBytes: ByteArray,
         peerCoseKey: ByteArray?
-    ): SessionCipher {
-        if(centralClientModeTransportProtocol?.isConnected == true) {
-            return centralClientModeTransportProtocol!!.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
+    ): SessionCipher? {
+        if(centralClientModeTransportProtocol != null) {
+            return centralClientModeTransportProtocol?.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
         }
-        return peripheralServerModeTransportProtocol!!.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
+        return peripheralServerModeTransportProtocol?.getSessionCipher(engagementBytes, eReaderKeyBytes, peerCoseKey)
     }
 
 }
