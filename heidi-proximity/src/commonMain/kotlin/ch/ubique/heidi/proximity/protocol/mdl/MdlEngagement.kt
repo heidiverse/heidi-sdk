@@ -22,9 +22,11 @@ data class MdlEngagement(val coseKey: ByteArray,
 						 val peripheralServerUuid: Uuid?,
 						 val centralClientModeSupported: Boolean,
 						 val peripheralServerModeSupported: Boolean,
-						 val capabilities: MdlCapabilities? = null,
-						 val originalData : ByteArray) : EngagementBuilder {
+							 val capabilities: MdlCapabilities? = null,
+							 val originalData : ByteArray) : EngagementBuilder {
 	companion object {
+		private const val MDL_ENGAGEMENT_VERSION = "1.1"
+
 		fun fromQrCode(qrcodeData: String) : MdlEngagement? {
 			val originalData = base64UrlDecode(qrcodeData)
 			return fromCbor(originalData)
@@ -64,7 +66,7 @@ data class MdlEngagement(val coseKey: ByteArray,
 			}
 		}
 
-		val capabilities = if(version?.asString() == "1.1") {
+		val capabilities = if(version?.asString() == MDL_ENGAGEMENT_VERSION) {
 			// we could have capabilities
 			deviceEngagement[Value.Number(JsonNumber.Integer(6))]?.asOrderedObject()?.let { capabilitiesObject ->
 				val caps = mutableMapOf<Int, MdlCapability>()
@@ -102,7 +104,7 @@ data class MdlEngagement(val coseKey: ByteArray,
 			bleOptions.put(11, centralClientUuid)
 		}
 		val deviceEngagement = mutableMapOf(
-			0 to "1.1",
+			0 to MDL_ENGAGEMENT_VERSION,
 			1 to listOf(
 				1,
 				24 to coseKey.toCbor()
