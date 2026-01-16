@@ -24,9 +24,7 @@ import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
-import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCoseKey
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionData
@@ -38,6 +36,7 @@ import ch.ubique.heidi.proximity.protocol.openid4vp.OpenId4VpTransportProtocol
 import ch.ubique.heidi.util.extensions.json
 import ch.ubique.heidi.util.extensions.toCbor
 import ch.ubique.heidi.util.log.Logger
+import ch.ubique.heidi.proximity.util.ProximityMdlUtils
 import ch.ubique.heidi.proximity.util.logPayloadDebug
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,11 +80,15 @@ class ProximityVerifier<T> private constructor(
 					val coseKeyEncoded = encodeCbor(coseKey)
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, Uuid.parse(serviceUuid),   peripheralServerUuid?.let { Uuid.parse(it)}, publicKey)
-					val engagementBuilder = MdlEngagementBuilder("", coseKeyEncoded, Uuid.parse(serviceUuid),  peripheralServerUuid?.let {
-						Uuid.parse(it)
-					}, true, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
-						MdlCapabilities.DC_API_CAPABILITY_KEY to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
-					)))
+					val engagementBuilder = MdlEngagementBuilder(
+						"",
+						coseKeyEncoded,
+						Uuid.parse(serviceUuid),
+						peripheralServerUuid?.let { Uuid.parse(it) },
+						true,
+						transportProtocol.peripheralServerModeTransportProtocol != null,
+						capabilities = ProximityMdlUtils.defaultDcApiCapabilities()
+					)
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester, readerKey = coseKey, isDcApi = preferDcApi)
 				}
 				ProximityProtocol.OPENID4VP -> {

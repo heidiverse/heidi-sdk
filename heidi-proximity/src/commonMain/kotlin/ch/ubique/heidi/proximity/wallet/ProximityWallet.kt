@@ -23,9 +23,7 @@ import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
-import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCoseKey
-import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
 import ch.ubique.heidi.proximity.protocol.mdl.MdlSessionData
@@ -42,6 +40,7 @@ import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
 import ch.ubique.heidi.proximity.verifier.TerminationReason
+import ch.ubique.heidi.proximity.util.ProximityMdlUtils
 import ch.ubique.heidi.proximity.util.logPayloadDebug
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
@@ -87,9 +86,15 @@ class ProximityWallet private constructor(
 					val readerEngagement = MdlEngagement.fromQrCode(readerEngagement)
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, readerEngagement?.centralClientUuid,  readerEngagement?.peripheralServerUuid, keypair)
-					val engagementBuilder = MdlEngagementBuilder("", coseKey, null, null, false, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
-						MdlCapabilities.DC_API_CAPABILITY_KEY to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
-					)))
+					val engagementBuilder = MdlEngagementBuilder(
+						"",
+						coseKey,
+						null,
+						null,
+						false,
+						transportProtocol.peripheralServerModeTransportProtocol != null,
+						capabilities = ProximityMdlUtils.defaultDcApiCapabilities()
+					)
 					// derive session key
 					val eReaderKey = readerEngagement!!.coseKey
 					val sessionCipher = (transportProtocol as MdlTransportProtocolExtensions).getSessionCipher(engagementBuilder.getEngagementBytes(), eReaderKey)
@@ -113,9 +118,15 @@ class ProximityWallet private constructor(
 					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, Uuid.parse(serviceUuid),  Uuid.parse(peripheralServerUuid!!), keypair)
-					val engagementBuilder = MdlEngagementBuilder("", coseKey, Uuid.parse(serviceUuid), Uuid.parse(peripheralServerUuid!!), false, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
-						MdlCapabilities.DC_API_CAPABILITY_KEY to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
-					)))
+					val engagementBuilder = MdlEngagementBuilder(
+						"",
+						coseKey,
+						Uuid.parse(serviceUuid),
+						Uuid.parse(peripheralServerUuid!!),
+						false,
+						transportProtocol.peripheralServerModeTransportProtocol != null,
+						capabilities = ProximityMdlUtils.defaultDcApiCapabilities()
+					)
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
@@ -139,9 +150,15 @@ class ProximityWallet private constructor(
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET,serviceUuid, peripheralServerUuid!!, keypair)
 					//TODO: we probably should expose the lis of capabilities somehow to the constructor, or at least let the constructor
 					// choose, which protocols we wish to support.
-					val engagementBuilder = MdlEngagementBuilder("", coseKey, serviceUuid, peripheralServerUuid!!, transportProtocol.centralClientModeTransportProtocol != null, transportProtocol.peripheralServerModeTransportProtocol != null,capabilities = MdlCapabilities(mapOf(
-						MdlCapabilities.DC_API_CAPABILITY_KEY to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
-					)))
+					val engagementBuilder = MdlEngagementBuilder(
+						"",
+						coseKey,
+						serviceUuid,
+						peripheralServerUuid!!,
+						transportProtocol.centralClientModeTransportProtocol != null,
+						transportProtocol.peripheralServerModeTransportProtocol != null,
+						capabilities = ProximityMdlUtils.defaultDcApiCapabilities()
+					)
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
