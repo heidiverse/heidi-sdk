@@ -25,6 +25,7 @@ import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
+import ch.ubique.heidi.proximity.protocol.mdl.MdlCoseKey
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagement
 import ch.ubique.heidi.proximity.protocol.mdl.MdlEngagementBuilder
@@ -76,22 +77,14 @@ class ProximityVerifier<T> private constructor(
 			val publicKey = EphemeralKey(Role.SK_READER)
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
-					val coseKey = mapOf(
-						//ECDH
-						-1 to 1,
-						// EC
-						1 to 2,
-						//x
-						-2 to publicKey.publicKey().slice(1..<33).toByteArray(),
-						//y
-						-3 to publicKey.publicKey().slice(33..<65).toByteArray(),
-					).toCbor()
+					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey())
+					val coseKeyEncoded = encodeCbor(coseKey)
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, Uuid.parse(serviceUuid),   peripheralServerUuid?.let { Uuid.parse(it)}, publicKey)
-					val engagementBuilder = MdlEngagementBuilder("", encodeCbor(coseKey), Uuid.parse(serviceUuid),  peripheralServerUuid?.let {
+					val engagementBuilder = MdlEngagementBuilder("", coseKeyEncoded, Uuid.parse(serviceUuid),  peripheralServerUuid?.let {
 						Uuid.parse(it)
 					}, true, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
-						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
+						MdlCapabilities.DC_API_CAPABILITY_KEY to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
 					)))
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester, readerKey = coseKey, isDcApi = preferDcApi)
 				}
@@ -114,16 +107,7 @@ class ProximityVerifier<T> private constructor(
 			val publicKey = EphemeralKey(Role.SK_READER)
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
-					val coseKey = mapOf(
-						//ECDH
-						-1 to 1,
-						// EC
-						1 to 2,
-						//x
-						-2 to publicKey.publicKey().slice(1..<33).toByteArray(),
-						//y
-						-3 to publicKey.publicKey().slice(33..<65).toByteArray(),
-					).toCbor()
+					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey())
 					val engagementData = qrcodeData ?: return null
 					val deviceEngagement = MdlEngagement.fromQrCode(engagementData)
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid,  deviceEngagement?.peripheralServerUuid, publicKey)

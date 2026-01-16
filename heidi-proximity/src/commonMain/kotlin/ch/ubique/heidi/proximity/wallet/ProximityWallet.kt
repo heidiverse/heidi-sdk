@@ -24,6 +24,7 @@ import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
+import ch.ubique.heidi.proximity.protocol.mdl.MdlCoseKey
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCentralClientModeTransportProtocol
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCharacteristicsFactory
@@ -87,21 +88,12 @@ class ProximityWallet private constructor(
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
 					val keypair = EphemeralKey(Role.SK_DEVICE)
-					val coseKey = encodeCbor(mapOf(
-						//ECDH
-						-1 to 1,
-						// EC
-						1 to 2,
-						//x
-						-2 to keypair.publicKey().slice(1..<33).toByteArray(),
-						//y
-						-3 to keypair.publicKey().slice(33..<65).toByteArray(),
-					).toCbor())
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 					val readerEngagement = MdlEngagement.fromQrCode(readerEngagement)
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, readerEngagement?.centralClientUuid,  readerEngagement?.peripheralServerUuid, keypair)
 					val engagementBuilder = MdlEngagementBuilder("", coseKey, null, null, false, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
-						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
+						MdlCapabilities.DC_API_CAPABILITY_KEY to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
 					)))
 					// derive session key
 					val eReaderKey = readerEngagement!!.coseKey
@@ -123,20 +115,11 @@ class ProximityWallet private constructor(
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
 					val keypair = EphemeralKey(Role.SK_DEVICE)
-					val coseKey = encodeCbor(mapOf(
-						//ECDH
-						-1 to 1,
-						// EC
-						1 to 2,
-						//x
-						-2 to keypair.publicKey().slice(1..<33).toByteArray(),
-						//y
-						-3 to keypair.publicKey().slice(33..<65).toByteArray(),
-					).toCbor())
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, Uuid.parse(serviceUuid),  Uuid.parse(peripheralServerUuid!!), keypair)
 					val engagementBuilder = MdlEngagementBuilder("", coseKey, Uuid.parse(serviceUuid), Uuid.parse(peripheralServerUuid!!), false, transportProtocol.peripheralServerModeTransportProtocol != null, capabilities = MdlCapabilities(mapOf(
-						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
+						MdlCapabilities.DC_API_CAPABILITY_KEY to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
 					)))
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
@@ -156,22 +139,13 @@ class ProximityWallet private constructor(
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
 					val keypair = EphemeralKey(Role.SK_DEVICE)
-					val coseKey = encodeCbor(mapOf(
-						//ECDH
-						-1 to 1,
-						// EC
-						1 to 2,
-						//x
-						-2 to keypair.publicKey().slice(1..<33).toByteArray(),
-						//y
-						-3 to keypair.publicKey().slice(33..<65).toByteArray(),
-					).toCbor())
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
 					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET,serviceUuid, peripheralServerUuid!!, keypair)
 					//TODO: we probably should expose the lis of capabilities somehow to the constructor, or at least let the constructor
 					// choose, which protocols we wish to support.
 					val engagementBuilder = MdlEngagementBuilder("", coseKey, serviceUuid, peripheralServerUuid!!, transportProtocol.centralClientModeTransportProtocol != null, transportProtocol.peripheralServerModeTransportProtocol != null,capabilities = MdlCapabilities(mapOf(
-						0x44437631 to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
+						MdlCapabilities.DC_API_CAPABILITY_KEY to DcApiCapability(listOf("openid4vp-v1-unsigned", "openid4vp-v1-signed"))
 					)))
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}

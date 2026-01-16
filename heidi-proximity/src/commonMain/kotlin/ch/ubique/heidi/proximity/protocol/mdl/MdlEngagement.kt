@@ -68,9 +68,9 @@ data class MdlEngagement(val coseKey: ByteArray,
 			// we could have capabilities
 			deviceEngagement[Value.Number(JsonNumber.Integer(6))]?.asOrderedObject()?.let { capabilitiesObject ->
 				val caps = mutableMapOf<Int, MdlCapability>()
-				capabilitiesObject[Value.Number(JsonNumber.Integer(0x44437631))]?.let { dcApiCapability ->
+				capabilitiesObject[Value.Number(JsonNumber.Integer(MdlCapabilities.DC_API_CAPABILITY_KEY))]?.let { dcApiCapability ->
 					dcApiCapability.asArray()?.mapNotNull { it.asString() }?.let{
-						caps.put(0x44437631, DcApiCapability(it))
+						caps.put(MdlCapabilities.DC_API_CAPABILITY_KEY, DcApiCapability(it))
 					}
 
 				}

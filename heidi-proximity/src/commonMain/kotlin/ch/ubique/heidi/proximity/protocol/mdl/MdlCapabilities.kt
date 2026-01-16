@@ -4,6 +4,10 @@ import ch.ubique.heidi.util.extensions.toCbor
 import uniffi.heidi_util_rust.Value
 
 class MdlCapabilities(val capabilities: Map<Int, MdlCapability>) {
+	companion object {
+		const val DC_API_CAPABILITY_KEY = 0x44437631
+	}
+
 	fun getValue() : Value {
 		var cborMap = mutableMapOf<Int, Value>()
 		for( (key, value) in this.capabilities ) {
