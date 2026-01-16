@@ -5,7 +5,7 @@ import uniffi.heidi_util_rust.Value
 
 class MdlCapabilities(val capabilities: Map<Int, MdlCapability>) {
 	companion object {
-		const val DC_API_CAPABILITY_KEY = 0x44437631
+		const val DC_API_CAPABILITY_KEY: Int = 0x44437631
 	}
 
 	fun getValue() : Value {

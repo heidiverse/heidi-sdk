@@ -22,11 +22,26 @@ package ch.ubique.heidi.proximity.util
 import ch.ubique.heidi.proximity.protocol.mdl.DcApiCapability
 import ch.ubique.heidi.proximity.protocol.mdl.MdlCapabilities
 import uniffi.heidi_crypto_rust.base64UrlEncode
+import uniffi.heidi_crypto_rust.SessionCipher
 import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.encodeCbor
 
 object ProximityMdlUtils {
+	enum class PayloadDecryptFailureType {
+		SHA_MISMATCH,
+		MISSING_CIPHER,
+		DECRYPT_FAILED,
+	}
+
+	sealed class PayloadDecryptResult {
+		data class Success(val data: ByteArray) : PayloadDecryptResult()
+		data class Failure(
+			val type: PayloadDecryptFailureType,
+			val debugMessage: String,
+		) : PayloadDecryptResult()
+	}
+
 	fun defaultDcApiCapabilities(): MdlCapabilities {
 		return MdlCapabilities(
 			mapOf(
@@ -41,5 +56,33 @@ object ProximityMdlUtils {
 		val sessionTranscriptBytes = encodeCbor(sessionTranscript)
 		val sessionTranscriptBytesHash = base64UrlEncode(sha256Rs(sessionTranscriptBytes))
 		return "iso-18013-5://${sessionTranscriptBytesHash}"
+	}
+
+	fun decryptAndValidatePayload(
+		encryptedPayload: ByteArray,
+		expectedSha: ByteArray?,
+		sessionCipher: SessionCipher?,
+	): PayloadDecryptResult {
+		expectedSha?.let { expected ->
+			val actualSha = sha256Rs(encryptedPayload)
+			if (!expected.contentEquals(actualSha)) {
+				return PayloadDecryptResult.Failure(
+					PayloadDecryptFailureType.SHA_MISMATCH,
+					"sha mismatch expected=${base64UrlEncode(expected)} actual=${base64UrlEncode(actualSha)}",
+				)
+			}
+		}
+
+		val currentCipher = sessionCipher ?: return PayloadDecryptResult.Failure(
+			PayloadDecryptFailureType.MISSING_CIPHER,
+			"missing session cipher",
+		)
+
+		val data = currentCipher.decrypt(encryptedPayload) ?: return PayloadDecryptResult.Failure(
+			PayloadDecryptFailureType.DECRYPT_FAILED,
+			"failed to decrypt payload of size ${encryptedPayload.size}",
+		)
+
+		return PayloadDecryptResult.Success(data)
 	}
 }

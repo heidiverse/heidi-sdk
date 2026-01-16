@@ -45,6 +45,7 @@ import kotlinx.coroutines.flow.update
 import uniffi.heidi_crypto_rust.EphemeralKey
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
+import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.encodeCbor
@@ -322,39 +323,36 @@ class ProximityVerifier<T> private constructor(
 						disconnect()
 						return@launch
 					}
-					sessionData.shaSum?.let { expectedSha ->
-						val actualSha = sha256Rs(encryptedPayload)
-						if (!expectedSha.contentEquals(actualSha)) {
-							Logger.debug(
-								"processMessageReceived sha mismatch expected=${base64UrlEncode(expectedSha)} actual=${base64UrlEncode(actualSha)}, disconnecting"
-							)
-							verifierStateMutable.update { ProximityVerifierState.Error(Error("MDL payload hash mismatch")) }
+					when (val result = ProximityMdlUtils.decryptAndValidatePayload(
+						encryptedPayload,
+						sessionData.shaSum,
+						sessionCipher,
+					)) {
+						is ProximityMdlUtils.PayloadDecryptResult.Success -> {
+							val data = result.data
+							if(isDcApi){
+								// data should be the dcql response
+								val response = documentRequester.verifySubmittedDocuments(data)
+								verifierStateMutable.update {
+									ProximityVerifierState.VerificationResult(response)
+								}
+							} else {
+								// handle mdl device response
+								verifierStateMutable.update {
+									ProximityVerifierState.Error(Error("mdl not yet implemented"))
+								}
+							}
+						}
+						is ProximityMdlUtils.PayloadDecryptResult.Failure -> {
+							Logger.debug("processMessageReceived ${result.debugMessage}, disconnecting")
+							val errorMessage = when (result.type) {
+								ProximityMdlUtils.PayloadDecryptFailureType.SHA_MISMATCH -> "MDL payload hash mismatch"
+								ProximityMdlUtils.PayloadDecryptFailureType.MISSING_CIPHER -> "Missing session cipher"
+								ProximityMdlUtils.PayloadDecryptFailureType.DECRYPT_FAILED -> "Failed to decrypt session data"
+							}
+							verifierStateMutable.update { ProximityVerifierState.Error(Error(errorMessage)) }
 							disconnect()
 							return@launch
-						}
-					}
-					val currentCipher = sessionCipher ?: run {
-						Logger.debug("processMessageReceived sessionCipher is null, disconnecting")
-						verifierStateMutable.update { ProximityVerifierState.Error(Error("Missing session cipher")) }
-						disconnect()
-						return@launch
-					}
-					val data = currentCipher.decrypt(encryptedPayload) ?: run {
-						Logger.debug("processMessageReceived unable to decrypt payload of size ${encryptedPayload.size}")
-						verifierStateMutable.update { ProximityVerifierState.Error(Error("Failed to decrypt session data")) }
-						disconnect()
-						return@launch
-					}
-					if(isDcApi){
-						// data should be the dcql response
-						val response = documentRequester.verifySubmittedDocuments(data)
-						verifierStateMutable.update {
-							ProximityVerifierState.VerificationResult(response)
-						}
-					} else {
-						// handle mdl device response
-						verifierStateMutable.update {
-							ProximityVerifierState.Error(Error("mdl not yet implemented"))
 						}
 					}
 				}

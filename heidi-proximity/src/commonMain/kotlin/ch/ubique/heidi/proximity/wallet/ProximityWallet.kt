@@ -409,28 +409,23 @@ class ProximityWallet private constructor(
 							disconnect()
 							return@launch
 						}
-						sessionData.shaSum?.let { expectedSha ->
-							val actualSha = sha256Rs(encryptedPayload)
-							if (!expectedSha.contentEquals(actualSha)) {
-								Logger.debug(
-									"Wallet received session data sha mismatch expected=${base64UrlEncode(expectedSha)} actual=${base64UrlEncode(actualSha)}"
-								)
-								walletStateMutable.update { ProximityWalletState.Error(Error("MDL payload hash mismatch")) }
+						val data = when (val result = ProximityMdlUtils.decryptAndValidatePayload(
+							encryptedPayload,
+							sessionData.shaSum,
+							sessionCipher,
+						)) {
+							is ProximityMdlUtils.PayloadDecryptResult.Success -> result.data
+							is ProximityMdlUtils.PayloadDecryptResult.Failure -> {
+								Logger.debug("Wallet received session data ${result.debugMessage}")
+								val errorMessage = when (result.type) {
+									ProximityMdlUtils.PayloadDecryptFailureType.SHA_MISMATCH -> "MDL payload hash mismatch"
+									ProximityMdlUtils.PayloadDecryptFailureType.MISSING_CIPHER -> "Missing session cipher"
+									ProximityMdlUtils.PayloadDecryptFailureType.DECRYPT_FAILED -> "Failed to decrypt session data"
+								}
+								walletStateMutable.update { ProximityWalletState.Error(Error(errorMessage)) }
 								disconnect()
 								return@launch
 							}
-						}
-						val currentCipher = sessionCipher ?: run {
-							Logger.debug("Wallet missing session cipher while processing message, disconnecting")
-							walletStateMutable.update { ProximityWalletState.Error(Error("Missing session cipher")) }
-							disconnect()
-							return@launch
-						}
-						val data = currentCipher.decrypt(encryptedPayload) ?: run {
-							Logger.debug("Wallet failed to decrypt payload of size ${encryptedPayload.size}")
-							walletStateMutable.update { ProximityWalletState.Error(Error("Failed to decrypt session data")) }
-							disconnect()
-							return@launch
 						}
 
 						if(isDcApi) {
