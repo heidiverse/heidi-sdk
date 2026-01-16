@@ -38,12 +38,14 @@ import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.jsonObjectOrNull
 import ch.ubique.heidi.util.extensions.jsonPrimitiveOrNull
 import ch.ubique.heidi.util.log.Logger
+import ch.ubique.heidi.visualization.layout.LayoutCardImage
 import ch.ubique.heidi.visualization.layout.LayoutData
 import ch.ubique.heidi.visualization.layout.LayoutType
 import ch.ubique.heidi.visualization.layout.deferredCard
 import ch.ubique.heidi.visualization.oca.OcaType
 import ch.ubique.heidi.visualization.oca.model.OcaBundleJson
 import ch.ubique.heidi.visualization.oca.model.content.AttributeType
+import ch.ubique.heidi.visualization.oca.model.content.TextShade
 import ch.ubique.heidi.visualization.oca.processing.AttributeValue
 import ch.ubique.heidi.visualization.oca.processing.OcaProcessor
 import ch.ubique.heidi.visualization.oca.processing.ProcessedAttribute
@@ -58,6 +60,8 @@ import ch.ubique.heidi.wallet.credentials.metadata.getPublicKey
 import ch.ubique.heidi.wallet.credentials.metadata.toKeyAssurance
 import ch.ubique.heidi.wallet.credentials.oca.OcaRepository
 import ch.ubique.heidi.wallet.credentials.presentation.CredentialSelectionUiModel
+import ch.ubique.heidi.wallet.credentials.signature.Signature
+import ch.ubique.heidi.wallet.credentials.signature.SignatureValidationState
 import ch.ubique.heidi.wallet.resources.StringResourceProvider
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DateTimePeriod
@@ -359,15 +363,54 @@ class ViewModelFactory private constructor(
 						identity.credentials
 					)
 				}
-                CredentialType.OpenBadge303 ->
-                    // TODO: OpenBadge
-                    fallbackIdentityMapper.mapIdentity(
-                        CredentialType.OpenBadge303,
-                        identity,
-                        jsonContent,
-                        activities,
-                        identity.credentials
+                CredentialType.OpenBadge303 -> {
+                    val vc = possibleOpenBadge303 ?: return null
+                    val title = vc.name ?: "Open Badge Credential"
+                    val subtitle = vc.achievement["description"].asString()?.truncate(100) ?: ""
+                    val issuer = vc.issuerName ?: "Open Badge Issuer"
+
+                    val signatureValid = if (vc.isSignatureValid()) {
+                        SignatureValidationState.VALID
+                    } else {
+                        SignatureValidationState.VALID
+                    }
+
+                    val backgroundImage = vc.pngBytes?.let {
+                        LayoutCardImage.Base64(it)
+                    }
+
+                    val card = LayoutData.Card(
+                        credentialName = title,
+                        issuerName = issuer,
+                        title = title,
+                        subtitle = subtitle,
+                        textColor = TextShade.DARK,
+                        cardColor = 0xFFFFFFFF,
+                        backgroundImage = backgroundImage,
+                        overlays = null
                     )
+
+                    IdentityUiModel.IdentityUiCredentialModel(
+                        id = identity.id,
+                        name = identity.name,
+                        card = card,
+                        title = title,
+                        subtitle = subtitle,
+                        signature = Signature(signatureValid, issuer),
+                        detailList = LayoutData.DetailList(emptyList()),
+                        hasEmergencyPass = false,
+                        hasOnlyEmergencyPass = false,
+                        credentials = identity.credentials,
+                        activities = activities,
+                        isPid = false,
+                        isUsable = true,
+                        isRevoked = isRevoked,
+                        isRefreshable = false,
+                        docType = "OpenBadge",
+                        frostBlob = identity.frostBlob,
+                        credentialUiModel = emptyList()
+                    )
+                }
                 CredentialType.Unknown -> null
 			}
 			val newModel = uiModel?.copy(isRevoked = isRevoked)
@@ -617,4 +660,12 @@ class ViewModelFactory private constructor(
 		val ocaProcessor = OcaProcessor(userLanguage = stringResourceProvider.getString("language_key"), payload = oca_json.toString(), ocaBundle = json.decodeFromString<OcaBundleJson>(oca_json.toString()))
 		return ocaProcessor.process(LayoutType.CARD) as LayoutData.Card
 	}
+}
+
+private fun String.truncate(maxLimit: Int): String {
+    return if (this.length > maxLimit) {
+        this.take(maxLimit - 3) + "..."
+    } else {
+        this
+    }
 }

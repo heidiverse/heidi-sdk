@@ -1,5 +1,6 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, io::Cursor, sync::Arc};
 
+use base64::{Engine, prelude::BASE64_STANDARD};
 use heidi_crypto_rust::crypto::{eddsa::EdDsaPublicKey, sha256};
 use heidi_util_rust::value::Value;
 use iref::IriBuf;
@@ -36,6 +37,9 @@ pub struct LdpVC {
 
     /// The original credential
     pub original: String,
+
+    /// Base64 encoded PNG bytes for Open Badges
+    pub png_bytes_b64: Option<String>,
 }
 
 impl LdpVC {
@@ -108,7 +112,27 @@ pub async fn parse_ldp_vc(
         doctype,
         data: vc.into(),
         original,
+        png_bytes_b64: None,
     })
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export(async_runtime = "tokio"))]
+pub async fn parse_open_badges(bytes: Vec<u8>, additional_context: Vec<String>) -> LdpVC {
+    let bytes_b64 = BASE64_STANDARD.encode(&bytes);
+
+    let p = png::Decoder::new(Cursor::new(bytes));
+    let info = p.read_info().unwrap();
+    let mut badge = String::new();
+    for chunk in &info.info().utf8_text {
+        badge.push_str(&chunk.get_text().unwrap());
+    }
+
+    let mut vc = parse_ldp_vc(badge, additional_context)
+        .await
+        .expect("Failed to parse Open Badges VC");
+    vc.png_bytes_b64 = Some(bytes_b64);
+
+    vc
 }
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
@@ -135,6 +159,7 @@ pub fn parse_ldp_vc_compacted(credential: String) -> Result<LdpVC, ParseError> {
         doctype,
         data: vc.into(),
         original,
+        png_bytes_b64: None,
     })
 }
 
