@@ -48,15 +48,33 @@ import uniffi.heidi_util_rust.deflateString
 
 fun StatusList.isRevoked(index: Int) : Boolean {
         return kotlin.runCatching {
-        val decompressed = deflateString(lst)
-        if(index/8 >decompressed.size) {
-            return true
-        }
-        val byteNumber = index / 8
-        val bitIndex = index % 8
-        val statusByte = decompressed[byteNumber].toUByte()
-        val statusBit = statusByte.and((1.shl(bitIndex)).toUByte())
-        statusBit == 1.shl(bitIndex).toUByte()
-    }.getOrNull() ?: true
+                val status = this.getStatus(index) ?: return false
+                status == 1.toByte()
+        }.getOrNull() ?: true
+}
+
+fun StatusList.getStatus(index: Int) : Byte? {
+        return kotlin.runCatching {
+                val decompressed = deflateString(lst)
+                val entrySize = (8U / this.bits).toByte()
+                if(index/entrySize >decompressed.size) {
+                        return null
+                }
+                val byteNumber = index / entrySize
+                val bitIndex = index % entrySize
+                val statusByte = decompressed[byteNumber].toUByte()
+                val statusMask = 255.shr(8 - this.bits.toByte())
+                val statusBits = statusByte.and(
+                        statusMask.shl(bitIndex * this.bits.toInt()).toUByte())
+                        .toInt().shr(bitIndex * this.bits.toInt())
+                statusBits.toByte()
+        }.getOrNull()
+}
+
+fun StatusList.isSuspended(index: Int) : Boolean {
+        return kotlin.runCatching {
+                val status = this.getStatus(index) ?: return false
+                status == 2.toByte()
+        }.getOrNull() ?: true
 }
 
