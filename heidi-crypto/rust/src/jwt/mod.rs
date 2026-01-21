@@ -22,18 +22,18 @@ use std::str::FromStr;
 
 use crate::crypto::{
     base64_url_decode,
-    x509::{extract_certs, X509Certificate},
+    x509::{X509Certificate, extract_certs},
 };
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use heidi_jwt::{
-    jwt::{
-        ec_verifier_from_sec1, verifier::DefaultVerifier, verifier_for_der, verifier_for_jwk, Jwt,
-        JwtVerifier,
-    },
     Jwk, JwsHeader,
+    jwt::{
+        Jwt, JwtVerifier, ec_verifier_from_sec1, verifier::DefaultVerifier, verifier_for_der,
+        verifier_for_jwk,
+    },
 };
 use heidi_util_rust::{log_error, log_warn, value::Value};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 #[uniffi::export]
 pub fn parse_encoded_jwt_header(jwt: String) -> Option<String> {
@@ -158,7 +158,7 @@ pub fn validate_jwt_with_jwk(jwt: &str, jwk: Value) -> bool {
 #[derive(Serialize, Deserialize, uniffi::Record)]
 pub struct DidVerificationDocument {
     #[serde(rename = "verificationMethod")]
-    verification_method: Vec<VerificationMethod>,
+    pub verification_method: Vec<VerificationMethod>,
 }
 
 impl JwtVerifier<serde_json::Value> for DidVerificationDocument {
@@ -179,12 +179,12 @@ impl JwtVerifier<serde_json::Value> for DidVerificationDocument {
 
 #[derive(Serialize, Deserialize, uniffi::Record)]
 pub struct VerificationMethod {
-    id: String,
-    controller: String,
+    pub id: String,
+    pub controller: String,
     #[serde(rename = "type")]
-    ty: String,
+    pub ty: String,
     #[serde(rename = "publicKeyJwk")]
-    public_key_jwk: Value,
+    pub public_key_jwk: Value,
 }
 
 #[uniffi::export]

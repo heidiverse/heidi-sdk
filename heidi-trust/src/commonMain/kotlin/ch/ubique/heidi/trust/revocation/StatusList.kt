@@ -20,36 +20,18 @@ under the License.
 
 package ch.ubique.heidi.trust.revocation
 
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonNames
 import uniffi.heidi_issuance_rust.StatusList
 import uniffi.heidi_util_rust.deflateString
 
-//@Serializable
-//data class StatusList @OptIn(ExperimentalSerializationApi::class) constructor(val sub: String, @JsonNames("status_list") val statusList: StatusList) {
-//    @Serializable
-//    data class  StatusList(val lst: String, val bits: Int) {
-//        fun isRevoked(index: Int) : Boolean {
-//            return kotlin.runCatching {
-//                val decompressed = deflateString(lst)
-//                if(index/8 >decompressed.size) {
-//                    return true
-//                }
-//                val byteNumber = index / 8
-//                val bitIndex = index % 8
-//                val statusByte = decompressed[byteNumber].toUByte()
-//                val statusBit = statusByte.and((1.shl(bitIndex)).toUByte())
-//                statusBit == 1.shl(bitIndex).toUByte()
-//            }.getOrNull() ?: true
-//        }
-//    }
-//}
+
+const val VALID = 0
+const val REVOKED = 1
+const val SUSPENDED = 2
 
 fun StatusList.isRevoked(index: Int) : Boolean {
         return kotlin.runCatching {
                 val status = this.getStatus(index) ?: return false
-                status == 1.toByte()
+                status == REVOKED.toByte()
         }.getOrNull() ?: true
 }
 
@@ -74,7 +56,7 @@ fun StatusList.getStatus(index: Int) : Byte? {
 fun StatusList.isSuspended(index: Int) : Boolean {
         return kotlin.runCatching {
                 val status = this.getStatus(index) ?: return false
-                status == 2.toByte()
+                status == SUSPENDED.toByte()
         }.getOrNull() ?: true
 }
 

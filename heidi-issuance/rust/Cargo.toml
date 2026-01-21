@@ -12,6 +12,7 @@ reqwest = { features = ["cookies"], optional = true, workspace = true }
 uniffi = { features = ["tokio"], optional = true, workspace = true }
 base64.workspace = true
 heidi-util-rust = { path = "../../heidi-util/rust"}
+heidi-crypto-rust = { path = "../../heidi-crypto/rust"}
 serde_json.workspace = true
 serde.workspace = true
 tokio = { features = ["time"], optional = true, workspace = true }

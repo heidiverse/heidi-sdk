@@ -19,10 +19,12 @@ under the License.
  */
 
 use base64::{prelude::BASE64_STANDARD, Engine};
+use heidi_crypto_rust::jwt::{DidVerificationDocument, SimpleVerifier};
 use heidi_jwt::chrono::{DateTime, Utc};
-use heidi_jwt::jwt::ec_verifier_from_sec1;
+use heidi_jwt::jwt::{ec_verifier_from_sec1, verifier_for_jwk};
 use heidi_jwt::jwt::{Jwt, JwtVerifier};
 use heidi_jwt::models::errors::{JwsError, JwtError};
+use heidi_util_rust::{log_error, log_warn};
 use serde::Deserialize;
 use serde::Serialize;
 use std::str::FromStr;
@@ -91,6 +93,42 @@ impl StatusListVerifier {
         clone.valid_at = Some(time.clone());
         clone.valid()
     }
+    pub fn valid_for_did_doc(
+        &self,
+        did_doc: &DidVerificationDocument,
+    ) -> Result<(), StatusListError> {
+        let header = match self.token.header() {
+            Ok(header) => header,
+            Err(_) => return Err(StatusListError::InvalidJwt),
+        };
+        let Some(kid) = header.claim("kid").and_then(|a| a.as_str()) else {
+            log_error!("VALIDATER", "no kid");
+            return Err(StatusListError::InvalidJwt);
+        };
+        log_warn!("VALIDATER", &format!("kid: {}", kid));
+
+        let Some(key) = did_doc.verification_method.iter().find(|vm| vm.id == kid) else {
+            log_error!("VALIDATER", "no matching key found");
+            return Err(StatusListError::InvalidSignature);
+        };
+
+        let Some(jwk) = key.public_key_jwk.transform() else {
+            log_error!("VALIDATER", "failed to transform to jwk");
+            return Err(StatusListError::InvalidSignature);
+        };
+        let Some(verifier) = verifier_for_jwk(jwk) else {
+            log_error!("VALIDATER", "could not parse jwk into key");
+            return Err(StatusListError::InvalidSignature);
+        };
+        let v: Box<dyn JwtVerifier<StatusListToken>> = Box::new(SimpleVerifier);
+
+        self.token
+            .verify_signature_with_verifier(verifier.as_ref())
+            .map_err(|_| StatusListError::InvalidSignature)?;
+        self.token
+            .verify(v.as_ref())
+            .map_err(|_| StatusListError::InvalidSignature)
+    }
     pub fn valid(&self) -> Result<(), StatusListError> {
         // check if we have a key in the header (e.g. x5c or jwk)
         let can_header_verify_jwt = match self.token.payload_with_verifier_from_header(self) {
@@ -124,32 +162,8 @@ impl StatusListVerifier {
                 }
             }
         }
-        // We can probably drop this
-        // check with our hard coded key
-        let Some(verifier) =
-            ec_verifier_from_sec1(&BASE64_STANDARD.decode(PUBLIC_KEY).unwrap(), "P-256")
-        else {
-            return if can_header_verify_jwt {
-                Ok(())
-            } else {
-                Err(StatusListError::InvalidSignature)
-            };
-        };
-        let can_hard_coded_key_verify_jwt = match self
-            .token
-            .payload_with_verifier(verifier.as_ref(), self)
-        {
-            Ok(_) => true,
-            Err(JwtError::Jws(JwsError::Expired(_))) => return Err(StatusListError::Expired),
-            Err(JwtError::Jws(JwsError::TypeError(_))) => return Err(StatusListError::TypeError),
-            _ => false,
-        };
 
-        if can_hard_coded_key_verify_jwt {
-            Ok(())
-        } else {
-            Err(StatusListError::InvalidSignature)
-        }
+        Err(StatusListError::InvalidSignature)
     }
 }
 
