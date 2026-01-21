@@ -36,4 +36,5 @@ data class CredentialSelectionUiModel(
 	val credential: VerifiableCredential,
 	val presentableCredential: PresentableCredential? = null,
 	val responseId: String,
+    val requiresCryptographicHolderBinding: Boolean,
 )

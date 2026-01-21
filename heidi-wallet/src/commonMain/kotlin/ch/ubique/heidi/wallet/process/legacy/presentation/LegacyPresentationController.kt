@@ -22,6 +22,7 @@ package ch.ubique.heidi.wallet.process.legacy.presentation
 
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
+import ch.ubique.heidi.dcql.toReadableString
 import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.wallet.ProximityWallet
@@ -43,6 +44,7 @@ import ch.ubique.heidi.wallet.credentials.identity.IdentityUiModel
 import ch.ubique.heidi.wallet.credentials.presentation.CredentialSelectionUiModel
 import ch.ubique.heidi.wallet.credentials.presentation.CredentialUseCaseUiModel
 import ch.ubique.heidi.wallet.credentials.presentation.PresentationUiModel
+import ch.ubique.heidi.wallet.credentials.presentation.ZkpUiModel
 import ch.ubique.heidi.wallet.credentials.presentation.getRequestedLoa
 import ch.ubique.heidi.wallet.crypto.SigningProvider
 import ch.ubique.heidi.wallet.extensions.asErrorState
@@ -260,34 +262,46 @@ class LegacyPresentationController private constructor(
 							}
                             is CredentialSelection.DcqlCredentialSelection -> {
 								//TODO: handle multiple sets
-								CredentialUseCaseUiModel(cs.purpose, cs.dcqlSetOptions.setOptions[0].associate {
-                                    it.queryId to it.credentialOptions.map { matchingCredential ->
-                                        allIdentities.first { identity ->
-											identity is IdentityUiModel.IdentityUiCredentialModel &&
-                                            identity.credentials.map { it.id }
-                                                .contains(matchingCredential.selectedVerifiableCredential.id)
-                                        }.let { identity ->
-                                            val ocaBundleUrl =
-                                                credentialsRepository.getById(matchingCredential.selectedVerifiableCredential.id)?.fk_oca_bundle_url
-                                            val credentialQuery =
-                                                cs.dcqlQuery.credentials?.first { cq -> cq.id == it.queryId }
-											if(credentialQuery == null) {
-												stateMutable.update {
-													PresentationWorkflow.Error("Matching Credential query not found; this should not happen")
-												}
-												return@launchSingleJob
-											}
-                                            viewModelFactory.getPresentableCredentialUiModelFromDcql(
-                                                it.queryId,
-                                                credentialQuery,
-                                                matchingCredential.selectedVerifiableCredential,
-                                                matchingCredential.selectedCredential,
-                                                identity,
-                                                ocaBundleUrl
-                                            )
+								CredentialUseCaseUiModel(
+                                    cs.purpose,
+                                    cs.dcqlSetOptions.setOptions[0].associate {
+                                        it.queryId to it.credentialOptions.map { matchingCredential ->
+                                            allIdentities.first { identity ->
+                                                identity is IdentityUiModel.IdentityUiCredentialModel &&
+                                                identity.credentials.map { it.id }
+                                                    .contains(matchingCredential.selectedVerifiableCredential.id)
+                                            }.let { identity ->
+                                                val ocaBundleUrl =
+                                                    credentialsRepository.getById(matchingCredential.selectedVerifiableCredential.id)?.fk_oca_bundle_url
+                                                val credentialQuery =
+                                                    cs.dcqlQuery.credentials?.first { cq -> cq.id == it.queryId }
+                                                if(credentialQuery == null) {
+                                                    stateMutable.update {
+                                                        PresentationWorkflow.Error("Matching Credential query not found; this should not happen")
+                                                    }
+                                                    return@launchSingleJob
+                                                }
+                                                viewModelFactory.getPresentableCredentialUiModelFromDcql(
+                                                    it.queryId,
+                                                    credentialQuery,
+                                                    matchingCredential.selectedVerifiableCredential,
+                                                    matchingCredential.selectedCredential,
+                                                    identity,
+                                                    ocaBundleUrl,
+                                                    cs.dcqlSetOptions.zkpOptions
+                                                )
+                                            }
                                         }
+                                    },
+                                    credentialSelection = cs,
+                                    zkpInfo = cs.dcqlSetOptions.zkpOptions?.let {
+                                        ZkpUiModel(
+                                            equalityProofs = it.equalityProofClaims.map { claim ->
+                                                claim.path.joinToString("/") { p -> p.toReadableString() }
+                                            }
+                                        )
                                     }
-                                }, cs)
+                                )
 							}
                             is CredentialSelection.PexCredentialSelection -> {
 								//TODO: handle multiple sets

@@ -33,4 +33,5 @@ data class ProcessedAttribute(
 	val unit: String? = null,
 	val isFlagged: Boolean = false,
 	val isMandatory: Boolean = false,
+    val isHidden: Boolean = false,
 )
