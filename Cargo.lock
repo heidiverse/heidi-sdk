@@ -5492,7 +5492,7 @@ dependencies = [
 [[package]]
 name = "next-gen-signatures"
 version = "0.1.2"
-source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service#56ed7cfa1108b96a941f314e9f955c921e660047"
+source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git#56ed7cfa1108b96a941f314e9f955c921e660047"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
@@ -6941,7 +6941,7 @@ dependencies = [
 [[package]]
 name = "rdf-util"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service#56ed7cfa1108b96a941f314e9f955c921e660047"
+source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git#56ed7cfa1108b96a941f314e9f955c921e660047"
 dependencies = [
  "anyhow",
  "oxrdf",
@@ -11195,7 +11195,7 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service#56ed7cfa1108b96a941f314e9f955c921e660047"
+source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git#56ed7cfa1108b96a941f314e9f955c921e660047"
 dependencies = [
  "anyhow",
  "ark-bls12-381",

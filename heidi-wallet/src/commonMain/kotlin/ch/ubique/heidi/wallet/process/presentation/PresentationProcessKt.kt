@@ -330,17 +330,23 @@ class PresentationProcessKt private constructor(
                 CredentialSelection.PexCredentialSelection(purpose, it.value)
             }
         } else if (dcqlQuery != null) {
-            // TODO: We need to improve this after refactoring
-            val tmpList = credentials.map { it.payload }
-            val result = selectCredentialsWithInfo(dcqlQuery, tmpList)
-
-            // Prioritize ZKP proofs for claim-based credentials
-            val setOptions = prioritizeBbsClaimBasedProofs(dcqlQuery, result.setOptions)
-
             val identityMap = credentials.associate {
                 val meta = CredentialMetadata.fromString(it.metadata)
                 it.payload to Pair(it.identityId, meta?.credentialType ?: CredentialType.Unknown)
             }
+
+            // TODO: We need to improve this after refactoring
+            val tmpList = credentials.map {
+                when (identityMap[it.payload]?.second) {
+                    CredentialType.OpenBadge303 -> Json.encodeToString(
+                        W3C.OpenBadge303.parseSerialized(it.payload).asJson())
+                    else -> it.payload
+                }
+            }
+            val result = selectCredentialsWithInfo(dcqlQuery, tmpList)
+
+            // Prioritize ZKP proofs for claim-based credentials
+            val setOptions = prioritizeBbsClaimBasedProofs(dcqlQuery, result.setOptions)
 
             this.dcqlMismatchInfo = DcqlMismatchInfo(
                 query = dcqlQuery,
@@ -368,8 +374,10 @@ class PresentationProcessKt private constructor(
                                                 is Credential.SdJwtCredential -> (it.credential as Credential.SdJwtCredential).v1.originalSdjwt == c.payload
                                                 is Credential.BbsCredential -> (it.credential as Credential.BbsCredential).v1.originalBbs == c.payload
                                                 is Credential.W3cCredential -> (it.credential as Credential.W3cCredential).v1.originalSdjwt == c.payload
-                                                // TODO: Alexey, not sure if this is correct
-                                                is Credential.OpenBadgeCredential -> (it.credential as Credential.OpenBadgeCredential).v1.original == c.payload
+                                                is Credential.OpenBadge303Credential -> {
+                                                    val vc = W3C.OpenBadge303.parseSerialized(c.payload)
+                                                    (it.credential as Credential.OpenBadge303Credential).v1 == vc.asW3CCredential()
+                                                }
                                             }
                                         }
                                         if (c == null) {
@@ -791,7 +799,7 @@ class PresentationProcessKt private constructor(
                                 nativeSigner?.let { Signer(nativeSigner) }
                             )
                             CredentialType.OpenBadge303 -> W3C.OpenBadge303
-                                .parseCompacted(c.payload)
+                                .parseSerialized(c.payload)
                                 .asVerifiablePresentation()
                             CredentialType.Unknown -> Result.success(null)
                         }

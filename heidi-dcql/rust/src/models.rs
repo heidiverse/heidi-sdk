@@ -20,13 +20,10 @@ under the License.
 
 #[cfg(feature = "bbs")]
 use heidi_credentials_rust::bbs::{decode_bbs, BbsRust};
-use heidi_credentials_rust::{
-    ldp::{parse_ldp_vc_compacted, LdpVC},
-    sdjwt::{decode_sdjwt, SdJwtRust},
-};
+use heidi_credentials_rust::sdjwt::{decode_sdjwt, SdJwtRust};
 use heidi_credentials_rust::{
     mdoc::{decode_mdoc, MdocRust},
-    w3c::W3CSdJwt,
+    w3c::{W3CSdJwt, W3CVerifiableCredential},
 };
 use heidi_credentials_rust::{models::Pointer, w3c::parse_w3c_sd_jwt};
 use heidi_util_rust::value::Value;
@@ -75,7 +72,7 @@ pub enum Credential {
     #[cfg(feature = "bbs")]
     BbsCredential(BbsRust),
     W3CCredential(W3CSdJwt),
-    OpenBadgeCredential(LdpVC),
+    OpenBadge303Credential(W3CVerifiableCredential),
 }
 
 #[derive(Clone, Debug, uniffi::Record, Serialize)]
@@ -131,8 +128,10 @@ impl FromStr for Credential {
             _ => (),
         };
 
-        if let Ok(ldp_vc) = parse_ldp_vc_compacted(s.to_string()) {
-            return Ok(Credential::OpenBadgeCredential(ldp_vc));
+        if let Ok(vc) = serde_json::from_str::<W3CVerifiableCredential>(s) {
+            if vc.types.contains(&"OpenBadgeCredential".to_string()) {
+                return Ok(Credential::OpenBadge303Credential(vc));
+            }
         }
 
         if let Ok(mdoc) = decode_mdoc(s) {

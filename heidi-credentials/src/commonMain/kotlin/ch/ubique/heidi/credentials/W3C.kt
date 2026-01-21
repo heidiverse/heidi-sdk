@@ -25,13 +25,11 @@ import ch.ubique.heidi.util.extensions.asObject
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.json
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.*
 import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_util_rust.Value
-import kotlin.io.encoding.Base64
 
 sealed class W3C {
     companion object {
@@ -112,35 +110,49 @@ sealed class W3C {
         }
     }
 
-    data class OpenBadge303(private val inner: LdpVc) : W3C() {
-        val originalJsonLd = inner.original
+    data class OpenBadge303(private val data: Data) : W3C() {
+        /**
+         * Helper class to store precomputed information such that we don't have to recompute it
+         * again every time we load the credential.
+         */
+        @Serializable
+        data class Data(
+            val credential: OpenBadges303Credential,
+
+            // NOTE: To check the credential validity network requests must be potentially made, as
+            //       such it is favorable to cache this value. But do note, that if the credential
+            //       expires, this value won't be updated.
+            val isValid: Boolean,
+        )
 
         override val docType: String
-            get() = inner.doctype.firstOrNull { it != "VerifiableCredential" }
+            get() = data.credential.data.types.firstOrNull { it != "VerifiableCredential" }
                 ?: "VerifiableCredential"
 
         val name: String?
-            get() = inner.data["name"].asString()
+            get() = when (val name = data.credential.data.name) {
+                is LocalizableString.ManyLvo -> name.v1.firstOrNull()?.value
+                is LocalizableString.OneLvo -> name.v1.value
+                is LocalizableString.String -> name.v1
+                null -> null
+            }
 
         val achievement: Value
-            get() = inner.data["credentialSubject"]["achievement"]
+            get() = data.credential.data.credentialSubject?.get("achievement") ?: Value.Null
 
         val issuerName: String?
-            get() = inner.data["issuer"]["name"].asString()
+            get() = data.credential.data.issuer?.get("name")?.asString()
 
-        val pngBytes: ByteArray? by lazy {
-            inner.pngBytesB64?.let { Base64.decode(it) }
+        val pngBytes: ByteArray = data.credential.imageBytes
+
+        private val dataAsJson: Value by lazy {
+            w3cCredentialAsJson(data.credential.data)
         }
 
-        private val isValid by lazy {
-            // TODO: Can we get rid of the runBlocking?
-            runBlocking { ldpVerifyProof(inner) }
-        }
-
-        override fun asJson(): Value = inner.data
+        override fun asJson(): Value = dataAsJson
 
         override fun presentation(): SdJwtBuilder {
-            TODO()
+            throw Exception("Use `asVerifiablePresentation()` instead")
         }
 
         fun asVerifiablePresentation(): Result<String> = runCatching {
@@ -152,10 +164,7 @@ sealed class W3C {
                 "type" to Value.Array(listOf(
                     Value.String("VerifiablePresentation")
                 )),
-                "verifiableCredential" to Value.Array(listOf(
-                    this.inner.data
-                )),
-                // TODO: Proof
+                "verifiableCredential" to Value.Array(listOf(dataAsJson)),
             ))
 
             json.encodeToString(proof)
@@ -164,19 +173,29 @@ sealed class W3C {
         override fun getOriginalNumClaims(): Int = 0
         override fun getNumDisclosed(): Int = 0
 
-        override fun isSignatureValid(): Boolean = isValid
+        override fun isSignatureValid(): Boolean = data.isValid
 
         fun serialized(): String =
-            Json.encodeToString(this.inner)
+            Json.encodeToString(this.data)
+
+        fun asW3CCredential(): W3cVerifiableCredential =
+            data.credential.data
 
         companion object {
-            suspend fun parse(credential: String): OpenBadge303 =
-                OpenBadge303(parseOpenBadges(Base64.decode(credential), listOf(
+            val OPEN_BADGE_FORMATS: Array<String> = arrayOf("ldp_vc")
+
+            suspend fun parse(bytes: ByteArray): OpenBadge303 {
+                val credential = parseOpenBadges303Credential(bytes, listOf(
                     "https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json",
                     "https://purl.imsglobal.org/spec/ob/v3p0/extensions.json"
-                )))
+                ))
 
-            fun parseCompacted(credential: String): OpenBadge303 =
+                val isValid = verifySecuredDocumentString(credential.original)
+
+                return OpenBadge303(Data(credential, isValid))
+            }
+
+            fun parseSerialized(credential: String): OpenBadge303 =
                 OpenBadge303(Json.decodeFromString(credential))
         }
     }

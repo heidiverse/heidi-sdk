@@ -27,7 +27,7 @@ use heidi_credentials_rust::bbs::BbsRust;
 use heidi_credentials_rust::models::{Pointer, PointerPart};
 use heidi_credentials_rust::sdjwt::SdJwtRust;
 use heidi_credentials_rust::{claims_pointer::Selector, w3c::W3CSdJwt};
-use heidi_credentials_rust::{ldp::LdpVC, mdoc::MdocRust};
+use heidi_credentials_rust::{mdoc::MdocRust, w3c::W3CVerifiableCredential};
 use heidi_util_rust::value::Value;
 use models::{
     ClaimsQuery, Credential, CredentialOptions, CredentialQuery, CredentialSetOption, DcqlQuery,
@@ -399,7 +399,7 @@ pub fn get_requested_attributes(
                 #[cfg(feature = "bbs")]
                 Credential::BbsCredential(bbs) => bbs.body().clone(),
                 Credential::W3CCredential(w3c) => w3c.json.clone(),
-                Credential::OpenBadgeCredential(ldp_vc) => ldp_vc.data.clone(),
+                Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
             };
 
             let all_ptrs = claim.path.resolve_ptr(body.clone()).unwrap_or(vec![]);
@@ -436,7 +436,7 @@ pub fn get_requested_attributes(
                 #[cfg(feature = "bbs")]
                 Credential::BbsCredential(bbs) => bbs.body().clone(),
                 Credential::W3CCredential(w3c) => w3c.json.clone(),
-                Credential::OpenBadgeCredential(ldp_vc) => ldp_vc.data.clone(),
+                Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
             };
 
             let all_ptrs = claim.path.resolve_ptr(body.clone()).unwrap_or(vec![]);
@@ -509,7 +509,10 @@ impl Credential {
         Ok(())
     }
 
-    pub fn matches_meta_open_badges(_ldp_vc: &LdpVC, _meta: Option<&Meta>) -> Result<(), ()> {
+    pub fn matches_meta_open_badges(
+        _vc: &W3CVerifiableCredential,
+        _meta: Option<&Meta>,
+    ) -> Result<(), ()> {
         Ok(())
     }
 
@@ -552,7 +555,7 @@ impl Credential {
             {
                 return Err(expected_format_error)
             }
-            Credential::OpenBadgeCredential(_)
+            Credential::OpenBadge303Credential(_)
                 if !OPEN_BADGE_FORMATS.contains(&credential_query.format.as_str()) =>
             {
                 return Err(expected_format_error)
@@ -582,10 +585,8 @@ impl Credential {
                     return Err(DcqlCredentialQueryMismatch::W3CMeta(e));
                 }
             }
-            Credential::OpenBadgeCredential(ldp_vc) => {
-                if let Err(_) =
-                    Self::matches_meta_open_badges(ldp_vc, credential_query.meta.as_ref())
-                {
+            Credential::OpenBadge303Credential(vc) => {
+                if let Err(_) = Self::matches_meta_open_badges(vc, credential_query.meta.as_ref()) {
                     unreachable!(); // currently no meta checks for open badges
                 }
             }
@@ -684,18 +685,7 @@ impl ClaimsQuery {
                 };
                 w3c.get(Arc::new(path))
             }
-            Credential::OpenBadgeCredential(ldp_vc) => {
-                let path = if matches!(self.path.first(),
-                    Some(PointerPart::String(s)) if s == "credentialSubject"
-                ) {
-                    self.path.clone()
-                } else {
-                    let mut path = self.path.clone();
-                    path.insert(0, PointerPart::String("credentialSubject".to_string()));
-                    path
-                };
-                ldp_vc.get(Arc::new(path))
-            }
+            Credential::OpenBadge303Credential(c) => c.get(Arc::new(self.path.clone())),
         };
 
         let Some(data) = data else {

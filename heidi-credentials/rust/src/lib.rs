@@ -19,8 +19,8 @@ under the License.
  */
 
 use chrono::SecondsFormat;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 use std::ops::Add;
 
 #[cfg(feature = "bbs")]
@@ -30,6 +30,7 @@ pub mod json_ld;
 pub mod ldp;
 pub mod mdoc;
 pub mod models;
+pub mod open_badges;
 pub mod sdjwt;
 pub mod sdjwt_util;
 pub mod w3c;

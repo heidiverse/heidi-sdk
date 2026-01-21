@@ -30,8 +30,10 @@ import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.toClaimsPointer
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.PointerPart
+import uniffi.heidi_credentials_rust.verifySecuredDocumentString
 import uniffi.heidi_crypto_rust.base64UrlDecode
 import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_dcql_rust.ClaimsQuery
@@ -279,6 +281,9 @@ private fun getCredentialType(vpToken: String, expectedFormat: String): Result<C
     if (W3C.W3C_FORMATS.contains(expectedFormat))
         return Result.success(CredentialType.W3C_VCDM)
 
+    if (W3C.OpenBadge303.OPEN_BADGE_FORMATS.contains(expectedFormat))
+        return Result.success(CredentialType.OpenBadge303)
+
     return Result.failure(UnknownCredentialQueryFormatException(expectedFormat))
 }
 
@@ -371,14 +376,13 @@ private fun checkCredentialQuery(
             }.getOrElse { return Result.failure(it) }
             val vpJson = Json.decodeFromString<Value>(vpToken)
             val vcJson = vpJson["verifiableCredential"][0]
-            val vc = W3C.OpenBadge303.parseCompacted(Json.encodeToString(vcJson))
 
             query.meta?.let {
                 checkMetaOpenBadges(it).exceptionOrNull()?.let { e -> return Result.failure(e) }
             }
 
             checkCredentialQuery(
-                query, vc.asJson(), vc.getOriginalNumClaims(), vc.getNumDisclosed()
+                query, vcJson, 0, 0
             ).map { result }
         }
 

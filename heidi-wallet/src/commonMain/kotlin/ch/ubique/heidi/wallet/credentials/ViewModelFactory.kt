@@ -125,7 +125,7 @@ class ViewModelFactory private constructor(
 				validFrom to validUntil
 			}
             CredentialType.OpenBadge303 -> {
-                val vc = W3C.OpenBadge303.parseCompacted(credential.payload).asJson()
+                val vc = W3C.OpenBadge303.parseSerialized(credential.payload).asJson()
                 val validFrom = vc["validFrom"].asString()?.let { Instant.parse(it).epochSeconds }
                 val validUntil = vc["validUntil"].asString()?.let { Instant.parse(it).epochSeconds }
 
@@ -148,7 +148,7 @@ class ViewModelFactory private constructor(
 			}.getOrNull() ?: ""
 			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse(credential.payload).asJson())
             CredentialType.OpenBadge303 -> Json.encodeToString(
-                W3C.OpenBadge303.parseCompacted(credential.payload).asJson())
+                W3C.OpenBadge303.parseSerialized(credential.payload).asJson())
             CredentialType.Unknown -> ""
 		}
 
@@ -158,7 +158,7 @@ class ViewModelFactory private constructor(
 			CredentialType.BbsTermwise -> null
 			CredentialType.W3C_VCDM -> W3C.parse(credential.payload).isSignatureValid()
             CredentialType.OpenBadge303 -> W3C.OpenBadge303
-                .parseCompacted(credential.payload)
+                .parseSerialized(credential.payload)
                 .isSignatureValid()
             CredentialType.Unknown -> null
 		}
@@ -234,7 +234,7 @@ class ViewModelFactory private constructor(
 				Json.encodeToString(possibleW3C.asJson())
 			}
             CredentialType.OpenBadge303 -> {
-                possibleOpenBadge303 = W3C.OpenBadge303.parseCompacted(credential.payload)
+                possibleOpenBadge303 = W3C.OpenBadge303.parseSerialized(credential.payload)
                 Json.encodeToString(possibleOpenBadge303.asJson())
             }
             CredentialType.Unknown -> return null
@@ -512,7 +512,7 @@ class ViewModelFactory private constructor(
 			}.getOrNull() ?: return null
 			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse(credential.payload).asJson())
             CredentialType.OpenBadge303 -> Json.encodeToString(
-                W3C.OpenBadge303.parseCompacted(credential.payload).asJson())
+                W3C.OpenBadge303.parseSerialized(credential.payload).asJson())
             CredentialType.Unknown -> return null
 		}
 	}

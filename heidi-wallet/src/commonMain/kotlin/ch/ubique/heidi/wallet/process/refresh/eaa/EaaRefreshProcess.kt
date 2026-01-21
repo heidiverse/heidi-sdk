@@ -232,7 +232,7 @@ class EaaRefreshProcess(
 
 			}.getOrNull() ?: return null
 			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
-            CredentialType.OpenBadge303 -> W3C.OpenBadge303.parseCompacted(credentialPayload).docType
+            CredentialType.OpenBadge303 -> W3C.OpenBadge303.parseSerialized(credentialPayload).docType
             CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null

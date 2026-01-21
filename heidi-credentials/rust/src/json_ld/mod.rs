@@ -229,10 +229,72 @@ mod frame {
         }
 
         // 4. Handle omitGraph
-        if state.options.omit_graph && results.len() == 1 {
-            Ok(results[0].clone())
+        let mut output = if state.options.omit_graph && results.len() == 1 {
+            results[0].clone()
         } else {
-            Ok(json!({ "@graph": results }))
+            json!({ "@graph": results })
+        };
+
+        // Handle unused blank nodes
+        let mut id_counts = HashMap::new();
+        count_blank_ids(&output, &mut id_counts);
+
+        prune_unused_blank_ids(&mut output, &id_counts);
+
+        Ok(output)
+    }
+
+    /// Recursively count occurrences of blank node IDs
+    fn count_blank_ids(val: &Value, counts: &mut HashMap<String, usize>) {
+        match val {
+            Value::Object(map) => {
+                if let Some(Value::String(id)) = map.get("@id") {
+                    if id.starts_with("_:") {
+                        *counts.entry(id.clone()).or_default() += 1;
+                    }
+                }
+                for v in map.values() {
+                    count_blank_ids(v, counts);
+                }
+            }
+            Value::Array(arr) => {
+                for v in arr {
+                    count_blank_ids(v, counts);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Recursively remove blank node IDs that are not shared/referenced
+    fn prune_unused_blank_ids(val: &mut Value, counts: &HashMap<String, usize>) {
+        match val {
+            Value::Object(map) => {
+                let mut remove_id = false;
+                if let Some(Value::String(id)) = map.get("@id") {
+                    if id.starts_with("_:") {
+                        // If it appears exactly once (or 0?), it's just the definition
+                        // with no incoming references. Safe to strip.
+                        if counts.get(id).copied().unwrap_or(0) <= 1 {
+                            remove_id = true;
+                        }
+                    }
+                }
+
+                if remove_id {
+                    map.remove("@id");
+                }
+
+                for v in map.values_mut() {
+                    prune_unused_blank_ids(v, counts);
+                }
+            }
+            Value::Array(arr) => {
+                for v in arr {
+                    prune_unused_blank_ids(v, counts);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -779,6 +841,120 @@ mod frame {
                 })
             );
         }
+
+        #[test]
+        fn test_cleanup_unused_blank_ids() {
+            // SCENARIO: A simple tree. The internal nodes have blank IDs (e.g. _:b1).
+            // Since nothing else references _:b1, the ID is noise and should be removed.
+
+            let data = json!({
+                "@graph": [
+                    {
+                        "@id": "node:root",
+                        "child": { "@id": "_:b1" }
+                    },
+                    {
+                        "@id": "_:b1",
+                        "name": "I am a nested object"
+                    }
+                ]
+            });
+
+            let frame = json!({
+                "@id": "node:root",
+                "child": {
+                    "name": {}
+                }
+            });
+
+            let map = create_node_map(data);
+            let result = super::frame(
+                &map,
+                &frame,
+                FramingOptions {
+                    omit_graph: true,
+                    ..FramingOptions::default()
+                },
+            )
+            .unwrap();
+
+            assert_eq!(
+                result,
+                json!({
+                    "@id": "node:root",
+                    "child": {
+                        // "@id": "_:b1"  <-- SHOULD BE GONE
+                        "name": "I am a nested object"
+                    }
+                })
+            );
+        }
+
+        #[test]
+        fn test_preserve_shared_blank_ids() {
+            // SCENARIO: A "Diamond" graph.
+            // Root has two children (left, right).
+            // BOTH left and right point to the SAME shared blank node (_:shared).
+            // We MUST preserve "@id": "_:shared" to indicate it is the exact same node instance.
+
+            let data = json!({
+                "@graph": [
+                    {
+                        "@id": "node:root",
+                        "left": { "@id": "_:shared" },
+                        "right": { "@id": "_:shared" }
+                    },
+                    {
+                        "@id": "_:shared",
+                        "value": "I am shared"
+                    }
+                ]
+            });
+
+            let frame = json!({
+                "@id": "node:root",
+                "left": { "value": {} },
+                "right": { "value": {} }
+            });
+
+            // Note: Default embed mode is 'Once'.
+            // - The first time _:shared is seen, it is embedded fully.
+            // - The second time, it is a reference.
+            // In BOTH places, the "@id": "_:shared" must exist to link them.
+
+            let map = create_node_map(data);
+            let result = super::frame(
+                &map,
+                &frame,
+                FramingOptions {
+                    omit_graph: true,
+                    ..FramingOptions::default()
+                },
+            )
+            .unwrap();
+
+            // We expect one full object and one reference (order depends on HashMap iteration,
+            // but the ID must be present in both).
+            let left = result["left"].as_object().unwrap();
+            let right = result["right"].as_object().unwrap();
+
+            // Check that IDs are preserved
+            assert_eq!(left["@id"], "_:shared");
+            assert_eq!(right["@id"], "_:shared");
+
+            // Verify one is full and one is a ref (logic of EmbedMode::Once)
+            let left_full = left.contains_key("value");
+            let right_full = right.contains_key("value");
+
+            assert!(
+                left_full || right_full,
+                "At least one should be fully embedded"
+            );
+            assert!(
+                left_full != right_full,
+                "One should be full, the other a reference"
+            );
+        }
     }
 }
 
@@ -872,5 +1048,150 @@ mod tests {
             .compacted(context)
             .await;
         println!("Compacted Framed JSON-LD: {:#}", compacted_framed);
+    }
+
+    #[tokio::test]
+    async fn test_open_badge_vc() {
+        let vc = r#"
+        {
+            "@graph": [
+                {
+                "@graph": [
+                    {
+                    "@id": "_:b1",
+                    "@type": "https://w3id.org/security#DataIntegrityProof",
+                    "http://purl.org/dc/terms/created": {
+                        "@type": "http://www.w3.org/2001/XMLSchema#dateTime",
+                        "@value": "2025-12-04T08:37:40.379213+00:00"
+                    },
+                    "https://w3id.org/security#cryptosuite": {
+                        "@type": "https://w3id.org/security#cryptosuiteString",
+                        "@value": "eddsa-rdfc-2022"
+                    },
+                    "https://w3id.org/security#proofPurpose": {
+                        "@id": "https://w3id.org/security#assertionMethod"
+                    },
+                    "https://w3id.org/security#proofValue": {
+                        "@type": "https://w3id.org/security#multibase",
+                        "@value": "z5hTkyXpMzQx671RKemdnj2GpmHCUthKY1KxYRVT8renbL81MTrnVbBGfR3QfwJVu8j32ZZdpvuwPvBVYxLEbuA5z"
+                    },
+                    "https://w3id.org/security#verificationMethod": {
+                        "@id": "https://api.openbadges.education/public/issuers/h6VCjbRBR7eC22jwUz45JA?v=3_0#key-0"
+                    }
+                    }
+                ],
+                "@id": "_:b0"
+                },
+                {
+                "@id": "_:b2",
+                "@type": "https://purl.imsglobal.org/spec/vc/ob/vocab.html#AchievementSubject",
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#achievement": {
+                    "@id": "https://api.openbadges.education/public/badges/1l5y_22PSauVhLYihoqmVw?v=3_0"
+                },
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#activityStartDate": {
+                    "@type": "https://www.w3.org/2001/XMLSchema#date",
+                    "@value": "2025-12-04T00:00:00+00:00"
+                },
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#identifier": {
+                    "@id": "_:b4"
+                }
+                },
+                {
+                "@id": "_:b3",
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#narrative": ""
+                },
+                {
+                "@id": "_:b4",
+                "@type": "https://purl.imsglobal.org/spec/vc/ob/vocab.html#IdentityObject",
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#hashed": {
+                    "@type": "https://www.w3.org/2001/XMLSchema#boolean",
+                    "@value": true
+                },
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#identityHash": "sha256$79a12f688e1bd35f85ad4ee1c71b5d7c942ea289aecf616159a20dc0d5af2419",
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#identityType": "emailAddress",
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#salt": "6800b252df744e47b9d9837371a1618a"
+                },
+                {
+                "@id": "https://api.openbadges.education/public/assertions/DwwWNnYoQ9aiBjnPMhPcxQ/image",
+                "@type": "https://purl.imsglobal.org/spec/vc/ob/vocab.html#Image"
+                },
+                {
+                "@id": "https://api.openbadges.education/public/assertions/DwwWNnYoQ9aiBjnPMhPcxQ/revocations",
+                "@type": "https://purl.imsglobal.org/spec/vcrl/v1p0/context.json#1EdTechRevocationList"
+                },
+                {
+                "@id": "https://api.openbadges.education/public/assertions/DwwWNnYoQ9aiBjnPMhPcxQ?v=3_0",
+                "@type": [
+                    "https://www.w3.org/2018/credentials#VerifiableCredential",
+                    "https://purl.imsglobal.org/spec/vc/ob/vocab.html#OpenBadgeCredential"
+                ],
+                "https://schema.org/name": "AI Act",
+                "https://w3id.org/security#proof": {
+                    "@id": "_:b0"
+                },
+                "https://www.w3.org/2018/credentials#credentialStatus": {
+                    "@id": "https://api.openbadges.education/public/assertions/DwwWNnYoQ9aiBjnPMhPcxQ/revocations"
+                },
+                "https://www.w3.org/2018/credentials#credentialSubject": {
+                    "@id": "_:b2"
+                },
+                "https://www.w3.org/2018/credentials#evidence": [],
+                "https://www.w3.org/2018/credentials#issuer": {
+                    "@id": "https://api.openbadges.education/public/issuers/h6VCjbRBR7eC22jwUz45JA?v=3_0"
+                },
+                "https://www.w3.org/2018/credentials#validFrom": {
+                    "@type": "http://www.w3.org/2001/XMLSchema#dateTime",
+                    "@value": "2025-12-04T08:37:40.379213+00:00"
+                }
+                },
+                {
+                "@id": "https://api.openbadges.education/public/badges/1l5y_22PSauVhLYihoqmVw?v=3_0",
+                "@type": "https://purl.imsglobal.org/spec/vc/ob/vocab.html#Achievement",
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#Criteria": {
+                    "@id": "_:b3"
+                },
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#achievementType": "Badge",
+                "https://purl.imsglobal.org/spec/vc/ob/vocab.html#image": {
+                    "@id": "https://api.openbadges.education/public/assertions/DwwWNnYoQ9aiBjnPMhPcxQ/image"
+                },
+                "https://schema.org/description": "Dieser Workshop bietet eine solide Einführung in KI mit besonderem Schwerpunkt auf dem Grundlagenwissen, das für einen verantwortungsvollen Umgang mit KI erforderlich ist - im Einklang mit den Anforderungen des EU-AI-Act. Die Teilnehmenden erhalten Einblicke in die Funktionsweise von KI-Systemen, wo ihre Grenzen und Risiken liegen und was eine verantwortungsvolle Nutzung in der Praxis bedeutet. Mit einer Mischung aus interaktivem Input und praktischer Reflexion stärkt das Training das Vertrauen und das Bewusstsein für den Umgang mit der sich entwickelnden KI-Landschaft und gibt rechtliche Grundlagen.",
+                "https://schema.org/name": "AI Act"
+                },
+                {
+                "@id": "https://api.openbadges.education/public/issuers/h6VCjbRBR7eC22jwUz45JA?v=3_0",
+                "@type": "https://purl.imsglobal.org/spec/vc/ob/vocab.html#Profile",
+                "https://schema.org/email": "annika@mycelia.education",
+                "https://schema.org/name": "Open Educational Badges",
+                "https://schema.org/url": {
+                    "@type": "https://www.w3.org/2001/XMLSchema#anyURI",
+                    "@value": "https://openbadges.education"
+                }
+                }
+            ]
+        }"#;
+
+        let mut loader = StaticLoader::new();
+        loader.add_document(
+            "https://www.w3.org/ns/credentials/v2",
+            include_str!("../../jsonld/www.w3.org/ns/credentials/v2"),
+        );
+        loader.add_document(
+            "https://www.w3.org/ns/credentials/examples/v2",
+            include_str!("../../jsonld/www.w3.org/ns/credentials/examples/v2"),
+        );
+        let loader = FallbackLoader::new(loader, ReqwestLoader::new());
+
+        let doc = JsonLdDocument::new(&vc.to_string(), &loader);
+
+        let frame = json!({
+            "@type": "https://www.w3.org/2018/credentials#VerifiableCredential",
+            "https://w3id.org/security#proof": {
+                "@graph": {
+                    "@type": "https://w3id.org/security#DataIntegrityProof"
+                }
+            }
+        });
+        let framed = doc.framed(&frame).await;
+        println!("Framed JSON-LD: {:#}", framed);
     }
 }
