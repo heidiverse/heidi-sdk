@@ -3480,6 +3480,7 @@ name = "heidi-issuance-rust"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "heidi-crypto-rust",
  "heidi-jwt",
  "heidi-util-rust",
  "reqwest",
