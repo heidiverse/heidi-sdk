@@ -23,6 +23,8 @@ package ch.ubique.heidi.presentation.request
 import ch.ubique.heidi.presentation.model.OID4VPVersion
 import ch.ubique.heidi.util.extensions.*
 import ch.ubique.heidi.wallet.process.presentation.models.TransactionDataWrapper
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
@@ -38,9 +40,12 @@ data class VersionedPresentationRequest(
 )
 
 @Serializable
-data class PresentationRequest(
+data class PresentationRequest @OptIn(ExperimentalSerializationApi::class) constructor(
 	@SerialName("client_id")
 	val clientId: String,
+	@EncodeDefault
+	@SerialName("response_type")
+	val responseType: String = "vp_token",
 	@SerialName("client_id_scheme")
 	val clientIdScheme: String? = null,
 	@SerialName("presentation_definition")
@@ -149,8 +154,11 @@ data class PresentationRequest(
 					} ?: it.transform<DcqlQuery>()
 				}
 
+			val responseType = value["response_type"].takeIf { it != Value.Null }?.asString() ?: "vp_token"
+
 			val request = PresentationRequest(
 				clientId,
+				responseType = responseType,
 				clientIdScheme = clientIdScheme,
 				presentationDefinition = if (presentationDefinition is Value.Null) {
 					null
