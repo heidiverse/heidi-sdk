@@ -18,10 +18,9 @@ specific language governing permissions and limitations
 under the License.
  */
 
-use base64::{prelude::BASE64_STANDARD, Engine};
 use heidi_crypto_rust::jwt::{DidVerificationDocument, SimpleVerifier};
 use heidi_jwt::chrono::{DateTime, Utc};
-use heidi_jwt::jwt::{ec_verifier_from_sec1, verifier_for_jwk};
+use heidi_jwt::jwt::verifier_for_jwk;
 use heidi_jwt::jwt::{Jwt, JwtVerifier};
 use heidi_jwt::models::errors::{JwsError, JwtError};
 use heidi_util_rust::{log_error, log_warn};
@@ -30,8 +29,8 @@ use serde::Serialize;
 use std::str::FromStr;
 use std::sync::Arc;
 
-const PUBLIC_KEY: &str =
-    "BB5YD+gnv9Nt34RiVpy3SC7vN7vhbnYuDAXrIuna1XtjVM1E+9/iPeuv0HLh1OFFKdBUTUOv1nBOO++UDfzGGjY=";
+// const PUBLIC_KEY: &str =
+//     "BB5YD+gnv9Nt34RiVpy3SC7vN7vhbnYuDAXrIuna1XtjVM1E+9/iPeuv0HLh1OFFKdBUTUOv1nBOO++UDfzGGjY=";
 
 #[derive(uniffi::Object, Clone)]
 pub struct StatusListVerifier {
@@ -131,7 +130,7 @@ impl StatusListVerifier {
     }
     pub fn valid(&self) -> Result<(), StatusListError> {
         // check if we have a key in the header (e.g. x5c or jwk)
-        let can_header_verify_jwt = match self.token.payload_with_verifier_from_header(self) {
+        let _can_header_verify_jwt = match self.token.payload_with_verifier_from_header(self) {
             Ok(_) => return Ok(()),
             Err(JwtError::Jws(JwsError::Expired(_))) => return Err(StatusListError::Expired),
             Err(JwtError::Jws(JwsError::TypeError(_))) => return Err(StatusListError::TypeError),
