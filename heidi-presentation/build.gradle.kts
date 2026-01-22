@@ -10,6 +10,9 @@ plugins {
 	alias(libs.plugins.vanniktech.publish)
 }
 
+val enableIosTargets = System.getProperty("os.name").startsWith("Mac") &&
+	(findProperty("enableIosTargets")?.toString()?.toBoolean() ?: true)
+
 kotlin {
 	compilerOptions {
 		freeCompilerArgs.add("-Xexpect-actual-classes")
@@ -23,22 +26,23 @@ kotlin {
 
 	jvm()
 
-	listOf(
-		
-		iosArm64(),
-		iosSimulatorArm64()
-	).forEach { iosTarget ->
-		iosTarget.binaries.framework {
-			baseName = "heidi-presentation"
-			isStatic = true
-		}
+	if (enableIosTargets) {
+		listOf(
+			iosArm64(),
+			iosSimulatorArm64()
+		).forEach { iosTarget ->
+			iosTarget.binaries.framework {
+				baseName = "heidi-presentation"
+				isStatic = true
+			}
 
-		iosTarget.binaries.all {
-			freeCompilerArgs += "-Xallocator=mimalloc"
-		}
+			iosTarget.binaries.all {
+				freeCompilerArgs += "-Xallocator=mimalloc"
+			}
 
-		iosTarget.compilations.getByName("main") {
-			useRustUpLinker()
+			iosTarget.compilations.getByName("main") {
+				useRustUpLinker()
+			}
 		}
 	}
 

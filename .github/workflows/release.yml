@@ -7,12 +7,12 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  release:
+  release-macos:
     strategy:
       fail-fast: false
       max-parallel: 4
       matrix:
-        platform: ["kmp", "android", "ios", "jvm"]
+        platform: ["kmp", "ios"]
     name: "Publish to Artifactory"
     runs-on: ["self-hosted", "macOS"]
 
@@ -21,6 +21,7 @@ jobs:
 
       - name: Determine Gradle tasks
         id: gradle_tasks
+        shell: bash
         run: |
           targets=()
           case "${{ matrix.platform }}" in
@@ -41,14 +42,22 @@ jobs:
         with:
           distribution: "zulu"
           java-version: "17"
+          cache: "gradle"
 
       - name: Setup rust Tool Chain
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
         with:
           toolchain: "1.90"
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Android SDK
+        if: matrix.platform == 'android' || matrix.platform == 'kmp' || matrix.platform == 'jvm'
+        uses: android-actions/setup-android@v3
+
       - name: Install Android SDK components
-        if: matrix.platform == 'android' || matrix.platform == 'kmp'
+        if: matrix.platform == 'android' || matrix.platform == 'kmp' || matrix.platform == 'jvm'
         run: |
           yes | sdkmanager --licenses
           yes | sdkmanager --install "ndk;28.2.13676358"
@@ -56,6 +65,7 @@ jobs:
       - name: Ensure gradlew is executable
         run: chmod +x gradlew
       - name: Install Linux-Toolchain
+        if: runner.os == 'macOS'
         run: |
           brew tap messense/macos-cross-toolchains
           # install x86_64-unknown-linux-gnu toolchain
@@ -69,6 +79,11 @@ jobs:
           UB_ARTIFACTORY_URL_ANDROID: ${{ secrets.ARTIFACTORY_URL_ANDROID }}
           UB_ARTIFACTORY_USER: ${{ secrets.ARTIFACTORY_USER }}
           UB_ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          MAVEN_SIGNING_KEY_ARMOR_ASC: ${{ secrets.MAVEN_SIGNING_KEY_ARMOR_ASC }}
+          MAVEN_SIGNING_KEY_PASSPHRASE: ${{ secrets.MAVEN_SIGNING_KEY_PASSPHRASE }}
+          MAVEN_SIGNING_KEY_ID: ${{ secrets.MAVEN_SIGNING_KEY_ID }}
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           IPHONEOS_DEPLOYMENT_TARGET: "16.4"
           CC_x86_64_unknown_linux_gnu: x86_64-linux-gnu-gcc
           CXX_x86_64_unknown_linux_gnu: x86_64-linux-gnu-g++
@@ -80,6 +95,100 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
           CARGO_TARGET_X86_64-PC-WINDOWS-GNU: x86_64-w64-mingw32-gcc
         run: |
-          echo "${{secrets.MAVEN_SIGNING_KEY_ARMOR_ASC}}" > ./signingkey.asc
-          gpg --quiet --output $GITHUB_WORKSPACE/signingkey.gpg --dearmor ./signingkey.asc
-          ./gradlew buildBindings ${{ steps.gradle_tasks.outputs.tasks }} -PgithubRefName=${{ github.ref_name }} -PreleaseBuild=true -Psigning.secretKeyRingFile=$GITHUB_WORKSPACE/signingkey.gpg -Psigning.password='${{secrets.MAVEN_SIGNING_KEY_PASSPHRASE}}' -Psigning.keyId=${{secrets.MAVEN_SIGNING_KEY_ID}} -PmavenCentralUsername=${{secrets.MAVEN_CENTRAL_USERNAME}} -PmavenCentralPassword=${{secrets.MAVEN_CENTRAL_PASSWORD}} 
+          ./.github/scripts/ci-gradle.sh publish "${{ steps.gradle_tasks.outputs.tasks }}" "${{ matrix.platform == 'ios' || matrix.platform == 'kmp' }}"
+
+  release-linux:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - platform: android
+            container_image: ghcr.io/cirruslabs/android-sdk:34
+          - platform: jvm
+            container_image: ghcr.io/cirruslabs/android-sdk:34
+    name: "Publish to Artifactory"
+    runs-on: ["k8s-runner-heidi"]
+    container:
+      image: ${{ matrix.container_image }}
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Determine Gradle tasks
+        id: gradle_tasks
+        shell: bash
+        run: |
+          targets=()
+          case "${{ matrix.platform }}" in
+            kmp) targets+=("KotlinMultiplatform") ;;
+            android) targets+=("AndroidRelease") ;;
+            ios) targets+=("IosArm64" "IosSimulatorArm64") ;;
+            jvm) targets+=("Jvm") ;;
+          esac
+
+          tasks=""
+          for target in "${targets[@]}"; do
+            tasks="$tasks publish${target}PublicationToMavenCentralRepository"
+          done
+          echo "tasks=$tasks" >> "$GITHUB_OUTPUT";
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4.5.0
+        with:
+          distribution: "zulu"
+          java-version: "17"
+          cache: "gradle"
+
+      - name: Setup rust Tool Chain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
+        with:
+          toolchain: "1.90"
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Android SDK
+        if: matrix.platform == 'android' || matrix.platform == 'kmp' || matrix.platform == 'jvm'
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        if: matrix.platform == 'android' || matrix.platform == 'kmp' || matrix.platform == 'jvm'
+        run: |
+          yes | sdkmanager --licenses
+          yes | sdkmanager --install "ndk;28.2.13676358"
+
+      - name: Ensure gradlew is executable
+        run: chmod +x gradlew
+      - name: Install Linux-Toolchain
+        if: runner.os == 'macOS'
+        run: |
+          brew tap messense/macos-cross-toolchains
+          # install x86_64-unknown-linux-gnu toolchain
+          brew install x86_64-unknown-linux-gnu
+          # install aarch64-unknown-linux-gnu toolchain
+          brew install aarch64-unknown-linux-gnu
+          # install mingw-w64 targets
+          brew install mingw-w64
+      - name: Publish artifact
+        env:
+          UB_ARTIFACTORY_URL_ANDROID: ${{ secrets.ARTIFACTORY_URL_ANDROID }}
+          UB_ARTIFACTORY_USER: ${{ secrets.ARTIFACTORY_USER }}
+          UB_ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          MAVEN_SIGNING_KEY_ARMOR_ASC: ${{ secrets.MAVEN_SIGNING_KEY_ARMOR_ASC }}
+          MAVEN_SIGNING_KEY_PASSPHRASE: ${{ secrets.MAVEN_SIGNING_KEY_PASSPHRASE }}
+          MAVEN_SIGNING_KEY_ID: ${{ secrets.MAVEN_SIGNING_KEY_ID }}
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          IPHONEOS_DEPLOYMENT_TARGET: "16.4"
+          CC_x86_64_unknown_linux_gnu: x86_64-linux-gnu-gcc
+          CXX_x86_64_unknown_linux_gnu: x86_64-linux-gnu-g++
+          AR_x86_64_unknown_linux_gnu: x86_64-linux-gnu-ar
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
+          AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_X86_64-PC-WINDOWS-GNU: x86_64-w64-mingw32-gcc
+        run: |
+          ./.github/scripts/ci-gradle.sh publish "${{ steps.gradle_tasks.outputs.tasks }}" "${{ matrix.platform == 'ios' || matrix.platform == 'kmp' }}"
