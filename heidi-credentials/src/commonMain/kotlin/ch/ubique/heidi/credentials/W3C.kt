@@ -26,6 +26,7 @@ import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.json
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.*
 import uniffi.heidi_crypto_rust.base64UrlEncode
@@ -149,8 +150,11 @@ sealed class W3C {
         val pngBytes: ByteArray = data.credential.imageBytes
 
         private val dataAsJson: Value by lazy {
-            w3cCredentialAsJson(data.credential.data)
+            w3cCredentialAsJson(data.credential.originalData)
         }
+
+        val originalString: String
+            get() = this.data.credential.original
 
         override fun asJson(): Value = dataAsJson
 
@@ -182,7 +186,7 @@ sealed class W3C {
             Json.encodeToString(this.data)
 
         fun asW3CCredential(): W3cVerifiableCredential =
-            data.credential.data
+            data.credential.originalData
 
         companion object {
             val OPEN_BADGE_FORMATS: Array<String> = arrayOf("ldp_vc")

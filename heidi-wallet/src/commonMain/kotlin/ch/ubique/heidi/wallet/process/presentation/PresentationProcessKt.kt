@@ -67,6 +67,7 @@ import ch.ubique.heidi.wallet.process.presentation.models.TransactionDataWrapper
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import uniffi.heidi_credentials_rust.SignatureCreator
+import uniffi.heidi_credentials_rust.w3cCredentialAsJson
 import uniffi.heidi_dcql_rust.CredentialSetOption
 import uniffi.heidi_dcql_rust.selectCredentialsWithInfo
 import uniffi.heidi_util_rust.encodeCbor
@@ -338,8 +339,10 @@ class PresentationProcessKt private constructor(
             // TODO: We need to improve this after refactoring
             val tmpList = credentials.map {
                 when (identityMap[it.payload]?.second) {
-                    CredentialType.OpenBadge303 -> Json.encodeToString(
-                        W3C.OpenBadge303.parseSerialized(it.payload).asJson())
+                    CredentialType.OpenBadge303 -> {
+                        val fuck = W3C.OpenBadge303.parseSerialized(it.payload).originalString
+                        fuck
+                    }
                     else -> it.payload
                 }
             }
@@ -377,6 +380,8 @@ class PresentationProcessKt private constructor(
                                                 is Credential.OpenBadge303Credential -> {
                                                     val vc = runCatching { W3C.OpenBadge303.parseSerialized(c.payload) }
                                                         .getOrNull() ?: return@firstOrNull false
+                                                    val a = (it.credential as Credential.OpenBadge303Credential).v1
+                                                    val b = vc.asW3CCredential()
                                                     (it.credential as Credential.OpenBadge303Credential).v1 == vc.asW3CCredential()
                                                 }
                                             }

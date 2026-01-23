@@ -242,6 +242,7 @@ pub struct W3CVerifiableCredential {
     /// will be retrievable from the URL. For example, the object could contain a link to an
     /// external document that notes whether the credential is suspended or revoked.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "credentialStatus")]
     pub status: Option<Value>,
 
     /// The value of the credentialSchema property MUST be one or more data schemas that provide

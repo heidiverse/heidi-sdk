@@ -28,6 +28,7 @@ pub struct OpenBadges303Credential {
     pub data: W3CVerifiableCredential,
 
     pub original: String,
+    pub original_data: W3CVerifiableCredential,
 
     pub image_bytes: Vec<u8>,
 }
@@ -45,6 +46,8 @@ impl OpenBadges303Credential {
             credential.push_str(&chunk.get_text().map_err(|_| ParseError::CorruptedChunks)?);
         }
         let original = credential.clone();
+        let original_data =
+            parse_canonicalized_w3c_json_ld(&credential).map_err(|e| ParseError::JsonLd(e))?;
 
         let data = parse_and_canonicalize_w3c_json_ld(credential, additional_context)
             .await
@@ -53,6 +56,7 @@ impl OpenBadges303Credential {
         Ok(Self {
             data,
             original,
+            original_data,
             image_bytes,
         })
     }
@@ -68,10 +72,12 @@ impl OpenBadges303Credential {
 
         let data =
             parse_canonicalized_w3c_json_ld(&credential).map_err(|e| ParseError::JsonLd(e))?;
+        let original_data = data.clone();
 
         Ok(Self {
             data,
             original: credential,
+            original_data,
             image_bytes,
         })
     }
