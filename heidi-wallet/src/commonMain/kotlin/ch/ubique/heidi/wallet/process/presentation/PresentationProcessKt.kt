@@ -375,7 +375,8 @@ class PresentationProcessKt private constructor(
                                                 is Credential.BbsCredential -> (it.credential as Credential.BbsCredential).v1.originalBbs == c.payload
                                                 is Credential.W3cCredential -> (it.credential as Credential.W3cCredential).v1.originalSdjwt == c.payload
                                                 is Credential.OpenBadge303Credential -> {
-                                                    val vc = W3C.OpenBadge303.parseSerialized(c.payload)
+                                                    val vc = runCatching { W3C.OpenBadge303.parseSerialized(c.payload) }
+                                                        .getOrNull() ?: return@firstOrNull false
                                                     (it.credential as Credential.OpenBadge303Credential).v1 == vc.asW3CCredential()
                                                 }
                                             }
