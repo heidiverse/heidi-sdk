@@ -54,4 +54,7 @@ pub fn generate_nonce(length: u64) -> String {
         .collect()
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __rust_probestack() {}
+
 uniffi::setup_scaffolding!();
