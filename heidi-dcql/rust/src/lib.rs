@@ -165,6 +165,7 @@ pub enum DcqlCredentialQueryMismatch {
     #[cfg(feature = "bbs")]
     BbsMeta(BbsMetaMismatch),
     W3CMeta(W3CMetaMismatch),
+    LdpMeta(LdpMetaMismatch),
 
     ExpectedFormat(String),
 
@@ -195,6 +196,12 @@ pub enum BbsMetaMismatch {
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
 pub enum W3CMetaMismatch {
     InvalidMeta,
+}
+
+#[derive(Debug, Clone, uniffi::Enum, Serialize)]
+pub enum LdpMetaMismatch {
+    InvalidMeta,
+    WrongCredentialTypes,
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
@@ -510,10 +517,23 @@ impl Credential {
     }
 
     pub fn matches_meta_open_badges(
-        _vc: &W3CVerifiableCredential,
-        _meta: Option<&Meta>,
-    ) -> Result<(), ()> {
-        Ok(())
+        vc: &W3CVerifiableCredential,
+        meta: Option<&Meta>,
+    ) -> Result<(), LdpMetaMismatch> {
+        match meta {
+            Some(Meta::LdpVc { type_values }) => {
+                if type_values
+                    .iter()
+                    .any(|values| values.iter().all(|t| vc.types.contains(t)))
+                {
+                    return Ok(());
+                } else {
+                    return Err(LdpMetaMismatch::WrongCredentialTypes);
+                }
+            }
+            None => Ok(()),
+            _ => Err(LdpMetaMismatch::InvalidMeta),
+        }
     }
 
     pub fn get_vct(sd_jwt: &SdJwtRust) -> &str {
@@ -586,8 +606,8 @@ impl Credential {
                 }
             }
             Credential::OpenBadge303Credential(vc) => {
-                if let Err(_) = Self::matches_meta_open_badges(vc, credential_query.meta.as_ref()) {
-                    unreachable!(); // currently no meta checks for open badges
+                if let Err(e) = Self::matches_meta_open_badges(vc, credential_query.meta.as_ref()) {
+                    return Err(DcqlCredentialQueryMismatch::LdpMeta(e));
                 }
             }
         }

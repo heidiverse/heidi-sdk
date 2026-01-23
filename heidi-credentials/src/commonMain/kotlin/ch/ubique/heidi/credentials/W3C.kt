@@ -129,6 +129,9 @@ sealed class W3C {
             get() = data.credential.data.types.firstOrNull { it != "VerifiableCredential" }
                 ?: "VerifiableCredential"
 
+        val types: List<String>
+            get() = data.credential.data.types
+
         val name: String?
             get() = when (val name = data.credential.data.name) {
                 is LocalizableString.ManyLvo -> name.v1.firstOrNull()?.value

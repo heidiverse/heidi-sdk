@@ -28,6 +28,7 @@ import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.get
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.toClaimsPointer
+import ch.ubique.heidi.util.extensions.asArray
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
 import kotlinx.coroutines.runBlocking
@@ -105,6 +106,9 @@ class InvalidDocTypeException(expected: String, actual: String) :
 
 class InvalidCredentialTypeException(expected: List<String>, actual: List<String>) :
     DcqlVerificationException("A document with credentialType in $expected was expected, but got credentialTypes = $actual!")
+
+class InvalidCredentialTypeCombinationException(expected: List<List<String>>, actual: List<String>) :
+    DcqlVerificationException("A document with credentialType combination in $expected was expected, but got credentialTypes = $actual!")
 
 
 private fun checkClaimQuery(
@@ -238,10 +242,17 @@ private fun checkMetaW3C(
 }
 
 private fun checkMetaOpenBadges(
-    meta: Meta
+    meta: Meta,
+    types: List<String>
 ): Result<Unit> {
-    // TODO: OpenBadges Metadata
-    return Result.success(Unit)
+    if (meta !is Meta.LdpVc)
+        return Result.failure(InvalidCredentialQueryMetaException("BBS", meta.toString()))
+
+    return if (meta.typeValues.any { it.containsAll(types) }) {
+        Result.success(Unit)
+    } else {
+        Result.failure(InvalidCredentialTypeCombinationException(meta.typeValues, types))
+    }
 }
 
 
@@ -378,7 +389,12 @@ private fun checkCredentialQuery(
             val vcJson = vpJson["verifiableCredential"][0]
 
             query.meta?.let {
-                checkMetaOpenBadges(it).exceptionOrNull()?.let { e -> return Result.failure(e) }
+                val types = vcJson["type"]
+                    .asArray()
+                    ?.mapNotNull { t -> t.asString() }
+                    ?: listOf()
+
+                checkMetaOpenBadges(it, types).exceptionOrNull()?.let { e -> return Result.failure(e) }
             }
 
             checkCredentialQuery(

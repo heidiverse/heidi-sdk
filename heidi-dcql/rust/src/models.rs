@@ -54,6 +54,7 @@ pub enum Meta {
     IsoMdoc { doctype_value: String },
     SdjwtVc { vct_values: Vec<String> },
     W3C { credential_types: Vec<String> },
+    LdpVc { type_values: Vec<Vec<String>> },
     // NOTE: BBS uses the W3C VCDM, so it makes sense to
     // reuse the same object for the metadata.
     // Bbs { credential_types: Vec<String> },
