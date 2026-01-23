@@ -147,6 +147,7 @@ mod issuance {
         Mdoc,
         BbsTermWise,
         W3C,
+        OpenBadge,
     }
 
     #[derive(uniffi::Enum, Clone, Copy)]
@@ -667,6 +668,9 @@ mod issuance {
                                     CredentialType::W3C => {
                                         CredentialFormat::W3C(payload.to_string())
                                     }
+                                    CredentialType::OpenBadge => {
+                                        CredentialFormat::OpenBadge(payload.to_string())
+                                    }
                                 },
                             })
                         })
@@ -680,6 +684,9 @@ mod issuance {
                                 CredentialFormat::BbsTermWise(payload.to_string())
                             }
                             CredentialType::W3C => CredentialFormat::W3C(payload.to_string()),
+                            CredentialType::OpenBadge => {
+                                CredentialFormat::OpenBadge(payload.to_string())
+                            }
                         },
                     })]
                 } else {
@@ -791,6 +798,9 @@ mod issuance {
                                     CredentialType::W3C => {
                                         CredentialFormat::W3C(payload.to_string())
                                     }
+                                    CredentialType::OpenBadge => {
+                                        CredentialFormat::OpenBadge(payload.to_string())
+                                    }
                                 },
                             }))
                         })
@@ -814,6 +824,9 @@ mod issuance {
                                 CredentialFormat::BbsTermWise(payload.to_string())
                             }
                             CredentialType::W3C => CredentialFormat::W3C(payload.to_string()),
+                            CredentialType::OpenBadge => {
+                                CredentialFormat::OpenBadge(payload.to_string())
+                            }
                         },
                     })]
                 } else {
@@ -960,6 +973,9 @@ mod issuance {
                                     CredentialType::W3C => {
                                         CredentialFormat::W3C(payload.to_string())
                                     }
+                                    CredentialType::OpenBadge => {
+                                        CredentialFormat::OpenBadge(payload.to_string())
+                                    }
                                 },
                             })
                         })
@@ -973,6 +989,9 @@ mod issuance {
                                 CredentialFormat::BbsTermWise(payload.to_string())
                             }
                             CredentialType::W3C => CredentialFormat::W3C(payload.to_string()),
+                            CredentialType::OpenBadge => {
+                                CredentialFormat::OpenBadge(payload.to_string())
+                            }
                         },
                     })]
                 } else {
@@ -2200,6 +2219,9 @@ mod issuance {
                                     CredentialFormat::BbsTermWise(payload.to_string())
                                 }
                                 CredentialType::W3C => CredentialFormat::W3C(payload.to_string()),
+                                CredentialType::OpenBadge => {
+                                    CredentialFormat::OpenBadge(payload.to_string())
+                                }
                             })
                             .collect(),
                         c_nonce: credential_response.c_nonce,

@@ -54,6 +54,7 @@ import uniffi.heidi_crypto_rust.base64UrlDecode
 import uniffi.heidi_wallet_rust.Credential
 import uniffi.heidi_wallet_rust.CredentialFormat
 import uniffi.heidi_wallet_rust.bbsJson
+import kotlin.io.encoding.Base64
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.ExperimentalTime
@@ -206,13 +207,15 @@ abstract class IssuanceProcess(
 			is CredentialFormat.SdJwt -> credential.credential.v1
 			is CredentialFormat.BbsTermWise -> credential.credential.v1
 			is CredentialFormat.W3c -> credential.credential.v1
+            is CredentialFormat.OpenBadge -> credential.credential.v1
 		}
 		val docType = when (credentialType) {
 			CredentialType.SdJwt -> SdJwt.parse(credentialPayload).getMetadata().vct
 			CredentialType.Mdoc -> MdocUtils.getDocType(credentialPayload)
 			CredentialType.BbsTermwise -> return null
 			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
-            CredentialType.OpenBadge303 -> W3C.OpenBadge303.parseSerialized(credentialPayload).docType
+            CredentialType.OpenBadge303 -> W3C.OpenBadge303
+                .parse(Base64.UrlSafe.decode(credentialPayload)).docType
             CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null
@@ -241,6 +244,7 @@ abstract class IssuanceProcess(
 				val cred = W3C.parse(credential.credential.getPayload())
 				cred.asJson()["render"]["oca"].asString()
 			}
+            is CredentialFormat.OpenBadge -> return null
 		}
 
 		if (ocaUrl != null) {
@@ -267,6 +271,7 @@ abstract class IssuanceProcess(
 			is CredentialFormat.SdJwt -> this.v1
 			is CredentialFormat.BbsTermWise -> this.v1
 			is CredentialFormat.W3c -> this.v1
+            is CredentialFormat.OpenBadge -> this.v1
 		}
 	}
 

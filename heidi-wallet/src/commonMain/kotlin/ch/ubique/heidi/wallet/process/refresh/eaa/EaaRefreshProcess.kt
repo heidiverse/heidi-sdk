@@ -258,6 +258,7 @@ class EaaRefreshProcess(
 			is CredentialFormat.SdJwt -> this.v1
 			is CredentialFormat.BbsTermWise -> this.v1
 			is CredentialFormat.W3c -> this.v1
+            is CredentialFormat.OpenBadge -> this.v1
 		}
 	}
 }

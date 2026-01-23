@@ -45,6 +45,7 @@ import org.koin.dsl.module
 import uniffi.heidi_wallet_rust.Credential
 import uniffi.heidi_wallet_rust.CredentialFormat
 import uniffi.heidi_wallet_rust.mdocAsJsonRepresentation
+import kotlin.io.encoding.Base64
 
 class OcaServiceController(val client: HttpClient, val stringResourceProvider: StringResourceProvider, val json: Json) {
 	companion object {
@@ -69,7 +70,8 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 			CredentialType.Mdoc -> mdocAsJsonRepresentation((credential.credential as CredentialFormat.Mdoc).v1) ?: return null
 			CredentialType.BbsTermwise -> return null
 			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse((credential.credential as CredentialFormat.W3c).v1).asJson())
-            CredentialType.OpenBadge303 -> TODO("Alexey: OpenBadge")
+            CredentialType.OpenBadge303 -> Json.encodeToString(W3C.OpenBadge303.parse(
+                Base64.UrlSafe.decode((credential.credential as CredentialFormat.OpenBadge).v1)).asJson())
             CredentialType.Unknown -> return null
 		}
 
@@ -78,6 +80,7 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 			is CredentialFormat.SdJwt -> credential.credential.v1
 			is CredentialFormat.BbsTermWise -> return null
 			is CredentialFormat.W3c -> credential.credential.v1
+            is CredentialFormat.OpenBadge -> credential.credential.v1
 		}
 
 		val docType = when (credentialType) {
@@ -85,7 +88,8 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 			CredentialType.Mdoc -> MdocUtils.getDocType(credentialPayload)
 			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
 			CredentialType.BbsTermwise -> return null
-            CredentialType.OpenBadge303 -> TODO("Alexey: OpenBadge")
+            CredentialType.OpenBadge303 -> W3C.OpenBadge303
+                .parse(Base64.UrlSafe.decode(credentialPayload)).docType
             CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null
