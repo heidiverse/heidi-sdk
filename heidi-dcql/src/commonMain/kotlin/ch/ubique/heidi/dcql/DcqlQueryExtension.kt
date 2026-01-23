@@ -102,6 +102,10 @@ fun Meta.similar(other: Meta?) : Boolean {
             is Meta.W3c -> this.credentialTypes.containsAll(other.credentialTypes)
             else -> false
         }
+        is Meta.LdpVc -> when(other) {
+            is Meta.LdpVc -> this.typeValues.containsAll(other.typeValues)
+            else -> false
+        }
     }
 }
 

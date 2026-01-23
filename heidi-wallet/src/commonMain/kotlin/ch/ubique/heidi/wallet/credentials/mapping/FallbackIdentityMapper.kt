@@ -88,7 +88,8 @@ class FallbackIdentityMapper(
 			}
 			CredentialType.BbsTermwise -> root
 			CredentialType.W3C_VCDM -> root
-			CredentialType.Unknown -> root
+            CredentialType.OpenBadge303 -> root
+            CredentialType.Unknown -> root
 		}
 
 		val firstName = credentialJson["given_name"]?.jsonPrimitive?.content

@@ -229,4 +229,5 @@ pub enum CredentialFormat {
     Mdoc(String),
     BbsTermWise(String),
     W3C(String),
+    OpenBadge(String),
 }

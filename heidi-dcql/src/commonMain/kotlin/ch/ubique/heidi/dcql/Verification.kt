@@ -28,10 +28,13 @@ import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.get
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.toClaimsPointer
+import ch.ubique.heidi.util.extensions.asArray
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.PointerPart
+import uniffi.heidi_credentials_rust.verifySecuredDocumentString
 import uniffi.heidi_crypto_rust.base64UrlDecode
 import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_dcql_rust.ClaimsQuery
@@ -103,6 +106,9 @@ class InvalidDocTypeException(expected: String, actual: String) :
 
 class InvalidCredentialTypeException(expected: List<String>, actual: List<String>) :
     DcqlVerificationException("A document with credentialType in $expected was expected, but got credentialTypes = $actual!")
+
+class InvalidCredentialTypeCombinationException(expected: List<List<String>>, actual: List<String>) :
+    DcqlVerificationException("A document with credentialType combination in $expected was expected, but got credentialTypes = $actual!")
 
 
 private fun checkClaimQuery(
@@ -235,6 +241,20 @@ private fun checkMetaW3C(
     return Result.failure(InvalidCredentialQueryMetaException("W3C", meta.toString()))
 }
 
+private fun checkMetaOpenBadges(
+    meta: Meta,
+    types: List<String>
+): Result<Unit> {
+    if (meta !is Meta.LdpVc)
+        return Result.failure(InvalidCredentialQueryMetaException("BBS", meta.toString()))
+
+    return if (meta.typeValues.any { it.containsAll(types) }) {
+        Result.success(Unit)
+    } else {
+        Result.failure(InvalidCredentialTypeCombinationException(meta.typeValues, types))
+    }
+}
+
 
 private fun getCredentialType(vpToken: String, expectedFormat: String): Result<CredentialType> {
     // BBS term-wise has unique formats
@@ -271,6 +291,9 @@ private fun getCredentialType(vpToken: String, expectedFormat: String): Result<C
 
     if (W3C.W3C_FORMATS.contains(expectedFormat))
         return Result.success(CredentialType.W3C_VCDM)
+
+    if (W3C.OpenBadge303.OPEN_BADGE_FORMATS.contains(expectedFormat))
+        return Result.success(CredentialType.OpenBadge303)
 
     return Result.failure(UnknownCredentialQueryFormatException(expectedFormat))
 }
@@ -355,6 +378,27 @@ private fun checkCredentialQuery(
 
             checkCredentialQuery(
                 query, w3c.asJson(), w3c.getOriginalNumClaims(), w3c.getNumDisclosed()
+            ).map { result }
+        }
+
+        CredentialType.OpenBadge303 -> {
+            val result = runCatching {
+                checkVpToken(CredentialType.OpenBadge303, vpToken, query.id)
+            }.getOrElse { return Result.failure(it) }
+            val vpJson = Json.decodeFromString<Value>(vpToken)
+            val vcJson = vpJson["verifiableCredential"][0]
+
+            query.meta?.let {
+                val types = vcJson["type"]
+                    .asArray()
+                    ?.mapNotNull { t -> t.asString() }
+                    ?: listOf()
+
+                checkMetaOpenBadges(it, types).exceptionOrNull()?.let { e -> return Result.failure(e) }
+            }
+
+            checkCredentialQuery(
+                query, vcJson, 0, 0
             ).map { result }
         }
 

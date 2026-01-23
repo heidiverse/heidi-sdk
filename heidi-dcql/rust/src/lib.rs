@@ -24,10 +24,10 @@ pub mod verify;
 use crate::models::SetOption;
 #[cfg(feature = "bbs")]
 use heidi_credentials_rust::bbs::BbsRust;
-use heidi_credentials_rust::mdoc::MdocRust;
 use heidi_credentials_rust::models::{Pointer, PointerPart};
 use heidi_credentials_rust::sdjwt::SdJwtRust;
 use heidi_credentials_rust::{claims_pointer::Selector, w3c::W3CSdJwt};
+use heidi_credentials_rust::{mdoc::MdocRust, w3c::W3CVerifiableCredential};
 use heidi_util_rust::value::Value;
 use models::{
     ClaimsQuery, Credential, CredentialOptions, CredentialQuery, CredentialSetOption, DcqlQuery,
@@ -40,6 +40,7 @@ use std::sync::Arc;
 const SDJWT_FORMATS: [&str; 2] = ["dc+sd-jwt", "vc+sd-jwt"];
 const MDOC_FORMATS: [&str; 1] = ["mso_mdoc"];
 const W3C_FORMATS: [&str; 1] = ["vc+sd-jwt"];
+const OPEN_BADGE_FORMATS: [&str; 1] = ["ldp_vc"];
 
 #[cfg(feature = "bbs")]
 const BBS_FORMATS: [&str; 1] = ["bbs-termwise"];
@@ -164,6 +165,7 @@ pub enum DcqlCredentialQueryMismatch {
     #[cfg(feature = "bbs")]
     BbsMeta(BbsMetaMismatch),
     W3CMeta(W3CMetaMismatch),
+    LdpMeta(LdpMetaMismatch),
 
     ExpectedFormat(String),
 
@@ -194,6 +196,12 @@ pub enum BbsMetaMismatch {
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
 pub enum W3CMetaMismatch {
     InvalidMeta,
+}
+
+#[derive(Debug, Clone, uniffi::Enum, Serialize)]
+pub enum LdpMetaMismatch {
+    InvalidMeta,
+    WrongCredentialTypes,
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
@@ -398,6 +406,7 @@ pub fn get_requested_attributes(
                 #[cfg(feature = "bbs")]
                 Credential::BbsCredential(bbs) => bbs.body().clone(),
                 Credential::W3CCredential(w3c) => w3c.json.clone(),
+                Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
             };
 
             let all_ptrs = claim.path.resolve_ptr(body.clone()).unwrap_or(vec![]);
@@ -434,6 +443,7 @@ pub fn get_requested_attributes(
                 #[cfg(feature = "bbs")]
                 Credential::BbsCredential(bbs) => bbs.body().clone(),
                 Credential::W3CCredential(w3c) => w3c.json.clone(),
+                Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
             };
 
             let all_ptrs = claim.path.resolve_ptr(body.clone()).unwrap_or(vec![]);
@@ -506,6 +516,26 @@ impl Credential {
         Ok(())
     }
 
+    pub fn matches_meta_open_badges(
+        vc: &W3CVerifiableCredential,
+        meta: Option<&Meta>,
+    ) -> Result<(), LdpMetaMismatch> {
+        match meta {
+            Some(Meta::LdpVc { type_values }) => {
+                if type_values
+                    .iter()
+                    .any(|values| values.iter().all(|t| vc.types.contains(t)))
+                {
+                    return Ok(());
+                } else {
+                    return Err(LdpMetaMismatch::WrongCredentialTypes);
+                }
+            }
+            None => Ok(()),
+            _ => Err(LdpMetaMismatch::InvalidMeta),
+        }
+    }
+
     pub fn get_vct(sd_jwt: &SdJwtRust) -> &str {
         sd_jwt
             .claims
@@ -545,6 +575,11 @@ impl Credential {
             {
                 return Err(expected_format_error)
             }
+            Credential::OpenBadge303Credential(_)
+                if !OPEN_BADGE_FORMATS.contains(&credential_query.format.as_str()) =>
+            {
+                return Err(expected_format_error)
+            }
             _ => (),
         }
 
@@ -568,6 +603,11 @@ impl Credential {
             Credential::W3CCredential(w3c) => {
                 if let Err(e) = Self::matches_meta_w3c(w3c, credential_query.meta.as_ref()) {
                     return Err(DcqlCredentialQueryMismatch::W3CMeta(e));
+                }
+            }
+            Credential::OpenBadge303Credential(vc) => {
+                if let Err(e) = Self::matches_meta_open_badges(vc, credential_query.meta.as_ref()) {
+                    return Err(DcqlCredentialQueryMismatch::LdpMeta(e));
                 }
             }
         }
@@ -665,6 +705,7 @@ impl ClaimsQuery {
                 };
                 w3c.get(Arc::new(path))
             }
+            Credential::OpenBadge303Credential(c) => c.get(Arc::new(self.path.clone())),
         };
 
         let Some(data) = data else {

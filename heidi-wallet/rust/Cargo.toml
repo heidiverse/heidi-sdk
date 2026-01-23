@@ -100,7 +100,7 @@ default = [
     "next-gen-signatures",
 
 ]
-uniffi = ["dep:uniffi", "dep:tokio"]
+uniffi = ["dep:uniffi", "dep:tokio", "heidi-credentials-rust/uniffi"]
 oid4vp = ["dep:reqwest"]
 reqwest = ["dep:reqwest", "dep:reqwest-middleware", "dep:reqwest-retry"]
 reqwest_cookies = ["dep:reqwest_cookie_store"]
