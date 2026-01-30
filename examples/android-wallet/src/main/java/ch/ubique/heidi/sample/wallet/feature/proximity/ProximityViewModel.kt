@@ -19,40 +19,30 @@ under the License.
  */
 package ch.ubique.heidi.sample.wallet.feature.proximity
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ch.ubique.heidi.credentials.ClaimsPointer
 import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.get
 import ch.ubique.heidi.credentials.toClaimsPointer
-import ch.ubique.heidi.dcql.Attribute
-import ch.ubique.heidi.dcql.AttributeType
 import ch.ubique.heidi.dcql.getVpToken
-import ch.ubique.heidi.dcql.sdJwtDcqlClaimsFromAttributes
 import ch.ubique.heidi.presentation.request.PresentationRequest
 import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.wallet.ProximityWallet
 import ch.ubique.heidi.proximity.wallet.ProximityWalletState
-import ch.ubique.heidi.util.extensions.asString
-import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 import uniffi.heidi_credentials_rust.SignatureCreator
 import uniffi.heidi_crypto_rust.SoftwareKeyPair
-import uniffi.heidi_dcql_rust.CredentialQuery
+import uniffi.heidi_crypto_rust.base64UrlDecode
+import uniffi.heidi_crypto_rust.parseEncodedJwtPayload
 import uniffi.heidi_dcql_rust.DcqlQuery
-import uniffi.heidi_dcql_rust.Meta
 import uniffi.heidi_util_rust.Value
 import kotlin.String
 import kotlin.uuid.ExperimentalUuidApi
@@ -179,6 +169,7 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 			)).encodeToByteArray())
 		}
 	}
+
 	var dcqlQuery : DcqlQuery? = null
 	var collectingJob : Job? = null
 	private fun startCollectingWalletState() {
@@ -188,13 +179,27 @@ class ProximityViewModel : ViewModel(), KoinComponent {
 				if (state is ProximityWalletState.RequestingDocuments) {
 					if(state.request is DocumentRequest.OpenId4Vp) {
 						//TODO: this is probably signed (or at least it could be signed) we need to check the signature
-						// and then check that verifier_info contains a wallet attestation attesting to the key used for signing the request
-						val v : Value = Json.decodeFromString<Value>((state.request as DocumentRequest.OpenId4Vp).parJwt)
-						var pr = PresentationRequest.fromValue(v)
-						//TODO: we would want to check if `origin`, which the wallet calculated itself, is actually found in expected
-						// origins of the request.
-//						(state.request as DocumentRequest.OpenId4Vp).origin
-						dcqlQuery = pr!!.dcqlQuery
+						// and then check that the 'jwt' jose header contains a wallet attestation attesting to the key used for signing the request
+						val request = state.request as DocumentRequest.OpenId4Vp
+						val pr: PresentationRequest? = try {
+
+							val presentationRequestString =
+								parseEncodedJwtPayload(request.parJwt)
+
+
+							val v: Value = Json.decodeFromString(presentationRequestString!!)
+							PresentationRequest.fromValue(v)
+
+						} catch (e: Exception) {
+
+							// Fallback: try to parse without verifying signature
+							PresentationRequest.fromValue(
+								Json.decodeFromString<Value>(request.parJwt)
+							)
+
+						}
+
+						dcqlQuery = pr?.dcqlQuery
 					}
 				}
 			}
