@@ -46,6 +46,9 @@ data class PresentationRequest @OptIn(ExperimentalSerializationApi::class) const
 	@EncodeDefault
 	@SerialName("response_type")
 	val responseType: String = "vp_token",
+	@EncodeDefault
+	@SerialName("response_mode")
+	val responseMode: String = "direct_post.jwt",
 	@SerialName("client_id_scheme")
 	val clientIdScheme: String? = null,
 	@SerialName("presentation_definition")
