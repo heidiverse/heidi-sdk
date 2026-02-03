@@ -232,7 +232,8 @@ class EaaRefreshProcess(
 
 			}.getOrNull() ?: return null
 			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
-			CredentialType.Unknown -> {
+            CredentialType.OpenBadge303 -> W3C.OpenBadge303.parseSerialized(credentialPayload).docType
+            CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null
 			}
@@ -257,6 +258,7 @@ class EaaRefreshProcess(
 			is CredentialFormat.SdJwt -> this.v1
 			is CredentialFormat.BbsTermWise -> this.v1
 			is CredentialFormat.W3c -> this.v1
+            is CredentialFormat.OpenBadge -> this.v1
 		}
 	}
 }

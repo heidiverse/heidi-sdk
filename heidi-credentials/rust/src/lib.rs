@@ -19,15 +19,18 @@ under the License.
  */
 
 use chrono::SecondsFormat;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 use std::ops::Add;
 
 #[cfg(feature = "bbs")]
 pub mod bbs;
 pub mod claims_pointer;
+pub mod json_ld;
+pub mod ldp;
 pub mod mdoc;
 pub mod models;
+pub mod open_badges;
 pub mod sdjwt;
 pub mod sdjwt_util;
 pub mod w3c;
@@ -50,5 +53,9 @@ pub fn generate_nonce(length: u64) -> String {
         .map(char::from)
         .collect()
 }
+
+#[cfg(target_arch = "x86_64")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __rust_probestack() {}
 
 uniffi::setup_scaffolding!();

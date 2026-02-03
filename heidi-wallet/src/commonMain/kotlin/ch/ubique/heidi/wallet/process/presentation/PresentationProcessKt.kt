@@ -67,6 +67,7 @@ import ch.ubique.heidi.wallet.process.presentation.models.TransactionDataWrapper
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import uniffi.heidi_credentials_rust.SignatureCreator
+import uniffi.heidi_credentials_rust.w3cCredentialAsJson
 import uniffi.heidi_dcql_rust.CredentialSetOption
 import uniffi.heidi_dcql_rust.selectCredentialsWithInfo
 import uniffi.heidi_util_rust.encodeCbor
@@ -330,17 +331,22 @@ class PresentationProcessKt private constructor(
                 CredentialSelection.PexCredentialSelection(purpose, it.value)
             }
         } else if (dcqlQuery != null) {
-            // TODO: We need to improve this after refactoring
-            val tmpList = credentials.map { it.payload }
-            val result = selectCredentialsWithInfo(dcqlQuery, tmpList)
-
-            // Prioritize ZKP proofs for claim-based credentials
-            var setOptions = prioritizeBbsClaimBasedProofs(dcqlQuery, result.setOptions)
-
             val identityMap = credentials.associate {
                 val meta = CredentialMetadata.fromString(it.metadata)
                 it.payload to Pair(it.identityId, meta?.credentialType ?: CredentialType.Unknown)
             }
+
+            // TODO: We need to improve this after refactoring
+            val tmpList = credentials.map {
+                when (identityMap[it.payload]?.second) {
+                    CredentialType.OpenBadge303 -> W3C.OpenBadge303.parseSerialized(it.payload).originalString
+                    else -> it.payload
+                }
+            }
+            val result = selectCredentialsWithInfo(dcqlQuery, tmpList)
+
+            // Prioritize ZKP proofs for claim-based credentials
+            val setOptions = prioritizeBbsClaimBasedProofs(dcqlQuery, result.setOptions)
 
             this.dcqlMismatchInfo = DcqlMismatchInfo(
                 query = dcqlQuery,
@@ -368,6 +374,13 @@ class PresentationProcessKt private constructor(
                                                 is Credential.SdJwtCredential -> (it.credential as Credential.SdJwtCredential).v1.originalSdjwt == c.payload
                                                 is Credential.BbsCredential -> (it.credential as Credential.BbsCredential).v1.originalBbs == c.payload
                                                 is Credential.W3cCredential -> (it.credential as Credential.W3cCredential).v1.originalSdjwt == c.payload
+                                                is Credential.OpenBadge303Credential -> {
+                                                    val vc = runCatching { W3C.OpenBadge303.parseSerialized(c.payload) }
+                                                        .getOrNull() ?: return@firstOrNull false
+                                                    val a = (it.credential as Credential.OpenBadge303Credential).v1
+                                                    val b = vc.asW3CCredential()
+                                                    (it.credential as Credential.OpenBadge303Credential).v1 == vc.asW3CCredential()
+                                                }
                                             }
                                         }
                                         if (c == null) {
@@ -732,8 +745,8 @@ class PresentationProcessKt private constructor(
                             email = email
                         )
 
-                        val vpToken = if (credentialMetadata.credentialType == CredentialType.SdJwt) {
-                            SdJwt.parse(c.payload).getVpToken(
+                        val vpToken: Result<String?> = when (credentialMetadata.credentialType) {
+                            CredentialType.SdJwt -> SdJwt.parse(c.payload).getVpToken(
                                 credentialQuery,
                                 audience,
                                 transactionData,
@@ -741,45 +754,46 @@ class PresentationProcessKt private constructor(
                                 nonce,
                                 nativeSigner?.let { Signer(nativeSigner) }
                             )
-                        } else if (credentialMetadata.credentialType == CredentialType.Mdoc) {
-                            // Non standard workaround for Warsaw event
-                            if (responseMode == "direct_post") {
-                                mdocGeneratedNonce = ""
+                            CredentialType.Mdoc -> {
+                                // Non standard workaround for Warsaw event
+                                if (responseMode == "direct_post") {
+                                    mdocGeneratedNonce = ""
+                                }
+                                val responseUriHash =
+                                    sha256Rs(encodeCbor(listOf(responseUri, mdocGeneratedNonce).toCbor()))
+                                val clientIdHash =
+                                    sha256Rs(encodeCbor(listOf(audience, mdocGeneratedNonce).toCbor()))
+                                val nativeSigner = nativeSigner ?: return PresentationWorkflow.Error("mDoc cannot be claim bound")
+                                Mdoc.parse(c.payload).getVpToken(
+                                    credentialQuery,
+                                    clientIdHash,
+                                    responseUriHash,
+                                    nonce,
+                                    Signer(nativeSigner)
+                                )
                             }
-                            val responseUriHash =
-                                sha256Rs(encodeCbor(listOf(responseUri, mdocGeneratedNonce).toCbor()))
-                            val clientIdHash =
-                                sha256Rs(encodeCbor(listOf(audience, mdocGeneratedNonce).toCbor()))
-                            val nativeSigner = nativeSigner ?: return PresentationWorkflow.Error("mDoc cannot be claim bound")
-                            Mdoc.parse(c.payload).getVpToken(
-                                credentialQuery,
-                                clientIdHash,
-                                responseUriHash,
-                                nonce,
-                                Signer(nativeSigner)
-                            )
-                        } else if (credentialMetadata.credentialType == CredentialType.BbsTermwise) {
-                            val signer = nativeSigner?.let { Signer(nativeSigner) }
+                            CredentialType.BbsTermwise -> {
+                                val signer = nativeSigner?.let { Signer(nativeSigner) }
 
-                            val publicKey = nativeSigner?.publicKey()
-                            val message = nonce.encodeToByteArray()
-                            val signature = signer?.sign(message)
+                                val publicKey = nativeSigner?.publicKey()
+                                val message = nonce.encodeToByteArray()
+                                val signature = signer?.sign(message)
 
-                            // TODO: Get issuer stuff from credential metadata
-                            Logger("ZKP").warn("----> before proof")
-                            Bbs.parse(c.payload).getVpToken(
-                                credentialQuery,
-                                issuerPk = "zUC711y7V85xqmn7UidKFf5kwC3RWjB9CTsqEWjk81Yqs1TQW73oSawsQxCU3mdziXmbyrEPs2GFkXqvojqYiWz9JyXHaMjh7bR3XYPJTXgU9FZHDEWMarUAWiRBYu5ZenGmvyn",
-                                issuerId = "did:example:issuer0",
-                                issuerKeyId = "did:example:issuer0#bls12_381-g2-pub001",
-                                deviceBindingPk = publicKey,
-                                message = sha256Rs(message),
-                                messageSignature = signature,
-                                clientId = audience,
-                                nonce = nonce,
-                            )
-                        } else if (credentialMetadata.credentialType == CredentialType.W3C_VCDM) {
-                            W3C.parse(c.payload).getVpToken(
+                                // TODO: Get issuer stuff from credential metadata
+                                Logger("ZKP").warn("----> before proof")
+                                Bbs.parse(c.payload).getVpToken(
+                                    credentialQuery,
+                                    issuerPk = "zUC711y7V85xqmn7UidKFf5kwC3RWjB9CTsqEWjk81Yqs1TQW73oSawsQxCU3mdziXmbyrEPs2GFkXqvojqYiWz9JyXHaMjh7bR3XYPJTXgU9FZHDEWMarUAWiRBYu5ZenGmvyn",
+                                    issuerId = "did:example:issuer0",
+                                    issuerKeyId = "did:example:issuer0#bls12_381-g2-pub001",
+                                    deviceBindingPk = publicKey,
+                                    message = sha256Rs(message),
+                                    messageSignature = signature,
+                                    clientId = audience,
+                                    nonce = nonce,
+                                )
+                            }
+                            CredentialType.W3C_VCDM -> W3C.parse(c.payload).getVpToken(
                                 credentialQuery,
                                 audience,
                                 transactionData,
@@ -787,9 +801,10 @@ class PresentationProcessKt private constructor(
                                 nonce,
                                 nativeSigner?.let { Signer(nativeSigner) }
                             )
-                        } else {
-                            // returning here results in return type being `Any`, why tough??
-                            Result.success(null)
+                            CredentialType.OpenBadge303 -> W3C.OpenBadge303
+                                .parseSerialized(c.payload)
+                                .asVerifiablePresentation()
+                            CredentialType.Unknown -> Result.success(null)
                         }
                         Logger("ZKP").warn("----> after proof")
                         if (vpToken.isFailure) {

@@ -25,9 +25,10 @@ enum class CredentialType {
 	Mdoc,
 	BbsTermwise,
 	W3C_VCDM,
+    OpenBadge303,
 	Unknown;
 
 	companion object {
-		val SUPPORTED = setOf(SdJwt, Mdoc, BbsTermwise, W3C_VCDM)
+		val SUPPORTED = setOf(SdJwt, Mdoc, BbsTermwise, W3C_VCDM, OpenBadge303)
 	}
 }

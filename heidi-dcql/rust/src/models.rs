@@ -23,7 +23,7 @@ use heidi_credentials_rust::bbs::{decode_bbs, BbsRust};
 use heidi_credentials_rust::sdjwt::{decode_sdjwt, SdJwtRust};
 use heidi_credentials_rust::{
     mdoc::{decode_mdoc, MdocRust},
-    w3c::W3CSdJwt,
+    w3c::{W3CSdJwt, W3CVerifiableCredential},
 };
 use heidi_credentials_rust::{models::Pointer, w3c::parse_w3c_sd_jwt};
 use heidi_util_rust::value::Value;
@@ -54,6 +54,7 @@ pub enum Meta {
     IsoMdoc { doctype_value: String },
     SdjwtVc { vct_values: Vec<String> },
     W3C { credential_types: Vec<String> },
+    LdpVc { type_values: Vec<Vec<String>> },
     // NOTE: BBS uses the W3C VCDM, so it makes sense to
     // reuse the same object for the metadata.
     // Bbs { credential_types: Vec<String> },
@@ -72,6 +73,7 @@ pub enum Credential {
     #[cfg(feature = "bbs")]
     BbsCredential(BbsRust),
     W3CCredential(W3CSdJwt),
+    OpenBadge303Credential(W3CVerifiableCredential),
 }
 
 #[derive(Clone, Debug, uniffi::Record, Serialize)]
@@ -126,6 +128,12 @@ impl FromStr for Credential {
             // Fallthrough to other formats
             _ => (),
         };
+
+        if let Ok(vc) = serde_json::from_str::<W3CVerifiableCredential>(s) {
+            if vc.types.contains(&"OpenBadgeCredential".to_string()) {
+                return Ok(Credential::OpenBadge303Credential(vc));
+            }
+        }
 
         if let Ok(mdoc) = decode_mdoc(s) {
             return Ok(Credential::MdocCredential(mdoc));

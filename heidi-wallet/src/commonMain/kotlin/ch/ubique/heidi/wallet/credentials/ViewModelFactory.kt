@@ -38,12 +38,14 @@ import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.jsonObjectOrNull
 import ch.ubique.heidi.util.extensions.jsonPrimitiveOrNull
 import ch.ubique.heidi.util.log.Logger
+import ch.ubique.heidi.visualization.layout.LayoutCardImage
 import ch.ubique.heidi.visualization.layout.LayoutData
 import ch.ubique.heidi.visualization.layout.LayoutType
 import ch.ubique.heidi.visualization.layout.deferredCard
 import ch.ubique.heidi.visualization.oca.OcaType
 import ch.ubique.heidi.visualization.oca.model.OcaBundleJson
 import ch.ubique.heidi.visualization.oca.model.content.AttributeType
+import ch.ubique.heidi.visualization.oca.model.content.TextShade
 import ch.ubique.heidi.visualization.oca.processing.AttributeValue
 import ch.ubique.heidi.visualization.oca.processing.OcaProcessor
 import ch.ubique.heidi.visualization.oca.processing.ProcessedAttribute
@@ -58,8 +60,12 @@ import ch.ubique.heidi.wallet.credentials.metadata.getPublicKey
 import ch.ubique.heidi.wallet.credentials.metadata.toKeyAssurance
 import ch.ubique.heidi.wallet.credentials.oca.OcaRepository
 import ch.ubique.heidi.wallet.credentials.presentation.CredentialSelectionUiModel
+import ch.ubique.heidi.wallet.credentials.signature.Signature
+import ch.ubique.heidi.wallet.credentials.signature.SignatureValidationState
 import ch.ubique.heidi.wallet.resources.StringResourceProvider
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.DateTimePeriod
+import kotlinx.datetime.LocalDateTime
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -72,6 +78,7 @@ import uniffi.heidi_dcql_rust.getRequestedAttributes
 import uniffi.heidi_wallet_rust.*
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.time.Instant
 
 class ViewModelFactory private constructor(
 	private val activityRepository: ActivityRepository,
@@ -117,8 +124,15 @@ class ViewModelFactory private constructor(
 
 				validFrom to validUntil
 			}
+            CredentialType.OpenBadge303 -> {
+                val vc = W3C.OpenBadge303.parseSerialized(credential.payload).asJson()
+                val validFrom = vc["validFrom"].asString()?.let { Instant.parse(it).epochSeconds }
+                val validUntil = vc["validUntil"].asString()?.let { Instant.parse(it).epochSeconds }
+
+                validFrom to validUntil
+            }
 			CredentialType.Unknown -> null to null
-		}
+        }
 
 		val jsonPayload = when (credential.metadata.credentialType) {
 			CredentialType.SdJwt -> {
@@ -133,7 +147,9 @@ class ViewModelFactory private constructor(
 				bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString())
 			}.getOrNull() ?: ""
 			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse(credential.payload).asJson())
-			CredentialType.Unknown -> ""
+            CredentialType.OpenBadge303 -> Json.encodeToString(
+                W3C.OpenBadge303.parseSerialized(credential.payload).asJson())
+            CredentialType.Unknown -> ""
 		}
 
 		val signatureVerified = when (credential.metadata.credentialType) {
@@ -141,7 +157,10 @@ class ViewModelFactory private constructor(
 			CredentialType.Mdoc -> null
 			CredentialType.BbsTermwise -> null
 			CredentialType.W3C_VCDM -> W3C.parse(credential.payload).isSignatureValid()
-			CredentialType.Unknown -> null
+            CredentialType.OpenBadge303 -> W3C.OpenBadge303
+                .parseSerialized(credential.payload)
+                .isSignatureValid()
+            CredentialType.Unknown -> null
 		}
 
 		return CredentialUiModel(
@@ -190,11 +209,13 @@ class ViewModelFactory private constructor(
 		val credential = identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.SdJwt }
 			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.Mdoc }
 			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.BbsTermwise }
-			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.W3C_VCDM }
+            ?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.W3C_VCDM }
+            ?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.OpenBadge303 }
 			?: return null
 		var possibleSdJwt: SdJwt? = null
 		var possibleBbs: Bbs? = null
 		var possibleW3C: W3C? = null
+        var possibleOpenBadge303: W3C.OpenBadge303? = null
 
 		val credentialType = credential.metadata.credentialType
 		val jsonContent = when (credentialType) {
@@ -212,7 +233,11 @@ class ViewModelFactory private constructor(
 				possibleW3C = W3C.parse(credential.payload)
 				Json.encodeToString(possibleW3C.asJson())
 			}
-			CredentialType.Unknown -> return null
+            CredentialType.OpenBadge303 -> {
+                possibleOpenBadge303 = W3C.OpenBadge303.parseSerialized(credential.payload)
+                Json.encodeToString(possibleOpenBadge303.asJson())
+            }
+            CredentialType.Unknown -> return null
 		}
 		var isRevoked = false
 		if(revocationCheck != null) {
@@ -224,7 +249,8 @@ class ViewModelFactory private constructor(
 					CredentialType.Mdoc -> mdocAsJsonRepresentation(c.payload) ?: return null
 					CredentialType.BbsTermwise -> continue
 					CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse(c.payload).asJson())
-					CredentialType.Unknown -> return null
+                    CredentialType.OpenBadge303 -> continue // TODO: OpenBadges implement status list
+                    CredentialType.Unknown -> return null
 				}
 				val jsonElement = json.parseToJsonElement(newContent)
 				val url = jsonElement.jsonObject["status"]?.jsonObjectOrNull()?.get("status_list")?.jsonObjectOrNull()?.get("uri")?.jsonPrimitiveOrNull()?.contentOrNull
@@ -337,7 +363,55 @@ class ViewModelFactory private constructor(
 						identity.credentials
 					)
 				}
-				CredentialType.Unknown -> null
+                CredentialType.OpenBadge303 -> {
+                    val vc = possibleOpenBadge303 ?: return null
+                    val title = vc.name ?: "Open Badge Credential"
+                    val subtitle = vc.achievement["description"].asString()?.truncate(100) ?: ""
+                    val issuer = vc.issuerName ?: "Open Badge Issuer"
+
+                    val signatureValid = if (vc.isSignatureValid()) {
+                        SignatureValidationState.VALID
+                    } else {
+                        SignatureValidationState.VALID
+                    }
+
+                    val backgroundImage = vc.pngBytes?.let {
+                        LayoutCardImage.Base64(it)
+                    }
+
+                    val card = LayoutData.Card(
+                        credentialName = title,
+                        issuerName = issuer,
+                        title = title,
+                        subtitle = subtitle,
+                        textColor = TextShade.DARK,
+                        cardColor = 0xFFFFFFFF,
+                        backgroundImage = backgroundImage,
+                        overlays = null
+                    )
+
+                    IdentityUiModel.IdentityUiCredentialModel(
+                        id = identity.id,
+                        name = identity.name,
+                        card = card,
+                        title = title,
+                        subtitle = subtitle,
+                        signature = Signature(signatureValid, issuer),
+                        detailList = LayoutData.DetailList(emptyList()),
+                        hasEmergencyPass = false,
+                        hasOnlyEmergencyPass = false,
+                        credentials = identity.credentials,
+                        activities = activities,
+                        isPid = false,
+                        isUsable = true,
+                        isRevoked = isRevoked,
+                        isRefreshable = false,
+                        docType = "OpenBadge",
+                        frostBlob = identity.frostBlob,
+                        credentialUiModel = emptyList()
+                    )
+                }
+                CredentialType.Unknown -> null
 			}
 			val newModel = uiModel?.copy(isRevoked = isRevoked)
 			inMemoryCache[identity.name] = newModel
@@ -437,7 +511,9 @@ class ViewModelFactory private constructor(
 				bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString())!!
 			}.getOrNull() ?: return null
 			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse(credential.payload).asJson())
-			CredentialType.Unknown -> return null
+            CredentialType.OpenBadge303 -> Json.encodeToString(
+                W3C.OpenBadge303.parseSerialized(credential.payload).asJson())
+            CredentialType.Unknown -> return null
 		}
 	}
 
@@ -584,4 +660,12 @@ class ViewModelFactory private constructor(
 		val ocaProcessor = OcaProcessor(userLanguage = stringResourceProvider.getString("language_key"), payload = oca_json.toString(), ocaBundle = json.decodeFromString<OcaBundleJson>(oca_json.toString()))
 		return ocaProcessor.process(LayoutType.CARD) as LayoutData.Card
 	}
+}
+
+private fun String.truncate(maxLimit: Int): String {
+    return if (this.length > maxLimit) {
+        this.take(maxLimit - 3) + "..."
+    } else {
+        this
+    }
 }
