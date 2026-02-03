@@ -54,6 +54,7 @@ pub fn generate_nonce(length: u64) -> String {
         .collect()
 }
 
+#[cfg(target_arch = "x86_64")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __rust_probestack() {}
 
