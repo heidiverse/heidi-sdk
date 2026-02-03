@@ -339,10 +339,7 @@ class PresentationProcessKt private constructor(
             // TODO: We need to improve this after refactoring
             val tmpList = credentials.map {
                 when (identityMap[it.payload]?.second) {
-                    CredentialType.OpenBadge303 -> {
-                        val fuck = W3C.OpenBadge303.parseSerialized(it.payload).originalString
-                        fuck
-                    }
+                    CredentialType.OpenBadge303 -> W3C.OpenBadge303.parseSerialized(it.payload).originalString
                     else -> it.payload
                 }
             }
