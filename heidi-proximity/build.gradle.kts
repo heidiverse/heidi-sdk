@@ -6,6 +6,9 @@ plugins {
 	alias(libs.plugins.kotlin.serialization)
 }
 
+val enableIosTargets = System.getProperty("os.name").startsWith("Mac") &&
+	(findProperty("enableIosTargets")?.toString()?.toBoolean() ?: true)
+
 kotlin {
 	compilerOptions {
 		freeCompilerArgs.add("-Xexpect-actual-classes")
@@ -18,14 +21,15 @@ kotlin {
 	}
 	jvm()
 
-	listOf(
-		
-		iosArm64(),
-		iosSimulatorArm64()
-	).forEach {
-		it.binaries.framework {
-			baseName = "heidi-proximity"
-			isStatic = true
+	if (enableIosTargets) {
+		listOf(
+			iosArm64(),
+			iosSimulatorArm64()
+		).forEach {
+			it.binaries.framework {
+				baseName = "heidi-proximity"
+				isStatic = true
+			}
 		}
 	}
 
