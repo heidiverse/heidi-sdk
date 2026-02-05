@@ -597,7 +597,7 @@ internal class GattClient(
             writeCharacteristic(
                 characteristic,
                 data,
-                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             ) == BluetoothStatusCodes.SUCCESS
         } else {
             @Suppress("DEPRECATION")
