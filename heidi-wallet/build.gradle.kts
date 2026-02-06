@@ -13,9 +13,6 @@ plugins {
     alias(libs.plugins.vanniktech.publish)
 }
 
-val enableIosTargets = System.getProperty("os.name").startsWith("Mac") &&
-    (findProperty("enableIosTargets")?.toString()?.toBoolean() ?: true)
-
 kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xexpect-actual-classes")
@@ -36,31 +33,29 @@ kotlin {
 
     jvm()
 
-    if (enableIosTargets) {
-        listOf(
-            iosArm64(),
-            iosSimulatorArm64()
-        ).forEach { iosTarget ->
-            iosTarget.binaries.framework {
-                baseName = "heidi-wallet"
-                isStatic = true
+    listOf(
+        iosArm64(),
+        iosSimulatorArm64()
+    ).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "heidi-wallet"
+            isStatic = true
 
-                export(projects.heidiUtil)
-                export(projects.heidiCredentials)
-                export(projects.heidiIssuance)
-                export(projects.heidiPresentation)
-                export(projects.heidiTrust)
-                export(projects.heidiProximity)
-                export(projects.heidiVisualization)
-            }
+            export(projects.heidiUtil)
+            export(projects.heidiCredentials)
+            export(projects.heidiIssuance)
+            export(projects.heidiPresentation)
+            export(projects.heidiTrust)
+            export(projects.heidiProximity)
+            export(projects.heidiVisualization)
+        }
 
-            iosTarget.binaries.all {
-                freeCompilerArgs += "-Xallocator=mimalloc"
-            }
+        iosTarget.binaries.all {
+            freeCompilerArgs += "-Xallocator=mimalloc"
+        }
 
-            iosTarget.compilations.getByName("main") {
-                useRustUpLinker()
-            }
+        iosTarget.compilations.getByName("main") {
+            useRustUpLinker()
         }
     }
 
@@ -108,11 +103,9 @@ kotlin {
             implementation(libs.sqldelight.android)
         }
 
-        if (enableIosTargets) {
-            iosMain.dependencies {
-                implementation(libs.sqldelight.native)
-                implementation(libs.ktor.client.darwin)
-            }
+        iosMain.dependencies {
+            implementation(libs.sqldelight.native)
+            implementation(libs.ktor.client.darwin)
         }
     }
 }
