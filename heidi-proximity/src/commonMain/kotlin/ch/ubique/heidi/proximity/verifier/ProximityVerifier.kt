@@ -79,7 +79,12 @@ class ProximityVerifier<T> private constructor(
 					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey())
 					val coseKeyEncoded = encodeCbor(coseKey)
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, Uuid.parse(serviceUuid),   peripheralServerUuid?.let { Uuid.parse(it)}, publicKey)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.VERIFIER,
+						Uuid.parse(serviceUuid),
+						peripheralServerUuid?.let { Uuid.parse(it)},
+						publicKey
+					)
 					val engagementBuilder = MdlEngagementBuilder(
 						"",
 						coseKeyEncoded,
@@ -94,7 +99,11 @@ class ProximityVerifier<T> private constructor(
 				ProximityProtocol.OPENID4VP -> {
 					val serviceUuid = Uuid.random()
 					val engagementBuilder = OpenId4VpEngagementBuilder(verifierName,  base64UrlEncode(publicKey.publicKey()), serviceUuid)
-					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.VERIFIER, serviceUuid, requester)
+					val transportProtocol = OpenId4VpTransportProtocol(
+						TransportProtocol.Role.VERIFIER,
+						serviceUuid,
+						requester
+					)
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester)
 				}
 			}
@@ -113,13 +122,22 @@ class ProximityVerifier<T> private constructor(
 					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey())
 					val engagementData = qrcodeData ?: return null
 					val deviceEngagement = MdlEngagement.fromQrCode(engagementData)
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid,  deviceEngagement?.peripheralServerUuid, publicKey)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.VERIFIER,
+						deviceEngagement?.centralClientUuid,
+						deviceEngagement?.peripheralServerUuid,
+						publicKey
+					)
 					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester, readerKey = coseKey, isDcApi = preferDcApi)
 				}
 				ProximityProtocol.OPENID4VP -> {
 					val serviceUuid = Uuid.random()
 					val engagementBuilder = OpenId4VpEngagementBuilder(verifierName,  base64UrlEncode(publicKey.publicKey()), serviceUuid)
-					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.VERIFIER, serviceUuid, requester)
+					val transportProtocol = OpenId4VpTransportProtocol(
+						TransportProtocol.Role.VERIFIER,
+						serviceUuid,
+						requester
+					)
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester)
 				}
 			}

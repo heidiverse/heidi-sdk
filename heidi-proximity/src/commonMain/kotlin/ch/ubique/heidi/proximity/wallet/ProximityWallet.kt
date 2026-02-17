@@ -84,7 +84,12 @@ class ProximityWallet private constructor(
 					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 					val readerEngagement = MdlEngagement.fromQrCode(readerEngagement)
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, readerEngagement?.centralClientUuid,  readerEngagement?.peripheralServerUuid, keypair)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						readerEngagement?.centralClientUuid,
+						readerEngagement?.peripheralServerUuid,
+						keypair
+					)
 					val engagementBuilder = MdlEngagementBuilder(
 						"",
 						coseKey,
@@ -116,7 +121,12 @@ class ProximityWallet private constructor(
 					val keypair = EphemeralKey(Role.SK_DEVICE)
 					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, Uuid.parse(serviceUuid),  Uuid.parse(peripheralServerUuid!!), keypair)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						Uuid.parse(serviceUuid),
+						Uuid.parse(peripheralServerUuid!!),
+						keypair
+					)
 					val engagementBuilder = MdlEngagementBuilder(
 						"",
 						coseKey,
@@ -129,7 +139,10 @@ class ProximityWallet private constructor(
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
-					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.WALLET, Uuid.parse(serviceUuid))
+					val transportProtocol = OpenId4VpTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						Uuid.parse(serviceUuid)
+					)
 					ProximityWallet(protocol, scope, null, transportProtocol)
 				}
 			}
@@ -146,7 +159,12 @@ class ProximityWallet private constructor(
 					val keypair = EphemeralKey(Role.SK_DEVICE)
 					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET,serviceUuid, peripheralServerUuid!!, keypair)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						serviceUuid,
+						peripheralServerUuid!!,
+						keypair
+					)
 					//TODO: we probably should expose the lis of capabilities somehow to the constructor, or at least let the constructor
 					// choose, which protocols we wish to support.
 					val engagementBuilder = MdlEngagementBuilder(
@@ -161,7 +179,10 @@ class ProximityWallet private constructor(
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
-					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.WALLET, serviceUuid)
+					val transportProtocol = OpenId4VpTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						serviceUuid
+					)
 					ProximityWallet(protocol, scope, null,transportProtocol)
 				}
 			}
@@ -195,7 +216,7 @@ class ProximityWallet private constructor(
 				}
 
 				override fun onDisconnected() {
-					if (!markSubmissionCompleted()) {
+					if (walletStateMutable.value !is ProximityWalletState.Error && !markSubmissionCompleted()) {
 						walletStateMutable.update { ProximityWalletState.Disconnected }
 					}
 				}
@@ -509,4 +530,5 @@ class ProximityWallet private constructor(
 			false
 		}
 	}
+
 }

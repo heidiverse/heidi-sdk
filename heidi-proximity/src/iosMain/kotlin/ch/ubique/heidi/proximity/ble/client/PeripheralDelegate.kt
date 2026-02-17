@@ -54,6 +54,7 @@ internal class PeripheralDelegate(
 			}
 			Logger("PeripheralDelegate").debug("set state as connected")
 			gattClient.listener?.onServicesDiscovered(listOf(BleGattService(didDiscoverCharacteristicsForService)))
+			gattClient.onPeerConnectedReady()
 			gattClient.listener?.onPeerConnected()
 		}
 		// TODO BM: connect to service uuid

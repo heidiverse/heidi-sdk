@@ -20,11 +20,17 @@ under the License.
 package ch.ubique.heidi.proximity.ble.client
 
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
+import ch.ubique.heidi.proximity.ConnectionTimeoutDefaults
 import ch.ubique.heidi.util.extensions.toData
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import platform.CoreBluetooth.*
 import platform.Foundation.NSError
 import platform.Foundation.NSNumber
@@ -32,6 +38,7 @@ import platform.darwin.DISPATCH_QUEUE_SERIAL
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_queue_create
+import platform.darwin.dispatch_get_main_queue
 import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalForeignApi::class)
@@ -54,6 +61,9 @@ internal class GattClient (
 	internal var connectedPeripheral: CBPeripheral? = null
 	private val pendingWrites = ArrayDeque<PendingWrite>()
 	private val writeQueue = dispatch_queue_create("ch.ubique.heidi.proximity.GattClient.writeQueue", null)
+	private val connectionTimeoutMillis = ConnectionTimeoutDefaults.BLE_CONNECTION_TIMEOUT_MILLIS
+	private val timeoutScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+	private var connectionTimeoutJob: Job? = null
 
 	override val characteristicValueSize: Int
 		get() = connectedPeripheral?.maximumWriteValueLengthForType(1)?.toInt() ?: 23
@@ -79,6 +89,7 @@ internal class GattClient (
 			runBlocking { delay(300) }
 			Logger("GattClient").debug("not ready")
 		}
+		startConnectionTimeout("scan")
 		manager!!.scanForPeripheralsWithServices(listOf(CBUUID.UUIDWithString(serviceUuid.toString())),null)
 	}
 
@@ -91,6 +102,7 @@ internal class GattClient (
 	}
 
 	override fun disconnect() {
+		cancelConnectionTimeout()
 		connectedPeripheral?.let {
 			manager!!.cancelPeripheralConnection(it)
 		}
@@ -190,11 +202,54 @@ internal class GattClient (
 		if (peripheral != connectedPeripheral) {
 			return
 		}
+		cancelConnectionTimeout()
 		dispatch_async(writeQueue) {
 			pendingWrites.clear()
 		}
 		connectedPeripheral = null
 		incomingMessages.clear()
+	}
+
+	internal fun onConnectionAttemptStarted() {
+		startConnectionTimeout("connect")
+	}
+
+	internal fun onPeerConnectedReady() {
+		cancelConnectionTimeout()
+	}
+
+	internal fun reportConnectionError(error: Throwable) {
+		cancelConnectionTimeout()
+		listener?.onError(error)
+	}
+
+	private fun startConnectionTimeout(phase: String) {
+		cancelConnectionTimeout()
+		connectionTimeoutJob = timeoutScope.launch {
+			delay(connectionTimeoutMillis)
+			Logger("GattClient").warn("BLE $phase timed out after ${connectionTimeoutMillis / 1000}s")
+			dispatch_async(dispatch_get_main_queue()) {
+				try {
+					manager?.stopScan()
+					connectedPeripheral?.let { peripheral ->
+						manager?.cancelPeripheralConnection(peripheral)
+					}
+				} catch (_: Throwable) {}
+				connectedPeripheral = null
+				dispatch_async(writeQueue) {
+					pendingWrites.clear()
+				}
+				incomingMessages.clear()
+				listener?.onError(
+					ConnectionTimeoutException("BLE $phase timed out after ${connectionTimeoutMillis / 1000} seconds")
+				)
+			}
+		}
+	}
+
+	private fun cancelConnectionTimeout() {
+		connectionTimeoutJob?.cancel()
+		connectionTimeoutJob = null
 	}
 
 	private fun enqueueWrite(
@@ -254,4 +309,6 @@ internal class GattClient (
 			onProgress?.invoke(sent, total)
 		}
 	}
+
+	private class ConnectionTimeoutException(message: String) : Exception(message)
 }

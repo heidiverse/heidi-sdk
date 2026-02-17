@@ -20,6 +20,7 @@ under the License.
 package ch.ubique.heidi.proximity.ble.client
 
 import ch.ubique.heidi.util.log.Logger
+import kotlinx.cinterop.ObjCSignatureOverride
 import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBCentralManagerDelegateProtocol
 import platform.CoreBluetooth.CBCentralManagerState
@@ -44,6 +45,7 @@ internal class CentralManagerDelegate(
 		Logger.debug("Central Manager didDiscoverPeripheral")
 		gattClient.discoveredPeripherals.add(didDiscoverPeripheral)
 		didDiscoverPeripheral.delegate = gattClient.peripheralDelegate
+		gattClient.onConnectionAttemptStarted()
 		manager.connectPeripheral(didDiscoverPeripheral, null)
 	}
 
@@ -54,6 +56,18 @@ internal class CentralManagerDelegate(
 		gattClient.listener?.onPeerConnecting()
 	}
 
+	@ObjCSignatureOverride
+	override fun centralManager(
+		central: CBCentralManager,
+		didFailToConnectPeripheral: CBPeripheral,
+		error: NSError?
+	) {
+		gattClient.reportConnectionError(
+			Error(error?.localizedDescription ?: "Failed to connect peripheral ${didFailToConnectPeripheral.identifier}")
+		)
+	}
+
+	@ObjCSignatureOverride
 	override fun centralManager(
 		central: CBCentralManager,
 		didDisconnectPeripheral: CBPeripheral,
