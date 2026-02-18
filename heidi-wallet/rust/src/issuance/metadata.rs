@@ -146,21 +146,13 @@ impl MetadataFetcher {
             }
         }
     }
+
     /// Get metadata for the credential issuer
     pub async fn get_credential_issuer_metadata(
         &self,
         credential_issuer_url: Url,
     ) -> Result<CredentialIssuerMetadata, ApiError> {
-        let mut openid_credential_issuer_endpoint = credential_issuer_url.clone();
-
-        openid_credential_issuer_endpoint
-            .path_segments_mut()
-            .map_err(|_| anyhow::anyhow!("unable to parse credential issuer url"))?
-            .push(".well-known")
-            .push("openid-credential-issuer");
-
         // try openid-federation
-        //
         let res_oidf = openidconnect_federation::DefaultFederationRelation::new_from_url(
             credential_issuer_url.as_str(),
         );
@@ -184,16 +176,43 @@ impl MetadataFetcher {
             }
         }
 
-        self.client
-            .get(openid_credential_issuer_endpoint)
+        // Try ietf well-known as per https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-credential-issuer-metadata-
+        // (The .well-known/openid-credential-issuer is **prepended** to the credential issuer url)
+        let ietf_credential_issuer_endpoint =
+            ietf_credential_issuer_endpoint(&credential_issuer_url)?;
+
+        if let Ok(metadata) = self
+            .client
+            .get(ietf_credential_issuer_endpoint)
+            .header("Accept", "application/json")
             .send()
             .await?
             .error_for_status()?
             .json::<CredentialIssuerMetadata>()
             .await
-            .map_err(|e| {
-                anyhow::anyhow!("Parsing of openid-credential-issuer endpoint failed: {e}").into()
-            })
+        {
+            return Ok(metadata);
+        }
+
+        // Try openid-connect well-known https://openid.net/specs/openid-connect-discovery-1_0-final.html#ProviderConfig
+        // (The .well-known/openid-credential-issuer is just appended to the credential issuer url)
+        let oidc_credential_issuer_endpoint =
+            oidc_credential_issuer_endpoint(&credential_issuer_url)?;
+
+        if let Ok(metadata) = self
+            .client
+            .get(oidc_credential_issuer_endpoint)
+            .header("Accept", "application/json")
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<CredentialIssuerMetadata>()
+            .await
+        {
+            return Ok(metadata);
+        }
+
+        return Err(anyhow::anyhow!("Failed to get credential issuer metadata").into());
     }
     /// Fetch access token
     pub async fn get_access_token(
@@ -213,9 +232,119 @@ impl MetadataFetcher {
     }
 }
 
+fn oidc_credential_issuer_endpoint(credential_issuer_url: &Url) -> Result<Url, anyhow::Error> {
+    let mut url = credential_issuer_url.clone();
+    url.path_segments_mut()
+        .map_err(|_| anyhow::anyhow!("unable to parse credential issuer url"))?
+        .pop_if_empty()
+        .push(".well-known")
+        .push("openid-credential-issuer");
+    Ok(url)
+}
+
+fn ietf_credential_issuer_endpoint(credential_issuer_url: &Url) -> Result<Url, anyhow::Error> {
+    let mut url = credential_issuer_url.clone();
+
+    let mut path_segments = url
+        .path_segments()
+        .ok_or(anyhow::anyhow!("unable to parse credential issuer url"))?
+        .collect::<Vec<_>>();
+
+    // Remove the trailing slash if is the only path segment (e.g., https://example.com/)
+    if path_segments.len() == 1 && path_segments[0].is_empty() {
+        path_segments.pop();
+    }
+
+    path_segments.insert(0, ".well-known");
+    path_segments.insert(1, "openid-credential-issuer");
+    url.set_path(&path_segments.join("/"));
+    Ok(url)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct UntypedMetadata {
     authorization_server_metadata: heidi_util_rust::value::Value,
     credential_issuer_metadata: heidi_util_rust::value::Value,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_oidc_credential_issuer_endpoint() {
+        let url = Url::parse("https://example.com/issuer").unwrap();
+        let endpoint = oidc_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/issuer/.well-known/openid-credential-issuer"
+        );
+
+        let url = Url::parse("https://example.com/issuer/").unwrap();
+        let endpoint = oidc_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/issuer/.well-known/openid-credential-issuer"
+        );
+
+        let url = Url::parse("https://example.com/issuer/path").unwrap();
+        let endpoint = oidc_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/issuer/path/.well-known/openid-credential-issuer"
+        );
+
+        let url = Url::parse("https://example.com/").unwrap();
+        let endpoint = oidc_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/.well-known/openid-credential-issuer"
+        );
+
+        let url = Url::parse("https://example.com").unwrap();
+        let endpoint = oidc_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/.well-known/openid-credential-issuer"
+        );
+    }
+
+    #[test]
+    fn test_openid4vci_credential_issuer_endpoint() {
+        let url = Url::parse("https://example.com/issuer").unwrap();
+        let endpoint = ietf_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/.well-known/openid-credential-issuer/issuer"
+        );
+
+        let url = Url::parse("https://example.com/issuer/").unwrap();
+        let endpoint = ietf_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/.well-known/openid-credential-issuer/issuer/"
+        );
+
+        let url = Url::parse("https://example.com/issuer/path").unwrap();
+        let endpoint = ietf_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/.well-known/openid-credential-issuer/issuer/path"
+        );
+
+        let url = Url::parse("https://example.com/").unwrap();
+        let endpoint = ietf_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/.well-known/openid-credential-issuer"
+        );
+
+        let url = Url::parse("https://example.com").unwrap();
+        let endpoint = ietf_credential_issuer_endpoint(&url).unwrap();
+        assert_eq!(
+            endpoint.as_str(),
+            "https://example.com/.well-known/openid-credential-issuer"
+        );
+    }
 }

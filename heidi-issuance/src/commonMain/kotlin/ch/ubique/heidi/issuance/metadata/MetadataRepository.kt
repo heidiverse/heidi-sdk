@@ -55,7 +55,16 @@ class MetadataRepository: HeidiIssuanceKoinComponent {
 				return@withContext metadata.transform()!!
 			}
 		}
-		metadataService.doCredentialIssuerMetadataRequest(baseUrl)
+
+        // Try IETF Approach
+        // https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-credential-issuer-metadata-
+        runCatching { metadataService.doCredentialIssuerMetadataRequestIetf(baseUrl) }
+            .getOrNull()
+            ?.let { return@withContext it }
+
+        // Try OIDC Approach
+        // https://openid.net/specs/openid-connect-discovery-1_0-final.html#ProviderConfig
+        metadataService.doCredentialIssuerMetadataRequestOidc(baseUrl)
 	}
 
 	fun getAuthorizationServerBaseUrl(
