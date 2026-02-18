@@ -19,10 +19,8 @@ under the License.
  */
 package ch.ubique.heidi.proximity.wallet
 
-import ch.ubique.heidi.proximity.ConnectionTimeoutDefaults
 import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.ProximityError
-import ch.ubique.heidi.proximity.ProximityPhase
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
@@ -49,8 +47,6 @@ import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -200,8 +196,6 @@ class ProximityWallet private constructor(
 	private var verifierName: String? = null
 
 	private var deviceEngagementSent = false
-	private val submitTimeoutMillis = ConnectionTimeoutDefaults.BLE_CONNECTION_TIMEOUT_MILLIS
-	private var submitTimeoutJob: Job? = null
 
 	init {
 		transportProtocol.setListener(
@@ -223,7 +217,6 @@ class ProximityWallet private constructor(
 				}
 
 				override fun onDisconnected() {
-					cancelSubmitTimeout()
 					if (walletStateMutable.value !is ProximityWalletState.Error && !markSubmissionCompleted()) {
 						walletStateMutable.update { ProximityWalletState.Disconnected }
 					}
@@ -241,7 +234,6 @@ class ProximityWallet private constructor(
 				}
 
 				override fun onTransportSpecificSessionTermination() {
-					cancelSubmitTimeout()
 					disconnect()
 					if (!markSubmissionCompleted()) {
 						walletStateMutable.update {
@@ -251,7 +243,6 @@ class ProximityWallet private constructor(
 				}
 
 				override fun onError(error: ProximityError) {
-					cancelSubmitTimeout()
 					walletStateMutable.update { ProximityWalletState.Error(error) }
 				}
 			}
@@ -313,7 +304,6 @@ class ProximityWallet private constructor(
 		}
 		Logger("BT").debug("submitDocument started: payloadBytes=${data.size}")
 		walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = 0.0) }
-		startSubmitTimeout()
 		val encryptedData = sessionCipher!!.encrypt(data)!!
 		val payloadShaSum = sha256Rs(encryptedData)
 		val payload = encodeCbor(
@@ -334,7 +324,6 @@ class ProximityWallet private constructor(
 			}
 		}.onFailure { error ->
 			Logger("BT").error("submitDocument send failed: ${error.message ?: error::class.simpleName}")
-			cancelSubmitTimeout()
 			val message = error.message ?: error::class.simpleName ?: "Unknown error"
 			walletStateMutable.update { ProximityWalletState.Error(ProximityError.Unknown(message)) }
 		}
@@ -364,7 +353,6 @@ class ProximityWallet private constructor(
 	}
 
 	fun disconnect() {
-		cancelSubmitTimeout()
 		transportProtocol.disconnect()
 		if (!markSubmissionCompleted()) {
 			walletStateMutable.update { ProximityWalletState.Disconnected }
@@ -551,7 +539,6 @@ class ProximityWallet private constructor(
 								ProximityWalletState.RequestingDocuments(documentRequest)
 							}
 							is ProximityWalletState.SubmittingDocuments -> {
-								cancelSubmitTimeout()
 								transportProtocol.disconnect()
 								ProximityWalletState.PresentationCompleted
 							}
@@ -568,35 +555,11 @@ class ProximityWallet private constructor(
 	private fun markSubmissionCompleted(): Boolean {
 		return if (walletStateMutable.value is ProximityWalletState.SubmittingDocuments) {
 			Logger("BT").debug("markSubmissionCompleted: transitioning to PresentationCompleted")
-			cancelSubmitTimeout()
 			walletStateMutable.update { ProximityWalletState.PresentationCompleted }
 			true
 		} else {
 			false
 		}
-	}
-
-	private fun startSubmitTimeout() {
-		cancelSubmitTimeout()
-		Logger("BT").debug("submit timeout started: ${submitTimeoutMillis}ms")
-		submitTimeoutJob = scope.launch(Dispatchers.Default) {
-			delay(submitTimeoutMillis)
-			if (walletStateMutable.value is ProximityWalletState.SubmittingDocuments) {
-				Logger("BT").warn("submit timeout fired in SubmittingDocuments, disconnecting")
-				walletStateMutable.update {
-					ProximityWalletState.Error(ProximityError.Timeout(ProximityPhase.SUBMIT, submitTimeoutMillis))
-				}
-				transportProtocol.disconnect()
-			}
-		}
-	}
-
-	private fun cancelSubmitTimeout() {
-		if (submitTimeoutJob != null) {
-			Logger("BT").debug("submit timeout canceled")
-		}
-		submitTimeoutJob?.cancel()
-		submitTimeoutJob = null
 	}
 
 }

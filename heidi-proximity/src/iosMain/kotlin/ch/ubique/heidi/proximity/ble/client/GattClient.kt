@@ -20,16 +20,13 @@ under the License.
 package ch.ubique.heidi.proximity.ble.client
 
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
-import ch.ubique.heidi.proximity.ConnectionTimeoutDefaults
 import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.ProximityOperation
-import ch.ubique.heidi.proximity.ProximityPhase
 import ch.ubique.heidi.util.extensions.toData
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,10 +58,8 @@ internal class GattClient (
 	internal var connectedPeripheral: CBPeripheral? = null
 	private val pendingWrites = ArrayDeque<PendingWrite>()
 	private val writeQueue = dispatch_queue_create("ch.ubique.heidi.proximity.GattClient.writeQueue", null)
-	private val connectionTimeoutMillis = ConnectionTimeoutDefaults.BLE_CONNECTION_TIMEOUT_MILLIS
 	private val timeoutScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-	private var connectionTimeoutJob: Job? = null
-	private var scanStartJob: Job? = null
+	private var scanStartJob: kotlinx.coroutines.Job? = null
 
 	override val characteristicValueSize: Int
 		get() = connectedPeripheral?.maximumWriteValueLengthForType(1)?.toInt() ?: 23
@@ -91,7 +86,6 @@ internal class GattClient (
 			reportConnectionError(ProximityError.BluetoothUnavailable("central manager is null"))
 			return
 		}
-		startConnectionTimeout(ProximityPhase.SCAN)
 		scanStartJob?.cancel()
 
 		val state = currentManager.state
@@ -106,7 +100,7 @@ internal class GattClient (
 			return
 		}
 		scanStartJob = timeoutScope.launch {
-			while (connectionTimeoutJob != null) {
+			while (true) {
 				val latestManager = manager ?: return@launch
 				val latestState = latestManager.state
 				if (latestState == CBManagerStatePoweredOn && isReady) {
@@ -128,6 +122,8 @@ internal class GattClient (
 	}
 
 	override fun stopScanning() {
+		scanStartJob?.cancel()
+		scanStartJob = null
 		runCatching { manager?.stopScan() }
 			.onFailure { reportConnectionError(ProximityError.Unknown(it.message ?: it::class.simpleName ?: "Unknown error")) }
 	}
@@ -137,7 +133,7 @@ internal class GattClient (
 	}
 
 	override fun disconnect() {
-		cancelConnectionTimeout()
+		cancelPendingScanStart()
 		connectedPeripheral?.let {
 			runCatching { manager?.cancelPeripheralConnection(it) }
 				.onFailure { reportConnectionError(ProximityError.Unknown(it.message ?: it::class.simpleName ?: "Unknown error")) }
@@ -260,7 +256,7 @@ internal class GattClient (
 		if (peripheral != connectedPeripheral) {
 			return
 		}
-		cancelConnectionTimeout()
+		cancelPendingScanStart()
 		dispatch_async(writeQueue) {
 			pendingWrites.clear()
 		}
@@ -270,15 +266,15 @@ internal class GattClient (
 	}
 
 	internal fun onConnectionAttemptStarted() {
-		startConnectionTimeout(ProximityPhase.CONNECT)
+		Logger("GattClient").debug("connection attempt started")
 	}
 
 	internal fun onPeerConnectedReady() {
-		cancelConnectionTimeout()
+		cancelPendingScanStart()
 	}
 
 	internal fun reportConnectionError(error: ProximityError) {
-		cancelConnectionTimeout()
+		cancelPendingScanStart()
 		listener?.onError(error)
 	}
 
@@ -302,7 +298,7 @@ internal class GattClient (
 	}
 
 	private fun hasActiveConnectionAttempt(): Boolean {
-		return connectionTimeoutJob != null || connectedPeripheral != null || manager?.isScanning == true
+		return scanStartJob != null || connectedPeripheral != null || manager?.isScanning == true
 	}
 
 	private fun cleanupConnectionAttempt() {
@@ -319,23 +315,7 @@ internal class GattClient (
 		incomingMessages.clear()
 	}
 
-	private fun startConnectionTimeout(phase: ProximityPhase) {
-		cancelConnectionTimeout()
-		connectionTimeoutJob = timeoutScope.launch {
-			delay(connectionTimeoutMillis)
-			Logger("GattClient").warn("BLE ${phase.name.lowercase()} timed out after ${connectionTimeoutMillis / 1000}s")
-			dispatch_async(dispatch_get_main_queue()) {
-				cleanupConnectionAttempt()
-				listener?.onError(
-					ProximityError.Timeout(phase = phase, timeoutMillis = connectionTimeoutMillis)
-				)
-			}
-		}
-	}
-
-	private fun cancelConnectionTimeout() {
-		connectionTimeoutJob?.cancel()
-		connectionTimeoutJob = null
+	private fun cancelPendingScanStart() {
 		scanStartJob?.cancel()
 		scanStartJob = null
 	}

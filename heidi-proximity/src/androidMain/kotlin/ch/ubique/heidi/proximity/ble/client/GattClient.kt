@@ -27,7 +27,6 @@ import android.os.Build
 import android.os.ParcelUuid
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.ble.gatt.BleGattService
-import ch.ubique.heidi.proximity.ConnectionTimeoutDefaults
 import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
@@ -38,12 +37,6 @@ import ch.ubique.heidi.util.log.Logger
 import java.lang.reflect.InvocationTargetException
 import java.util.ArrayDeque
 import java.util.UUID
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
 
@@ -92,9 +85,6 @@ internal class GattClient(
 
     private var scanner: BluetoothLeScanner? = null
     private var scannerListener: BleScannerListener? = null
-    private val connectionTimeoutMillis = ConnectionTimeoutDefaults.BLE_CONNECTION_TIMEOUT_MILLIS
-    private val timeoutScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var connectionTimeoutJob: Job? = null
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -124,13 +114,11 @@ internal class GattClient(
     override fun connect(deviceMacAddress: String) {
         try {
             isConnecting = true
-            startConnectionTimeout("connect")
             val bluetoothAdapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
             val device = bluetoothAdapter.getRemoteDevice(deviceMacAddress)
             connectToDevice(device)
         } catch (e: Exception) {
             isConnecting = false
-            cancelConnectionTimeout()
             reportError(ProximityError.Unknown(e.message ?: e::class.simpleName ?: "Unknown error"))
         }
     }
@@ -150,10 +138,8 @@ internal class GattClient(
             scanner = bluetoothManager.adapter.bluetoothLeScanner.also {
                 it.startScan(listOf(filter), settings, scanCallback)
             }
-            startConnectionTimeout("scan")
         } catch (e: Exception) {
             scannerListener?.onError(e.message ?: e.javaClass.simpleName)
-            cancelConnectionTimeout()
         }
     }
 
@@ -173,7 +159,6 @@ internal class GattClient(
     }
 
     override fun disconnect() {
-        cancelConnectionTimeout()
         inhibitCallbacks = true
         if (gatt != null) {
             // used to convey we want to shutdown once all writes are done.
@@ -283,7 +268,6 @@ internal class GattClient(
                 }
             }
             BluetoothProfile.STATE_DISCONNECTED -> {
-                cancelConnectionTimeout()
                 chunkAccumulator.clear()
                 writeQueues.clear()
                 coordinator.reset()
@@ -378,7 +362,6 @@ internal class GattClient(
 
     override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
         if (status != BluetoothGatt.GATT_SUCCESS) {
-            cancelConnectionTimeout()
             reportError(ProximityError.Unknown("Error changing MTU, status: $status"))
             return
         }
@@ -387,7 +370,6 @@ internal class GattClient(
         requireListener().onMtuChanged(mtu)
 
         // Once the MTU is changed, consider the connection as established
-        cancelConnectionTimeout()
         reportPeerConnected()
     }
 
@@ -496,7 +478,6 @@ internal class GattClient(
     }
 
     private fun reportError(error: ProximityError) {
-        cancelConnectionTimeout()
         if (inhibitCallbacks) return
         requireListener().onError(error)
     }
@@ -518,49 +499,11 @@ internal class GattClient(
         reportPeerConnecting()
 
         try {
-            startConnectionTimeout("connect")
             gatt = device.connectGatt(context, false, this, BluetoothDevice.TRANSPORT_LE)
         } catch (e: SecurityException) {
-            cancelConnectionTimeout()
             reportError(ProximityError.Unknown(e.message ?: e::class.simpleName ?: "Unknown error"))
         } finally {
             isConnecting = false
-        }
-    }
-
-    private fun startConnectionTimeout(phase: String) {
-        cancelConnectionTimeout()
-        connectionTimeoutJob = timeoutScope.launch {
-            delay(connectionTimeoutMillis)
-            if (gatt == null && scanner == null && !isConnecting) {
-                return@launch
-            }
-            Logger(TAG).warn("BLE $phase timed out after ${connectionTimeoutMillis / 1000}s")
-            stopScanning()
-            closeGattImmediately()
-            reportError(
-                ConnectionTimeoutException("BLE $phase timed out after ${connectionTimeoutMillis / 1000} seconds")
-            )
-        }
-    }
-
-    private fun cancelConnectionTimeout() {
-        connectionTimeoutJob?.cancel()
-        connectionTimeoutJob = null
-    }
-
-    private fun closeGattImmediately() {
-        try {
-            gatt?.close()
-        } catch (e: SecurityException) {
-            Logger(TAG).error("Caught SecurityException while forcing GATT close", e)
-        } finally {
-            gatt = null
-            chunkAccumulator.clear()
-            writeQueues.clear()
-            coordinator.reset()
-            mtuRequested = false
-            cachedCharacteristicValueSize = 0
         }
     }
 
@@ -771,6 +714,4 @@ internal class GattClient(
             flush(gatt)
         }
     }
-
-    private class ConnectionTimeoutException(message: String) : Exception(message)
 }

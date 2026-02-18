@@ -19,12 +19,6 @@ under the License.
  */
 package ch.ubique.heidi.proximity
 
-enum class ProximityPhase {
-	SCAN,
-	CONNECT,
-	SUBMIT,
-}
-
 enum class ProximityOperation {
 	WRITE,
 	WRITE_CHARACTERISTIC,
@@ -41,13 +35,6 @@ sealed interface ProximityError {
 		val stateDescription: String
 	) : ProximityError {
 		override val message: String = "Bluetooth unavailable: $stateDescription"
-	}
-
-	data class Timeout(
-		val phase: ProximityPhase,
-		val timeoutMillis: Long
-	) : ProximityError {
-		override val message: String = "BLE ${phase.name} timed out after ${timeoutMillis / 1000} seconds"
 	}
 
 	data class MissingConnectedPeripheral(
