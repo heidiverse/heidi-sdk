@@ -74,9 +74,11 @@ internal class GattServer (
     }
 
 	override fun start(characteristics: List<BleGattCharacteristic>): Boolean {
+		Logger.debug("GattServer.start requested, waiting for poweredOn state (current=${describePeripheralState(lastPeripheralManagerState)})")
 		while(!isReady) {
 			runBlocking { delay(300) }
 		}
+		Logger.debug("GattServer ready, adding service=$serviceUuid with ${characteristics.size} characteristics")
 		service = CBMutableService(CBUUID.UUIDWithString(serviceUuid.toString()), true).also {
 			it.setCharacteristics(characteristics.map { it.characteristic })
 		}
@@ -92,6 +94,10 @@ internal class GattServer (
 
 	override fun startAdvertising(listener: BleAdvertiserListener) {
 		advertiserListener = listener
+		Logger.debug(
+			"GattServer.startAdvertising requested, state=${describePeripheralState(lastPeripheralManagerState)}, " +
+				"service=$serviceUuid, hasService=${service != null}"
+		)
 		manager?.startAdvertising(mapOf(
 			CBAdvertisementDataServiceUUIDsKey to listOf(CBUUID.UUIDWithString(serviceUuid.toString()))
 		))
@@ -147,15 +153,16 @@ internal class GattServer (
     override val characteristicValueSize: Int
         get() = 512
 
-    override fun onStateUpdated(peripheral: CBPeripheralManager) {
-        val state = peripheral.state
-        val wasReady = isReady
-        isReady = state == CBPeripheralManagerStatePoweredOn
-        lastPeripheralManagerState = state
-        if (!isReady) {
-            chunkAccumulator.clear()
-            pendingWrites.clear()
-            canUpdateSubscribers = false
+	override fun onStateUpdated(peripheral: CBPeripheralManager) {
+		val state = peripheral.state
+		val wasReady = isReady
+		isReady = state == CBPeripheralManagerStatePoweredOn
+		lastPeripheralManagerState = state
+		Logger.debug("GattServer state updated: ${describePeripheralState(state)} (wasReady=$wasReady, isReady=$isReady)")
+		if (!isReady) {
+			chunkAccumulator.clear()
+			pendingWrites.clear()
+			canUpdateSubscribers = false
             if (wasReady) {
                 Logger.warn("GattServer: BLE became unavailable while active, reporting disconnect/error")
                 listener?.onError(
@@ -201,13 +208,18 @@ internal class GattServer (
         }
     }
 
-    override fun onStartAdvertising(peripheral: CBPeripheralManager, error: NSError?) {
-        Logger.debug("Peripheral Manager did start advertising error: $error")
-    }
+	override fun onStartAdvertising(peripheral: CBPeripheralManager, error: NSError?) {
+		Logger.debug(
+			"Peripheral Manager did start advertising: error=$error, state=${describePeripheralState(peripheral.state)}"
+		)
+	}
 
-    override fun onAddService(peripheral: CBPeripheralManager, service: CBService, error: NSError?) {
-        Logger.debug("Peripheral Manager didAddService advertising error: $error")
-    }
+	override fun onAddService(peripheral: CBPeripheralManager, service: CBService, error: NSError?) {
+		Logger.debug(
+			"Peripheral Manager didAddService: service=${service.UUID?.UUIDString}, error=$error, " +
+				"state=${describePeripheralState(peripheral.state)}"
+		)
+	}
 
     override fun onReadyToUpdateSubscribers(peripheral: CBPeripheralManager) {
         Logger.debug("Peripheral Manager peripheralManagerIsReadyToUpdateSubscribers")

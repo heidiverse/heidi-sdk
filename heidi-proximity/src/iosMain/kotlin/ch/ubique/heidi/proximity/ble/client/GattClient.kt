@@ -64,6 +64,7 @@ internal class GattClient (
 	private val connectionTimeoutMillis = ConnectionTimeoutDefaults.BLE_CONNECTION_TIMEOUT_MILLIS
 	private val timeoutScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 	private var connectionTimeoutJob: Job? = null
+	private var scanStartJob: Job? = null
 
 	override val characteristicValueSize: Int
 		get() = connectedPeripheral?.maximumWriteValueLengthForType(1)?.toInt() ?: 23
@@ -85,22 +86,44 @@ internal class GattClient (
 	}
 
 	override fun startScanning(listener: BleScannerListener) {
-		if (!isReady) {
-			reportConnectionError(
-				ProximityError.BluetoothUnavailable(describeCentralState(manager?.state ?: -1))
-			)
-			return
-		}
-		startConnectionTimeout(ProximityPhase.SCAN)
 		val currentManager = manager
 		if (currentManager == null) {
 			reportConnectionError(ProximityError.BluetoothUnavailable("central manager is null"))
 			return
 		}
-		runCatching {
-			currentManager.scanForPeripheralsWithServices(listOf(CBUUID.UUIDWithString(serviceUuid.toString())), null)
-		}.onFailure {
-			reportConnectionError(ProximityError.Unknown(it.message ?: it::class.simpleName ?: "Unknown error"))
+		startConnectionTimeout(ProximityPhase.SCAN)
+		scanStartJob?.cancel()
+
+		val state = currentManager.state
+		Logger("GattClient").debug("startScanning requested, state=${describeCentralState(state)}, isReady=$isReady")
+		if (state == CBManagerStatePoweredOn && isReady) {
+			startScanNow(currentManager)
+			return
+		}
+		if (isTerminalUnavailableState(state)) {
+			reportConnectionError(ProximityError.BluetoothUnavailable(describeCentralState(state)))
+			cleanupConnectionAttempt()
+			return
+		}
+		scanStartJob = timeoutScope.launch {
+			while (connectionTimeoutJob != null) {
+				val latestManager = manager ?: return@launch
+				val latestState = latestManager.state
+				if (latestState == CBManagerStatePoweredOn && isReady) {
+					dispatch_async(dispatch_get_main_queue()) {
+						startScanNow(latestManager)
+					}
+					return@launch
+				}
+				if (isTerminalUnavailableState(latestState)) {
+					dispatch_async(dispatch_get_main_queue()) {
+						reportConnectionError(ProximityError.BluetoothUnavailable(describeCentralState(latestState)))
+						cleanupConnectionAttempt()
+					}
+					return@launch
+				}
+				delay(150)
+			}
 		}
 	}
 
@@ -261,10 +284,15 @@ internal class GattClient (
 
 	internal fun onCentralStateChanged(state: Long) {
 		isReady = state == CBManagerStatePoweredOn
+		Logger("GattClient").debug("central state changed to ${describeCentralState(state)}, isReady=$isReady")
 		if (isReady) {
 			return
 		}
 		if (!hasActiveConnectionAttempt()) {
+			return
+		}
+		if (state == CBManagerStateUnknown || state == CBManagerStateResetting) {
+			Logger("GattClient").debug("central state ${describeCentralState(state)} while connecting, waiting for readiness")
 			return
 		}
 		reportConnectionError(
@@ -278,6 +306,8 @@ internal class GattClient (
 	}
 
 	private fun cleanupConnectionAttempt() {
+		scanStartJob?.cancel()
+		scanStartJob = null
 		runCatching { manager?.stopScan() }
 		connectedPeripheral?.let { peripheral ->
 			runCatching { manager?.cancelPeripheralConnection(peripheral) }
@@ -306,6 +336,23 @@ internal class GattClient (
 	private fun cancelConnectionTimeout() {
 		connectionTimeoutJob?.cancel()
 		connectionTimeoutJob = null
+		scanStartJob?.cancel()
+		scanStartJob = null
+	}
+
+	private fun startScanNow(currentManager: CBCentralManager) {
+		Logger("GattClient").debug("starting BLE scan for service=$serviceUuid")
+		runCatching {
+			currentManager.scanForPeripheralsWithServices(listOf(CBUUID.UUIDWithString(serviceUuid.toString())), null)
+		}.onFailure {
+			reportConnectionError(ProximityError.Unknown(it.message ?: it::class.simpleName ?: "Unknown error"))
+		}
+	}
+
+	private fun isTerminalUnavailableState(state: Long): Boolean {
+		return state == CBManagerStatePoweredOff ||
+			state == CBManagerStateUnauthorized ||
+			state == CBManagerStateUnsupported
 	}
 
 	private fun enqueueWrite(
