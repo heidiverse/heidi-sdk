@@ -19,12 +19,13 @@ under the License.
  */
 
 use base64::{
-    prelude::{BASE64_STANDARD, BASE64_STANDARD_NO_PAD, BASE64_URL_SAFE, BASE64_URL_SAFE_NO_PAD},
     Engine,
+    prelude::{BASE64_STANDARD, BASE64_STANDARD_NO_PAD, BASE64_URL_SAFE, BASE64_URL_SAFE_NO_PAD},
 };
 
 pub mod crypto;
 pub mod iso180135;
+pub mod jws;
 pub mod jwt;
 
 #[derive(Debug)]
