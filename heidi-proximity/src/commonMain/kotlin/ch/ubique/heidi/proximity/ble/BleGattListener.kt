@@ -19,10 +19,12 @@ under the License.
  */
 package ch.ubique.heidi.proximity.ble
 
+import ch.ubique.heidi.proximity.ProximityError
+
 internal interface BleGattListener {
     fun onPeerConnecting()
     fun onPeerConnected()
     fun onPeerDisconnected()
     fun onMtuChanged(mtu: Int) {}
-    fun onError(error: Throwable)
+    fun onError(error: ProximityError)
 }

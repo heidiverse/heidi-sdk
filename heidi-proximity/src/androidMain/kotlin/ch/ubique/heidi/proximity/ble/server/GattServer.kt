@@ -28,6 +28,7 @@ import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.Context
 import android.os.Build
 import android.os.ParcelUuid
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
@@ -100,7 +101,7 @@ internal class GattServer(
 		gattServer = try {
 			bluetoothManager.openGattServer(context, this)
 		} catch (e: Exception) {
-			reportError(e)
+			reportError(ProximityError.Unknown(e.message ?: e::class.simpleName ?: "Unknown error"))
 			return false
 		}
 
@@ -116,7 +117,7 @@ internal class GattServer(
 		try {
 			requireServer().addService(service)
 		} catch (e: SecurityException) {
-			reportError(e)
+			reportError(ProximityError.Unknown(e.message ?: e::class.simpleName ?: "Unknown error"))
 			return false
 		}
 		return true
@@ -357,7 +358,7 @@ internal class GattServer(
 
 	override fun onNotificationSent(device: BluetoothDevice, status: Int) {
 		if (status != BluetoothGatt.GATT_SUCCESS) {
-			reportError(Error("Error in onNotificationSent status=$status"))
+			reportError(ProximityError.Unknown("Error in onNotificationSent status=$status"))
 			return
 		}
 		drainWritingQueues()
@@ -375,10 +376,15 @@ internal class GattServer(
 		}
 	}
 
-	private fun reportError(error: Throwable) {
+	private fun reportError(error: ProximityError) {
 		if (listener != null && !inhibitCallbacks) {
 			requireListener().onError(error)
 		}
+	}
+
+	private fun reportError(error: Throwable) {
+		val message = error.message ?: error::class.simpleName ?: "Unknown error"
+		reportError(ProximityError.Unknown(message))
 	}
 
 	private fun requireServer(): BluetoothGattServer {
@@ -393,7 +399,7 @@ internal class GattServer(
 		try {
 			gattServer?.sendResponse(device, requestId, status, offset, value)
 		} catch (e: Exception) {
-			reportError(e)
+			reportError(ProximityError.Unknown(e.message ?: e::class.simpleName ?: "Unknown error"))
 		}
 	}
 
@@ -426,12 +432,12 @@ internal class GattServer(
 		} else {
 			val characteristic = characteristics.singleOrNull { it.uuid?.toJavaUuid() == charUuid }?.characteristic
 			if (characteristic == null) {
-				reportError(Error("No characteristic found for UUID $charUuid"))
+				reportError(ProximityError.Unknown("No characteristic found for UUID $charUuid"))
 				return
 			}
 
 			val connection = currentConnection ?: run {
-				reportError(Error("Currently not connected"))
+				reportError(ProximityError.Unknown("Currently not connected"))
 				return
 			}
 
@@ -445,12 +451,12 @@ internal class GattServer(
 				}
 
 				if (!success) {
-					reportError(Error("Error calling notifyCharacteristicsChanged on characteristic $charUuid"))
+					reportError(ProximityError.Unknown("Error calling notifyCharacteristicsChanged on characteristic $charUuid"))
 					return
 				}
 				chunk.progress?.advance(chunk.payloadSize)
 			} catch (e: SecurityException) {
-				reportError(e)
+				reportError(ProximityError.Unknown(e.message ?: e::class.simpleName ?: "Unknown error"))
 			}
 		}
 	}

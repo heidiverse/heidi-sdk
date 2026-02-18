@@ -237,7 +237,7 @@ fun ProximityVerifierScreen(
 						}
 					}
 					is ProximityVerifierState.Error -> {
-						Text(state.throwable.stackTraceToString())
+						Text(state.error.message)
 					}
 				}
 			}

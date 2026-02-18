@@ -193,7 +193,7 @@ class LegacyPresentationController private constructor(
 					}
 					is ProximityWalletState.Error -> stateMutable.update {
 						PresentationWorkflow.Error(
-							state.throwable.message ?: state.throwable::class.simpleName ?: "Proximity Error", retry = ::resetState
+							state.error.message, retry = ::resetState
 						)
 					}
 				}

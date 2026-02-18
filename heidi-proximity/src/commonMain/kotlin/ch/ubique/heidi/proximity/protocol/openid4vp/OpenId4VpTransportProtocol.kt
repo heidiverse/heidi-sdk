@@ -19,6 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.proximity.protocol.openid4vp
 
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.ble.BleGattFactory
 import ch.ubique.heidi.proximity.ble.client.BleGattClient
 import ch.ubique.heidi.proximity.ble.client.BleScannerListener
@@ -136,7 +137,7 @@ internal class OpenId4VpTransportProtocol(
 			startScanning(
 				object : BleScannerListener {
 					override fun onError(msg: String) {
-						reportError(Error(msg))
+						reportError(ProximityError.Unknown(msg))
 					}
 				}
 			)
@@ -145,7 +146,7 @@ internal class OpenId4VpTransportProtocol(
 
 	private suspend fun connectAsServer(requester: DocumentRequester<*>?) {
 		if (requester == null) {
-			reportError(Error("No requester provided for the server side of the protocol"))
+			reportError(ProximityError.Unknown("No requester provided for the server side of the protocol"))
 			return
 		}
 
@@ -166,7 +167,7 @@ internal class OpenId4VpTransportProtocol(
 
 			val characteristics = characteristicsFactory.createServerCharacteristics()
 			if (!start(characteristics)) {
-				reportError(Error("Error starting Gatt Server"))
+				reportError(ProximityError.Unknown("Error starting Gatt Server"))
 				stop()
 				gattServer = null
 				return
@@ -175,7 +176,7 @@ internal class OpenId4VpTransportProtocol(
 			startAdvertising(
 				object : BleAdvertiserListener {
 					override fun onError(msg: String) {
-						reportError(Error(msg))
+						reportError(ProximityError.Unknown(msg))
 					}
 				}
 			)

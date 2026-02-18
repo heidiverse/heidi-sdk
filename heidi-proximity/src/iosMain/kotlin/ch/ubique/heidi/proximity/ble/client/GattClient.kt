@@ -21,19 +21,19 @@ package ch.ubique.heidi.proximity.ble.client
 
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.ConnectionTimeoutDefaults
+import ch.ubique.heidi.proximity.ProximityError
+import ch.ubique.heidi.proximity.ProximityOperation
+import ch.ubique.heidi.proximity.ProximityPhase
 import ch.ubique.heidi.util.extensions.toData
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import platform.CoreBluetooth.*
-import platform.Foundation.NSError
-import platform.Foundation.NSNumber
 import platform.darwin.DISPATCH_QUEUE_SERIAL
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
@@ -85,16 +85,28 @@ internal class GattClient (
 	}
 
 	override fun startScanning(listener: BleScannerListener) {
-		while(!isReady) {
-			runBlocking { delay(300) }
-			Logger("GattClient").debug("not ready")
+		if (!isReady) {
+			reportConnectionError(
+				ProximityError.BluetoothUnavailable(describeCentralState(manager?.state ?: -1))
+			)
+			return
 		}
-		startConnectionTimeout("scan")
-		manager!!.scanForPeripheralsWithServices(listOf(CBUUID.UUIDWithString(serviceUuid.toString())),null)
+		startConnectionTimeout(ProximityPhase.SCAN)
+		val currentManager = manager
+		if (currentManager == null) {
+			reportConnectionError(ProximityError.BluetoothUnavailable("central manager is null"))
+			return
+		}
+		runCatching {
+			currentManager.scanForPeripheralsWithServices(listOf(CBUUID.UUIDWithString(serviceUuid.toString())), null)
+		}.onFailure {
+			reportConnectionError(ProximityError.Unknown(it.message ?: it::class.simpleName ?: "Unknown error"))
+		}
 	}
 
 	override fun stopScanning() {
-		manager!!.stopScan()
+		runCatching { manager?.stopScan() }
+			.onFailure { reportConnectionError(ProximityError.Unknown(it.message ?: it::class.simpleName ?: "Unknown error")) }
 	}
 
 	override fun supportsSessionTermination(): Boolean {
@@ -104,7 +116,8 @@ internal class GattClient (
 	override fun disconnect() {
 		cancelConnectionTimeout()
 		connectedPeripheral?.let {
-			manager!!.cancelPeripheralConnection(it)
+			runCatching { manager?.cancelPeripheralConnection(it) }
+				.onFailure { reportConnectionError(ProximityError.Unknown(it.message ?: it::class.simpleName ?: "Unknown error")) }
 		}
 
 		connectedPeripheral = null
@@ -112,12 +125,17 @@ internal class GattClient (
 	}
 
 	override fun readCharacteristic(charUuid: Uuid) {
-		connectedPeripheral?.let { peripheral ->
-			peripheralCharacteristics[peripheral]
-				?.find { it.uuid == charUuid }
-				?.let { peripheral.readValueForCharacteristic(it.characteristic) }
-
+		val peripheral = connectedPeripheral ?: run {
+			reportConnectionError(ProximityError.MissingConnectedPeripheral(ProximityOperation.READ_CHARACTERISTIC))
+			return
 		}
+		val characteristic = peripheralCharacteristics[peripheral]
+			?.find { it.uuid == charUuid }
+			?: run {
+				reportConnectionError(ProximityError.CharacteristicNotFound(ProximityOperation.READ))
+				return
+			}
+		peripheral.readValueForCharacteristic(characteristic.characteristic)
 	}
 
 	override fun writeCharacteristic(
@@ -127,15 +145,19 @@ internal class GattClient (
 	) {
 		Logger("GattClient").debug("write chunked: $charUuid (${data.size})")
 		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
-		connectedPeripheral?.let { peripheral ->
-			peripheralCharacteristics[peripheral]
-				?.find { it.uuid == charUuid }
-				?.let { char ->
-					chunkMessage(data) { chunk ->
-						val payloadSize = (chunk.size - 1).coerceAtLeast(0)
-						enqueueWrite(char.characteristic, chunk, progress, payloadSize)
-					}
-				}
+		val peripheral = connectedPeripheral ?: run {
+			reportConnectionError(ProximityError.MissingConnectedPeripheral(ProximityOperation.WRITE_CHARACTERISTIC))
+			return
+		}
+		val characteristic = peripheralCharacteristics[peripheral]
+			?.find { it.uuid == charUuid }
+			?: run {
+				reportConnectionError(ProximityError.CharacteristicNotFound(ProximityOperation.WRITE))
+				return
+			}
+		chunkMessage(data) { chunk ->
+			val payloadSize = (chunk.size - 1).coerceAtLeast(0)
+			enqueueWrite(characteristic.characteristic, chunk, progress, payloadSize)
 		}
 	}
 
@@ -146,46 +168,59 @@ internal class GattClient (
 	) {
 		Logger("GattClient").debug("write non chunked: $charUuid (${data.size})")
 		val progress = onProgress?.let { WriteProgress(total = data.size, onProgress = it) }
-		connectedPeripheral?.let { peripheral ->
-			peripheralCharacteristics[peripheral]
-				?.find { it.uuid == charUuid }
-				?.let {
-//					Logger("GattClient").debug("queueing non chunked write")
-					enqueueWrite(it.characteristic, data, progress, data.size)
-				}
+		val peripheral = connectedPeripheral ?: run {
+			reportConnectionError(ProximityError.MissingConnectedPeripheral(ProximityOperation.WRITE_CHARACTERISTIC))
+			return
 		}
+		val characteristic = peripheralCharacteristics[peripheral]
+			?.find { it.uuid == charUuid }
+			?: run {
+				reportConnectionError(ProximityError.CharacteristicNotFound(ProximityOperation.WRITE))
+				return
+			}
+		enqueueWrite(characteristic.characteristic, data, progress, data.size)
 	}
 
 	override fun readDescriptor(charUuid: Uuid, descriptorUuid: Uuid) {
-		connectedPeripheral?.let { peripheral ->
-			peripheralCharacteristics[peripheral]
-				?.find { it.uuid == charUuid }
-				?.let {
-					it.descriptors
-						?.map { it as CBDescriptor }
-						?.find { descriptor -> descriptor.UUID.UUIDString.lowercase() == descriptorUuid.toString().lowercase() }
-						?.let {
-							peripheral.readValueForDescriptor(it)
-						}
-
-				}
+		val peripheral = connectedPeripheral ?: run {
+			reportConnectionError(ProximityError.MissingConnectedPeripheral(ProximityOperation.READ_DESCRIPTOR))
+			return
 		}
+		val characteristic = peripheralCharacteristics[peripheral]
+			?.find { it.uuid == charUuid }
+			?: run {
+				reportConnectionError(ProximityError.CharacteristicNotFound(ProximityOperation.READ_DESCRIPTOR))
+				return
+			}
+		val descriptor = characteristic.descriptors
+			?.map { it as CBDescriptor }
+			?.find { it.UUID.UUIDString.lowercase() == descriptorUuid.toString().lowercase() }
+			?: run {
+				reportConnectionError(ProximityError.DescriptorNotFound(ProximityOperation.READ))
+				return
+			}
+		peripheral.readValueForDescriptor(descriptor)
 	}
 
 	override fun writeDescriptor(charUuid: Uuid, descriptorUuid: Uuid, data: ByteArray) {
-		connectedPeripheral?.let { peripheral ->
-			peripheralCharacteristics[peripheral]
-				?.find { it.uuid == charUuid }
-				?.let {
-					it.descriptors
-						?.map { it as CBDescriptor }
-						?.find { descriptor -> descriptor.UUID.UUIDString.lowercase() == descriptorUuid.toString().lowercase() }
-						?.let {
-							peripheral.writeValue(data.toData(), it)
-						}
-
-				}
+		val peripheral = connectedPeripheral ?: run {
+			reportConnectionError(ProximityError.MissingConnectedPeripheral(ProximityOperation.WRITE_DESCRIPTOR))
+			return
 		}
+		val characteristic = peripheralCharacteristics[peripheral]
+			?.find { it.uuid == charUuid }
+			?: run {
+				reportConnectionError(ProximityError.CharacteristicNotFound(ProximityOperation.WRITE_DESCRIPTOR))
+				return
+			}
+		val descriptor = characteristic.descriptors
+			?.map { it as CBDescriptor }
+			?.find { it.UUID.UUIDString.lowercase() == descriptorUuid.toString().lowercase() }
+			?: run {
+				reportConnectionError(ProximityError.DescriptorNotFound(ProximityOperation.WRITE))
+				return
+			}
+		peripheral.writeValue(data.toData(), descriptor)
 	}
 
 	internal fun notifyReadyToSend(peripheral: CBPeripheral) {
@@ -208,40 +243,61 @@ internal class GattClient (
 		}
 		connectedPeripheral = null
 		incomingMessages.clear()
+		listener?.onPeerDisconnected()
 	}
 
 	internal fun onConnectionAttemptStarted() {
-		startConnectionTimeout("connect")
+		startConnectionTimeout(ProximityPhase.CONNECT)
 	}
 
 	internal fun onPeerConnectedReady() {
 		cancelConnectionTimeout()
 	}
 
-	internal fun reportConnectionError(error: Throwable) {
+	internal fun reportConnectionError(error: ProximityError) {
 		cancelConnectionTimeout()
 		listener?.onError(error)
 	}
 
-	private fun startConnectionTimeout(phase: String) {
+	internal fun onCentralStateChanged(state: Long) {
+		isReady = state == CBManagerStatePoweredOn
+		if (isReady) {
+			return
+		}
+		if (!hasActiveConnectionAttempt()) {
+			return
+		}
+		reportConnectionError(
+			ProximityError.BluetoothUnavailable(describeCentralState(state))
+		)
+		cleanupConnectionAttempt()
+	}
+
+	private fun hasActiveConnectionAttempt(): Boolean {
+		return connectionTimeoutJob != null || connectedPeripheral != null || manager?.isScanning == true
+	}
+
+	private fun cleanupConnectionAttempt() {
+		runCatching { manager?.stopScan() }
+		connectedPeripheral?.let { peripheral ->
+			runCatching { manager?.cancelPeripheralConnection(peripheral) }
+		}
+		connectedPeripheral = null
+		dispatch_async(writeQueue) {
+			pendingWrites.clear()
+		}
+		incomingMessages.clear()
+	}
+
+	private fun startConnectionTimeout(phase: ProximityPhase) {
 		cancelConnectionTimeout()
 		connectionTimeoutJob = timeoutScope.launch {
 			delay(connectionTimeoutMillis)
-			Logger("GattClient").warn("BLE $phase timed out after ${connectionTimeoutMillis / 1000}s")
+			Logger("GattClient").warn("BLE ${phase.name.lowercase()} timed out after ${connectionTimeoutMillis / 1000}s")
 			dispatch_async(dispatch_get_main_queue()) {
-				try {
-					manager?.stopScan()
-					connectedPeripheral?.let { peripheral ->
-						manager?.cancelPeripheralConnection(peripheral)
-					}
-				} catch (_: Throwable) {}
-				connectedPeripheral = null
-				dispatch_async(writeQueue) {
-					pendingWrites.clear()
-				}
-				incomingMessages.clear()
+				cleanupConnectionAttempt()
 				listener?.onError(
-					ConnectionTimeoutException("BLE $phase timed out after ${connectionTimeoutMillis / 1000} seconds")
+					ProximityError.Timeout(phase = phase, timeoutMillis = connectionTimeoutMillis)
 				)
 			}
 		}
@@ -310,5 +366,13 @@ internal class GattClient (
 		}
 	}
 
-	private class ConnectionTimeoutException(message: String) : Exception(message)
+	private fun describeCentralState(state: Long): String = when (state) {
+		CBManagerStateUnknown -> "unknown"
+		CBManagerStateResetting -> "resetting"
+		CBManagerStateUnsupported -> "unsupported"
+		CBManagerStateUnauthorized -> "unauthorized"
+		CBManagerStatePoweredOff -> "poweredOff"
+		CBManagerStatePoweredOn -> "poweredOn"
+		else -> "state=$state"
+	}
 }

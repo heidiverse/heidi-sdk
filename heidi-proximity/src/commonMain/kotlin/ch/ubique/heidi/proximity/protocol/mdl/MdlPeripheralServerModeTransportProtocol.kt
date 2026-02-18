@@ -19,6 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.proximity.protocol.mdl
 
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.ble.BleGattFactory
 import ch.ubique.heidi.proximity.ble.client.BleGattClient
 import ch.ubique.heidi.proximity.ble.client.BleGattClientListener
@@ -157,7 +158,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 			val characteristics = characteristicsFactory.createServerWalletCharacteristics()
 
 			if (!start(characteristics)) {
-				reportError(Error("Error starting Gatt Server"))
+				reportError(ProximityError.Unknown("Error starting Gatt Server"))
 				stop()
 				gattServer = null
 				return
@@ -166,7 +167,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 			startAdvertising(
 				object : BleAdvertiserListener {
 					override fun onError(msg: String) {
-						reportError(Error(msg))
+						reportError(ProximityError.Unknown(msg))
 					}
 				}
 			)
@@ -183,7 +184,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 				startScanning(
 					object : BleScannerListener {
 						override fun onError(msg: String) {
-							reportError(Error(msg))
+							reportError(ProximityError.Unknown(msg))
 						}
 					}
 				)
@@ -205,7 +206,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 			reportDisconnected()
 		}
 
-		override fun onError(error: Throwable) {
+		override fun onError(error: ProximityError) {
 			reportError(error)
 		}
 
@@ -214,11 +215,11 @@ internal class MdlPeripheralServerModeTransportProtocol(
 				val value = characteristic.value
 				return when {
 					value == null -> {
-						reportError(Error("Value is null"))
+						reportError(ProximityError.Unknown("Value is null"))
 						GattRequestResult(isSuccessful = false)
 					}
 					value.size != 1 -> {
-						reportError(Error("Value has invalid size (${value.size})"))
+						reportError(ProximityError.Unknown("Value has invalid size (${value.size})"))
 						GattRequestResult(isSuccessful = false)
 					}
 					value[0] == 0x02.toByte() -> {
@@ -230,7 +231,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 						GattRequestResult(isSuccessful = true)
 					}
 					else -> {
-						reportError(Error("Invalid value for state characteristic"))
+						reportError(ProximityError.Unknown("Invalid value for state characteristic"))
 						GattRequestResult(isSuccessful = false)
 					}
 				}
@@ -266,7 +267,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 			Logger.error("changin mtu: $mtu")
 		}
 
-		override fun onError(error: Throwable) {
+		override fun onError(error: ProximityError) {
 			reportError(error)
 		}
 
@@ -275,21 +276,21 @@ internal class MdlPeripheralServerModeTransportProtocol(
 			if (service != null) {
 				val stateCharacteristic = service.characteristics.singleOrNull { it.uuid == characteristicStateUuid }
 				if (stateCharacteristic == null) {
-					reportError(Error("State characteristic not found"))
+					reportError(ProximityError.Unknown("State characteristic not found"))
 					return emptyList()
 				}
 
 				val client2ServerCharacteristic =
 					service.characteristics.singleOrNull { it.uuid == characteristicClient2ServerUuid }
 				if (client2ServerCharacteristic == null) {
-					reportError(Error("Client2Server characteristic not found"))
+					reportError(ProximityError.Unknown("Client2Server characteristic not found"))
 					return emptyList()
 				}
 
 				val server2ClientCharacteristic =
 					service.characteristics.singleOrNull { it.uuid == characteristicServer2ClientUuid }
 				if (server2ClientCharacteristic == null) {
-					reportError(Error("Server2Client characteristic not found"))
+					reportError(ProximityError.Unknown("Server2Client characteristic not found"))
 					return emptyList()
 				}
 
@@ -299,7 +300,7 @@ internal class MdlPeripheralServerModeTransportProtocol(
 					server2ClientCharacteristic,
 				)
 			} else {
-				reportError(Error("Service not found"))
+				reportError(ProximityError.Unknown("Service not found"))
 				return emptyList()
 			}
 		}
@@ -319,10 +320,10 @@ internal class MdlPeripheralServerModeTransportProtocol(
 			if (characteristic.uuid == characteristicStateUuid) {
 				val value = characteristic.value
 				when {
-					value == null -> reportError(Error("Value is null"))
-					value.size != 1 -> reportError(Error("Value has invalid size (${value.size})"))
+					value == null -> reportError(ProximityError.Unknown("Value is null"))
+					value.size != 1 -> reportError(ProximityError.Unknown("Value has invalid size (${value.size})"))
 					value[0] == 0x02.toByte() -> reportTransportSpecificSessionTermination()
-					else -> reportError(Error("Invalid value for state characteristic"))
+					else -> reportError(ProximityError.Unknown("Invalid value for state characteristic"))
 				}
 			} else {
 				characteristic.value?.let { reportMessageReceived(it) }

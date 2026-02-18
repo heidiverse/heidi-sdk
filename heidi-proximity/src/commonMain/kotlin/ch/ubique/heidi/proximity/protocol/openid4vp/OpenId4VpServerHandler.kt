@@ -19,6 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.proximity.protocol.openid4vp
 
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.ble.server.BleGattServer
 import ch.ubique.heidi.proximity.ble.server.BleGattServerListener
@@ -34,7 +35,7 @@ internal class OpenId4VpServerHandler(
 	private val onConnected: () -> Unit,
 	private val onDisconnected: () -> Unit,
 	private val onMessageReceived: (ByteArray) -> Unit,
-	private val onError: (Throwable) -> Unit,
+	private val onError: (ProximityError) -> Unit,
 ) : BleGattServerListener {
 
 	/** The encoded document request to be transmitted to the wallet */
@@ -59,7 +60,7 @@ internal class OpenId4VpServerHandler(
 		onDisconnected.invoke()
 	}
 
-	override fun onError(error: Throwable) {
+	override fun onError(error: ProximityError) {
 		onError.invoke(error)
 	}
 

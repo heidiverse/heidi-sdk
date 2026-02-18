@@ -19,7 +19,10 @@ under the License.
  */
 package ch.ubique.heidi.proximity.wallet
 
+import ch.ubique.heidi.proximity.ConnectionTimeoutDefaults
 import ch.ubique.heidi.proximity.ProximityProtocol
+import ch.ubique.heidi.proximity.ProximityError
+import ch.ubique.heidi.proximity.ProximityPhase
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
@@ -46,6 +49,8 @@ import ch.ubique.heidi.util.log.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -195,6 +200,8 @@ class ProximityWallet private constructor(
 	private var verifierName: String? = null
 
 	private var deviceEngagementSent = false
+	private val submitTimeoutMillis = ConnectionTimeoutDefaults.BLE_CONNECTION_TIMEOUT_MILLIS
+	private var submitTimeoutJob: Job? = null
 
 	init {
 		transportProtocol.setListener(
@@ -216,6 +223,7 @@ class ProximityWallet private constructor(
 				}
 
 				override fun onDisconnected() {
+					cancelSubmitTimeout()
 					if (walletStateMutable.value !is ProximityWalletState.Error && !markSubmissionCompleted()) {
 						walletStateMutable.update { ProximityWalletState.Disconnected }
 					}
@@ -226,11 +234,14 @@ class ProximityWallet private constructor(
 					if (message != null) {
 						processMessageReceived(message)
 					} else {
-						walletStateMutable.update { ProximityWalletState.Error(Error("Received message is null")) }
+						walletStateMutable.update {
+							ProximityWalletState.Error(ProximityError.InvalidData("Received message is null"))
+						}
 					}
 				}
 
 				override fun onTransportSpecificSessionTermination() {
+					cancelSubmitTimeout()
 					disconnect()
 					if (!markSubmissionCompleted()) {
 						walletStateMutable.update {
@@ -239,7 +250,8 @@ class ProximityWallet private constructor(
 					}
 				}
 
-				override fun onError(error: Throwable) {
+				override fun onError(error: ProximityError) {
+					cancelSubmitTimeout()
 					walletStateMutable.update { ProximityWalletState.Error(error) }
 				}
 			}
@@ -282,11 +294,26 @@ class ProximityWallet private constructor(
 		return true
 	}
 
-	fun submitDocument(data: ByteArray): Boolean {
-		if (walletState.value !is ProximityWalletState.RequestingDocuments) {
-			return false
+	fun submitDocument(data: ByteArray) {
+		when (val state = walletState.value) {
+			is ProximityWalletState.RequestingDocuments -> {}
+			is ProximityWalletState.Error -> {
+				Logger("BT").debug("submitDocument ignored: walletState=$state")
+				return
+			}
+			else -> {
+				Logger("BT").debug("submitDocument ignored: walletState=$state")
+				walletStateMutable.update {
+					ProximityWalletState.Error(
+						ProximityError.InvalidState("Unable to submit: wallet is not ready to submit documents")
+					)
+				}
+				return
+			}
 		}
+		Logger("BT").debug("submitDocument started: payloadBytes=${data.size}")
 		walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = 0.0) }
+		startSubmitTimeout()
 		val encryptedData = sessionCipher!!.encrypt(data)!!
 		val payloadShaSum = sha256Rs(encryptedData)
 		val payload = encodeCbor(
@@ -296,15 +323,21 @@ class ProximityWallet private constructor(
 			).toCbor()
 		)
 		logPayloadDebug("Wallet sending MDL payload", payload)
-		transportProtocol.sendMessage(payload) { sent, total ->
-			val progress = if (total > 0) sent.toDouble() / total.toDouble() else null
-			walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = progress) }
-			if (progress != null && progress >= 1.0) {
-				markSubmissionCompleted()
+		runCatching {
+			transportProtocol.sendMessage(payload) { sent, total ->
+				val progress = if (total > 0) sent.toDouble() / total.toDouble() else null
+				Logger("BT").debug("submitDocument progress: sent=$sent total=$total progress=$progress")
+				walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = progress) }
+				if (progress != null && progress >= 1.0) {
+					markSubmissionCompleted()
+				}
 			}
+		}.onFailure { error ->
+			Logger("BT").error("submitDocument send failed: ${error.message ?: error::class.simpleName}")
+			cancelSubmitTimeout()
+			val message = error.message ?: error::class.simpleName ?: "Unknown error"
+			walletStateMutable.update { ProximityWalletState.Error(ProximityError.Unknown(message)) }
 		}
-
-		return true
 	}
 
 	fun declinePresentation(): Boolean {
@@ -331,6 +364,7 @@ class ProximityWallet private constructor(
 	}
 
 	fun disconnect() {
+		cancelSubmitTimeout()
 		transportProtocol.disconnect()
 		if (!markSubmissionCompleted()) {
 			walletStateMutable.update { ProximityWalletState.Disconnected }
@@ -369,7 +403,9 @@ class ProximityWallet private constructor(
 							runCatching {  dcRequest["requests"]!!.jsonArray.getOrNull(0)!!.jsonObject["data"]!!.jsonObject["request"]!!.jsonPrimitive.content }
 								.onFailure { error ->
 									walletStateMutable.update {
-										ProximityWalletState.Error(error)
+										ProximityWalletState.Error(
+											ProximityError.Unknown(error.message ?: error::class.simpleName ?: "Unknown error")
+										)
 									}
 								}
 								.onSuccess { result ->
@@ -407,7 +443,7 @@ class ProximityWallet private constructor(
 						}
 					} else {
 						val sessionData = MdlSessionData.fromCbor(message) ?: run {
-							Logger.debug("Wallet failed to decode MdlSessionData from message of size ${message.size}")
+							Logger("BT").debug("Wallet failed to decode MdlSessionData from message of size ${message.size}")
 							disconnect()
 							return@launch
 						}
@@ -417,7 +453,7 @@ class ProximityWallet private constructor(
 							isDcApi = it
 						}
 						if (sessionData.status != null) {
-							Logger.debug("Wallet received terminal status=${sessionData.status}, disconnecting")
+							Logger("BT").debug("Wallet received terminal status=${sessionData.status}, disconnecting")
 							if (!markSubmissionCompleted()) {
 								walletStateMutable.update { ProximityWalletState.Disconnected }
 							}
@@ -425,8 +461,10 @@ class ProximityWallet private constructor(
 							return@launch
 						}
 						val encryptedPayload = sessionData.data ?: run {
-							Logger.debug("Wallet received session data without payload, disconnecting")
-							walletStateMutable.update { ProximityWalletState.Error(Error("Received empty session data")) }
+							Logger("BT").debug("Wallet received session data without payload, disconnecting")
+							walletStateMutable.update {
+								ProximityWalletState.Error(ProximityError.InvalidData("Received empty session data"))
+							}
 							disconnect()
 							return@launch
 						}
@@ -437,13 +475,13 @@ class ProximityWallet private constructor(
 						)) {
 							is ProximityMdlUtils.PayloadDecryptResult.Success -> result.data
 							is ProximityMdlUtils.PayloadDecryptResult.Failure -> {
-								Logger.debug("Wallet received session data ${result.debugMessage}")
+								Logger("BT").debug("Wallet received session data ${result.debugMessage}")
 								val errorMessage = when (result.type) {
 									ProximityMdlUtils.PayloadDecryptFailureType.SHA_MISMATCH -> "MDL payload hash mismatch"
 									ProximityMdlUtils.PayloadDecryptFailureType.MISSING_CIPHER -> "Missing session cipher"
 									ProximityMdlUtils.PayloadDecryptFailureType.DECRYPT_FAILED -> "Failed to decrypt session data"
 								}
-								walletStateMutable.update { ProximityWalletState.Error(Error(errorMessage)) }
+								walletStateMutable.update { ProximityWalletState.Error(ProximityError.InvalidData(errorMessage)) }
 								disconnect()
 								return@launch
 							}
@@ -462,7 +500,9 @@ class ProximityWallet private constructor(
 							runCatching {  dcRequest["requests"]!!.jsonArray.getOrNull(0)!!.jsonObject["data"]!!.jsonObject["request"]!!.jsonPrimitive.content }
 								.onFailure { error ->
 									walletStateMutable.update {
-										ProximityWalletState.Error(error)
+										ProximityWalletState.Error(
+											ProximityError.Unknown(error.message ?: error::class.simpleName ?: "Unknown error")
+										)
 									}
 								}
 								.onSuccess { result ->
@@ -511,10 +551,13 @@ class ProximityWallet private constructor(
 								ProximityWalletState.RequestingDocuments(documentRequest)
 							}
 							is ProximityWalletState.SubmittingDocuments -> {
+								cancelSubmitTimeout()
 								transportProtocol.disconnect()
 								ProximityWalletState.PresentationCompleted
 							}
-							else -> ProximityWalletState.Error(Error("Received message in unexpected state: $current"))
+							else -> ProximityWalletState.Error(
+								ProximityError.InvalidState("Received message in unexpected state: $current")
+							)
 						}
 					}
 				}
@@ -524,11 +567,36 @@ class ProximityWallet private constructor(
 
 	private fun markSubmissionCompleted(): Boolean {
 		return if (walletStateMutable.value is ProximityWalletState.SubmittingDocuments) {
+			Logger("BT").debug("markSubmissionCompleted: transitioning to PresentationCompleted")
+			cancelSubmitTimeout()
 			walletStateMutable.update { ProximityWalletState.PresentationCompleted }
 			true
 		} else {
 			false
 		}
+	}
+
+	private fun startSubmitTimeout() {
+		cancelSubmitTimeout()
+		Logger("BT").debug("submit timeout started: ${submitTimeoutMillis}ms")
+		submitTimeoutJob = scope.launch(Dispatchers.Default) {
+			delay(submitTimeoutMillis)
+			if (walletStateMutable.value is ProximityWalletState.SubmittingDocuments) {
+				Logger("BT").warn("submit timeout fired in SubmittingDocuments, disconnecting")
+				walletStateMutable.update {
+					ProximityWalletState.Error(ProximityError.Timeout(ProximityPhase.SUBMIT, submitTimeoutMillis))
+				}
+				transportProtocol.disconnect()
+			}
+		}
+	}
+
+	private fun cancelSubmitTimeout() {
+		if (submitTimeoutJob != null) {
+			Logger("BT").debug("submit timeout canceled")
+		}
+		submitTimeoutJob?.cancel()
+		submitTimeoutJob = null
 	}
 
 }

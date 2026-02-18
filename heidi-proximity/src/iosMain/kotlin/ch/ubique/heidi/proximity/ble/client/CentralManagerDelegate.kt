@@ -19,11 +19,12 @@ under the License.
  */
 package ch.ubique.heidi.proximity.ble.client
 
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.util.log.Logger
 import kotlinx.cinterop.ObjCSignatureOverride
 import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBCentralManagerDelegateProtocol
-import platform.CoreBluetooth.CBCentralManagerState
+import platform.CoreBluetooth.CBCentralManagerStatePoweredOn
 import platform.CoreBluetooth.CBPeripheral
 import platform.CoreBluetooth.CBUUID
 import platform.Foundation.NSError
@@ -63,7 +64,7 @@ internal class CentralManagerDelegate(
 		error: NSError?
 	) {
 		gattClient.reportConnectionError(
-			Error(error?.localizedDescription ?: "Failed to connect peripheral ${didFailToConnectPeripheral.identifier}")
+			ProximityError.ConnectionFailed
 		)
 	}
 
@@ -74,11 +75,17 @@ internal class CentralManagerDelegate(
 		error: NSError?
 	) {
 		Logger.debug("Disconnected from peripheral: ${didDisconnectPeripheral.identifier}")
+		if (error != null) {
+			gattClient.reportConnectionError(
+				ProximityError.PeripheralDisconnected
+			)
+		}
 		gattClient.onPeripheralDisconnected(didDisconnectPeripheral)
 	}
 
 	override fun centralManagerDidUpdateState(central: CBCentralManager) {
 		Logger.debug("Central Manager did update state ${central.state} ${central.isScanning}")
-		isReady(central.state == 5L)
+		isReady(central.state == CBCentralManagerStatePoweredOn)
+		gattClient.onCentralStateChanged(central.state)
 	}
 }
