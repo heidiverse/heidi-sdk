@@ -1,9 +1,10 @@
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_jwt::{Jwk, jwt::verifier_for_jwk};
-use heidi_util_rust::{log_error, value::Value};
-
-use crate::crypto::base64_url_decode;
+use heidi_util_rust::value::Value;
 
 #[uniffi::export]
+
+/// Validate a detached JWS with a JWK, this function assumes that the header has been validated beforehand.
 pub fn validate_detached_jws_with_jwk(
     header_b64: &str,
     signature_b64: &str,
@@ -17,12 +18,8 @@ pub fn validate_detached_jws_with_jwk(
     signing_input.push(b'.');
     signing_input.extend_from_slice(&raw_body);
 
-    let sig = match std::panic::catch_unwind(|| base64_url_decode(signature_b64.to_string())) {
-        Ok(sig) => sig,
-        Err(_) => {
-            log_error!("VALIDATER", "invalid base64url signature in detached jws");
-            return false;
-        }
+    let Ok(signature) = BASE64_URL_SAFE_NO_PAD.decode(signature_b64) else {
+        return false;
     };
 
     let Some(jwk) = jwk.transform::<Jwk>() else {
@@ -33,7 +30,7 @@ pub fn validate_detached_jws_with_jwk(
         return false;
     };
 
-    return verifier.verify(&signing_input, &sig).is_ok();
+    return verifier.verify(&signing_input, &signature).is_ok();
 }
 
 #[cfg(test)]
