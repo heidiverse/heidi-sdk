@@ -35,7 +35,7 @@ class MetadataRepository: HeidiIssuanceKoinComponent {
 	// TODO UBMW: Keep a cache of the metadata
 
 	suspend fun getAuthorizationServerMetadata(baseUrl: String) = withContext(Dispatchers.IO) {
-		val result = runCatching {   metadataService.resolveOpenIdFederation(baseUrl) }.getOrNull()
+		val result = runCatching { metadataService.resolveOpenIdFederation(baseUrl) }.getOrNull()
 		result?.let {
 			val metadata = it.metadata.get("oauth_authorization_server")
 			metadata?.let {
@@ -43,11 +43,28 @@ class MetadataRepository: HeidiIssuanceKoinComponent {
 				return@withContext metadata.transform()!!
 			}
 		}
-		metadataService.doAuthorizationServerMetadataRequest(baseUrl)
+
+        val ietfUrl = MetadataService.ietfAuthorizationServerMetadataUrl(baseUrl)
+        runCatching { metadataService.doAuthorizationServerMetadataRequest(ietfUrl) }
+            .getOrNull()
+            ?.let { return@withContext it }
+
+        val ietfFallbackUrl = MetadataService.ietfFallbackAuthorizationServerMetadataUrl(baseUrl)
+        runCatching { metadataService.doAuthorizationServerMetadataRequest(ietfFallbackUrl) }
+            .getOrNull()
+            ?.let { return@withContext it }
+
+        val oidcUrl = MetadataService.oidcAuthorizationServerMetadataUrl(baseUrl)
+        runCatching { metadataService.doAuthorizationServerMetadataRequest(oidcUrl) }
+            .getOrNull()
+            ?.let { return@withContext it }
+
+        val oidcFallbackUrl = MetadataService.oidcFallbackAuthorizationServerMetadataUrl(baseUrl)
+		metadataService.doAuthorizationServerMetadataRequest(oidcFallbackUrl)
 	}
 
 	suspend fun getCredentialIssuerMetadata(baseUrl: String) = withContext(Dispatchers.IO) {
-		val result = runCatching {   metadataService.resolveOpenIdFederation(baseUrl) }.getOrNull()
+		val result = runCatching { metadataService.resolveOpenIdFederation(baseUrl) }.getOrNull()
 		result?.let {
 			//TODO UBAM: remove force unwrap
 			val metadata = it.metadata.get("openid_credential_issuer")
@@ -58,13 +75,15 @@ class MetadataRepository: HeidiIssuanceKoinComponent {
 
         // Try IETF Approach
         // https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-credential-issuer-metadata-
-        runCatching { metadataService.doCredentialIssuerMetadataRequestIetf(baseUrl) }
+        val ietfUrl = MetadataService.ietfCredentialIssuerEndpoint(baseUrl)
+        runCatching { metadataService.doCredentialIssuerMetadataRequest(ietfUrl) }
             .getOrNull()
             ?.let { return@withContext it }
 
         // Try OIDC Approach
         // https://openid.net/specs/openid-connect-discovery-1_0-final.html#ProviderConfig
-        metadataService.doCredentialIssuerMetadataRequestOidc(baseUrl)
+        val oidcUrl = MetadataService.oidcCredentialIssuerEndpoint(baseUrl)
+        metadataService.doCredentialIssuerMetadataRequest(oidcUrl)
 	}
 
 	fun getAuthorizationServerBaseUrl(

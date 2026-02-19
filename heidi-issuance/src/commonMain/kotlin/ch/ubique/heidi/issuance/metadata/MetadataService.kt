@@ -22,7 +22,6 @@ package ch.ubique.heidi.issuance.metadata
 
 import ch.ubique.heidi.issuance.metadata.data.AuthorizationServerMetadata
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
-import ch.ubique.heidi.util.log.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -44,55 +43,56 @@ internal class MetadataService(
 		}
 
 		private const val WELL_KNOWN_PATH = ".well-known"
-		private const val AUTHORIZATION_SERVER_METADATA_PATH = "/$WELL_KNOWN_PATH/oauth-authorization-server"
+        private const val AUTHORIZATION_SERVER_METADATA_PATH_PART = "oauth-authorization-server"
+		private const val AUTHORIZATION_SERVER_METADATA_PATH = "/$WELL_KNOWN_PATH/$AUTHORIZATION_SERVER_METADATA_PATH_PART"
 		// Fallback for old drafts (Yes, looking at you ...)
-		private const val AUTHORIZATION_SERVER_METADATA_PATH_FALLBACK = "/$WELL_KNOWN_PATH/openid-configuration"
+        private const val AUTHORIZATION_SERVER_METADATA_PATH_FALLBACK_PART = "openid-configuration"
+		private const val AUTHORIZATION_SERVER_METADATA_PATH_FALLBACK = "/$WELL_KNOWN_PATH/$AUTHORIZATION_SERVER_METADATA_PATH_FALLBACK_PART"
         private const val CREDENTIAL_ISSUER_METADATA_PATH_PART = "openid-credential-issuer"
         private const val CREDENTIAL_ISSUER_METADATA_PATH = "/$WELL_KNOWN_PATH/$CREDENTIAL_ISSUER_METADATA_PATH_PART"
 
-        fun oidcCredentialIssuerEndpoint(url: String): Url =
+        private fun prependPath(url: String, path: List<String>): Url =
             URLBuilder(url).apply {
+                val segments = pathSegments.toMutableList()
+                if (segments.isEmpty()){
+                    segments.add("")
+                }
+                path.forEachIndexed { i, segment ->
+                    segments.add(i + 1, segment)
+                }
+                pathSegments = segments
+            }.build()
+
+        fun oidcAuthorizationServerMetadataUrl(baseUrl: String): Url =
+            URLBuilder(baseUrl).apply {
+                appendPathSegments(AUTHORIZATION_SERVER_METADATA_PATH)
+            }.build()
+
+        fun ietfAuthorizationServerMetadataUrl(baseUrl: String): Url =
+            prependPath(baseUrl, listOf(WELL_KNOWN_PATH, AUTHORIZATION_SERVER_METADATA_PATH_PART))
+
+        fun oidcFallbackAuthorizationServerMetadataUrl(baseUrl: String): Url =
+            URLBuilder(baseUrl).apply {
+                appendPathSegments(AUTHORIZATION_SERVER_METADATA_PATH_FALLBACK)
+            }.build()
+
+        fun ietfFallbackAuthorizationServerMetadataUrl(baseUrl: String): Url =
+            prependPath(baseUrl, listOf(WELL_KNOWN_PATH, AUTHORIZATION_SERVER_METADATA_PATH_FALLBACK_PART))
+
+        fun oidcCredentialIssuerEndpoint(baseUrl: String): Url =
+            URLBuilder(baseUrl).apply {
                 appendPathSegments(CREDENTIAL_ISSUER_METADATA_PATH)
             }.build()
 
-        fun ietfCredentialIssuerEndpoint(url: String): Url =
-            URLBuilder(url).apply {
-                val path = pathSegments.toMutableList()
-                if (path.isEmpty()){
-                    path.add("")
-                }
-                path.add(1, WELL_KNOWN_PATH)
-                path.add(2, CREDENTIAL_ISSUER_METADATA_PATH_PART)
-                pathSegments = path
-            }.build()
+        fun ietfCredentialIssuerEndpoint(baseUrl: String): Url =
+            prependPath(baseUrl, listOf(WELL_KNOWN_PATH, CREDENTIAL_ISSUER_METADATA_PATH_PART))
     }
 
-	suspend fun doAuthorizationServerMetadataRequest(baseUrl: String): AuthorizationServerMetadata {
-		val authorizationServerMetadataUrl = URLBuilder(baseUrl).apply {
-			appendPathSegments(AUTHORIZATION_SERVER_METADATA_PATH)
-		}.build()
-
-		try {
-			return httpClient.get(authorizationServerMetadataUrl).body<AuthorizationServerMetadata>()
-		} catch (e: Exception) {
-			Logger.info("Authorization Server Metadata Request Fallback detected: $e");
-
-			val authorizationServerMetadataUrlFallback = URLBuilder(baseUrl).apply {
-				appendPathSegments(AUTHORIZATION_SERVER_METADATA_PATH_FALLBACK)
-			}.build()
-
-			return httpClient.get(authorizationServerMetadataUrlFallback).body<AuthorizationServerMetadata>()
-		}
-	}
-
-    suspend fun doCredentialIssuerMetadataRequestOidc(baseUrl: String): CredentialIssuerMetadata {
-        val credentialIssuerMetadataUrl = oidcCredentialIssuerEndpoint(baseUrl)
-        return httpClient.get(credentialIssuerMetadataUrl).body<CredentialIssuerMetadata>()
+    suspend fun doAuthorizationServerMetadataRequest(url: Url): AuthorizationServerMetadata {
+        return httpClient.get(url).body<AuthorizationServerMetadata>()
     }
-
-    suspend fun doCredentialIssuerMetadataRequestIetf(baseUrl: String): CredentialIssuerMetadata {
-        val credentialIssuerMetadataUrl = ietfCredentialIssuerEndpoint(baseUrl)
-        return httpClient.get(credentialIssuerMetadataUrl).body<CredentialIssuerMetadata>()
+    suspend fun doCredentialIssuerMetadataRequest(url: Url): CredentialIssuerMetadata {
+        return httpClient.get(url).body<CredentialIssuerMetadata>()
     }
 
 	suspend fun resolveOpenIdFederation(baseUrl: String) : FederationResult {
