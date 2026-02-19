@@ -187,7 +187,6 @@ impl MetadataFetcher {
             .header("Accept", "application/json")
             .send()
             .await?
-            .error_for_status()?
             .json::<CredentialIssuerMetadata>()
             .await
         {
@@ -205,7 +204,6 @@ impl MetadataFetcher {
             .header("Accept", "application/json")
             .send()
             .await?
-            .error_for_status()?
             .json::<CredentialIssuerMetadata>()
             .await
         {
