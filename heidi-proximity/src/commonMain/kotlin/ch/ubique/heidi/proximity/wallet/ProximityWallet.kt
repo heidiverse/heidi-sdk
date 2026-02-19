@@ -20,6 +20,7 @@ under the License.
 package ch.ubique.heidi.proximity.wallet
 
 import ch.ubique.heidi.proximity.ProximityProtocol
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
 import ch.ubique.heidi.proximity.protocol.TransportProtocol
@@ -84,7 +85,12 @@ class ProximityWallet private constructor(
 					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 					val readerEngagement = MdlEngagement.fromQrCode(readerEngagement)
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, readerEngagement?.centralClientUuid,  readerEngagement?.peripheralServerUuid, keypair)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						readerEngagement?.centralClientUuid,
+						readerEngagement?.peripheralServerUuid,
+						keypair
+					)
 					val engagementBuilder = MdlEngagementBuilder(
 						"",
 						coseKey,
@@ -116,7 +122,12 @@ class ProximityWallet private constructor(
 					val keypair = EphemeralKey(Role.SK_DEVICE)
 					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET, Uuid.parse(serviceUuid),  Uuid.parse(peripheralServerUuid!!), keypair)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						Uuid.parse(serviceUuid),
+						Uuid.parse(peripheralServerUuid!!),
+						keypair
+					)
 					val engagementBuilder = MdlEngagementBuilder(
 						"",
 						coseKey,
@@ -129,7 +140,10 @@ class ProximityWallet private constructor(
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
-					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.WALLET, Uuid.parse(serviceUuid))
+					val transportProtocol = OpenId4VpTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						Uuid.parse(serviceUuid)
+					)
 					ProximityWallet(protocol, scope, null, transportProtocol)
 				}
 			}
@@ -146,7 +160,12 @@ class ProximityWallet private constructor(
 					val keypair = EphemeralKey(Role.SK_DEVICE)
 					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.WALLET,serviceUuid, peripheralServerUuid!!, keypair)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						serviceUuid,
+						peripheralServerUuid!!,
+						keypair
+					)
 					//TODO: we probably should expose the lis of capabilities somehow to the constructor, or at least let the constructor
 					// choose, which protocols we wish to support.
 					val engagementBuilder = MdlEngagementBuilder(
@@ -161,7 +180,10 @@ class ProximityWallet private constructor(
 					ProximityWallet(protocol, scope, engagementBuilder, transportProtocol)
 				}
 				ProximityProtocol.OPENID4VP -> {
-					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.WALLET, serviceUuid)
+					val transportProtocol = OpenId4VpTransportProtocol(
+						TransportProtocol.Role.WALLET,
+						serviceUuid
+					)
 					ProximityWallet(protocol, scope, null,transportProtocol)
 				}
 			}
@@ -195,7 +217,7 @@ class ProximityWallet private constructor(
 				}
 
 				override fun onDisconnected() {
-					if (!markSubmissionCompleted()) {
+					if (walletStateMutable.value !is ProximityWalletState.Error && !markSubmissionCompleted()) {
 						walletStateMutable.update { ProximityWalletState.Disconnected }
 					}
 				}
@@ -205,7 +227,9 @@ class ProximityWallet private constructor(
 					if (message != null) {
 						processMessageReceived(message)
 					} else {
-						walletStateMutable.update { ProximityWalletState.Error(Error("Received message is null")) }
+						walletStateMutable.update {
+							ProximityWalletState.Error(ProximityError.InvalidData("Received message is null"))
+						}
 					}
 				}
 
@@ -218,7 +242,7 @@ class ProximityWallet private constructor(
 					}
 				}
 
-				override fun onError(error: Throwable) {
+				override fun onError(error: ProximityError) {
 					walletStateMutable.update { ProximityWalletState.Error(error) }
 				}
 			}
@@ -261,10 +285,24 @@ class ProximityWallet private constructor(
 		return true
 	}
 
-	fun submitDocument(data: ByteArray): Boolean {
-		if (walletState.value !is ProximityWalletState.RequestingDocuments) {
-			return false
+	fun submitDocument(data: ByteArray) {
+		when (val state = walletState.value) {
+			is ProximityWalletState.RequestingDocuments -> {}
+			is ProximityWalletState.Error -> {
+				Logger("BT").debug("submitDocument ignored: walletState=$state")
+				return
+			}
+			else -> {
+				Logger("BT").debug("submitDocument ignored: walletState=$state")
+				walletStateMutable.update {
+					ProximityWalletState.Error(
+						ProximityError.InvalidState("Unable to submit: wallet is not ready to submit documents")
+					)
+				}
+				return
+			}
 		}
+		Logger("BT").debug("submitDocument started: payloadBytes=${data.size}")
 		walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = 0.0) }
 		val encryptedData = sessionCipher!!.encrypt(data)!!
 		val payloadShaSum = sha256Rs(encryptedData)
@@ -275,15 +313,20 @@ class ProximityWallet private constructor(
 			).toCbor()
 		)
 		logPayloadDebug("Wallet sending MDL payload", payload)
-		transportProtocol.sendMessage(payload) { sent, total ->
-			val progress = if (total > 0) sent.toDouble() / total.toDouble() else null
-			walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = progress) }
-			if (progress != null && progress >= 1.0) {
-				markSubmissionCompleted()
+		runCatching {
+			transportProtocol.sendMessage(payload) { sent, total ->
+				val progress = if (total > 0) sent.toDouble() / total.toDouble() else null
+				Logger("BT").debug("submitDocument progress: sent=$sent total=$total progress=$progress")
+				walletStateMutable.update { ProximityWalletState.SubmittingDocuments(progress = progress) }
+				if (progress != null && progress >= 1.0) {
+					markSubmissionCompleted()
+				}
 			}
+		}.onFailure { error ->
+			Logger("BT").error("submitDocument send failed: ${error.message ?: error::class.simpleName}")
+			val message = error.message ?: error::class.simpleName ?: "Unknown error"
+			walletStateMutable.update { ProximityWalletState.Error(ProximityError.Unknown(message)) }
 		}
-
-		return true
 	}
 
 	fun declinePresentation(): Boolean {
@@ -348,7 +391,9 @@ class ProximityWallet private constructor(
 							runCatching {  dcRequest["requests"]!!.jsonArray.getOrNull(0)!!.jsonObject["data"]!!.jsonObject["request"]!!.jsonPrimitive.content }
 								.onFailure { error ->
 									walletStateMutable.update {
-										ProximityWalletState.Error(error)
+										ProximityWalletState.Error(
+											ProximityError.Unknown(error.message ?: error::class.simpleName ?: "Unknown error")
+										)
 									}
 								}
 								.onSuccess { result ->
@@ -386,7 +431,7 @@ class ProximityWallet private constructor(
 						}
 					} else {
 						val sessionData = MdlSessionData.fromCbor(message) ?: run {
-							Logger.debug("Wallet failed to decode MdlSessionData from message of size ${message.size}")
+							Logger("BT").debug("Wallet failed to decode MdlSessionData from message of size ${message.size}")
 							disconnect()
 							return@launch
 						}
@@ -396,7 +441,7 @@ class ProximityWallet private constructor(
 							isDcApi = it
 						}
 						if (sessionData.status != null) {
-							Logger.debug("Wallet received terminal status=${sessionData.status}, disconnecting")
+							Logger("BT").debug("Wallet received terminal status=${sessionData.status}, disconnecting")
 							if (!markSubmissionCompleted()) {
 								walletStateMutable.update { ProximityWalletState.Disconnected }
 							}
@@ -404,8 +449,10 @@ class ProximityWallet private constructor(
 							return@launch
 						}
 						val encryptedPayload = sessionData.data ?: run {
-							Logger.debug("Wallet received session data without payload, disconnecting")
-							walletStateMutable.update { ProximityWalletState.Error(Error("Received empty session data")) }
+							Logger("BT").debug("Wallet received session data without payload, disconnecting")
+							walletStateMutable.update {
+								ProximityWalletState.Error(ProximityError.InvalidData("Received empty session data"))
+							}
 							disconnect()
 							return@launch
 						}
@@ -416,13 +463,13 @@ class ProximityWallet private constructor(
 						)) {
 							is ProximityMdlUtils.PayloadDecryptResult.Success -> result.data
 							is ProximityMdlUtils.PayloadDecryptResult.Failure -> {
-								Logger.debug("Wallet received session data ${result.debugMessage}")
+								Logger("BT").debug("Wallet received session data ${result.debugMessage}")
 								val errorMessage = when (result.type) {
 									ProximityMdlUtils.PayloadDecryptFailureType.SHA_MISMATCH -> "MDL payload hash mismatch"
 									ProximityMdlUtils.PayloadDecryptFailureType.MISSING_CIPHER -> "Missing session cipher"
 									ProximityMdlUtils.PayloadDecryptFailureType.DECRYPT_FAILED -> "Failed to decrypt session data"
 								}
-								walletStateMutable.update { ProximityWalletState.Error(Error(errorMessage)) }
+								walletStateMutable.update { ProximityWalletState.Error(ProximityError.InvalidData(errorMessage)) }
 								disconnect()
 								return@launch
 							}
@@ -441,7 +488,9 @@ class ProximityWallet private constructor(
 							runCatching {  dcRequest["requests"]!!.jsonArray.getOrNull(0)!!.jsonObject["data"]!!.jsonObject["request"]!!.jsonPrimitive.content }
 								.onFailure { error ->
 									walletStateMutable.update {
-										ProximityWalletState.Error(error)
+										ProximityWalletState.Error(
+											ProximityError.Unknown(error.message ?: error::class.simpleName ?: "Unknown error")
+										)
 									}
 								}
 								.onSuccess { result ->
@@ -493,7 +542,9 @@ class ProximityWallet private constructor(
 								transportProtocol.disconnect()
 								ProximityWalletState.PresentationCompleted
 							}
-							else -> ProximityWalletState.Error(Error("Received message in unexpected state: $current"))
+							else -> ProximityWalletState.Error(
+								ProximityError.InvalidState("Received message in unexpected state: $current")
+							)
 						}
 					}
 				}
@@ -503,10 +554,12 @@ class ProximityWallet private constructor(
 
 	private fun markSubmissionCompleted(): Boolean {
 		return if (walletStateMutable.value is ProximityWalletState.SubmittingDocuments) {
+			Logger("BT").debug("markSubmissionCompleted: transitioning to PresentationCompleted")
 			walletStateMutable.update { ProximityWalletState.PresentationCompleted }
 			true
 		} else {
 			false
 		}
 	}
+
 }

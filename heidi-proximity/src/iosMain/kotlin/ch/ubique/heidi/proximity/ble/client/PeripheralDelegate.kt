@@ -19,6 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.proximity.ble.client
 
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
 import ch.ubique.heidi.proximity.ble.gatt.BleGattService
 import ch.ubique.heidi.util.log.Logger
@@ -37,6 +38,12 @@ internal class PeripheralDelegate(
 ) : NSObject(), CBPeripheralDelegateProtocol {
 
 	override fun peripheral(peripheral: CBPeripheral, didDiscoverServices: NSError?) {
+		if (didDiscoverServices != null) {
+			gattClient.reportConnectionError(
+				ProximityError.ServiceDiscoveryFailed
+			)
+			return
+		}
 		Logger("PeripheralDelegate").debug("peripheral did discover services")
 		peripheral.services?.forEach { service ->
 			peripheral.discoverCharacteristics(null, service as CBService)
@@ -44,6 +51,12 @@ internal class PeripheralDelegate(
 	}
 
 	override fun peripheral(peripheral: CBPeripheral, didDiscoverCharacteristicsForService: CBService, error: NSError?) {
+		if (error != null) {
+			gattClient.reportConnectionError(
+				ProximityError.CharacteristicDiscoveryFailed
+			)
+			return
+		}
 		Logger("PeripheralDelegate").debug("chars for ${didDiscoverCharacteristicsForService.UUID.UUIDString.lowercase()} (${gattClient.serviceUuid.toString().lowercase()})")
 		if(didDiscoverCharacteristicsForService.UUID.UUIDString.lowercase() == gattClient.serviceUuid.toString().lowercase()) {
 			val characteristics = didDiscoverCharacteristicsForService.characteristics?.map { BleGattCharacteristic(it as CBCharacteristic) } ?: emptyList()
@@ -54,6 +67,7 @@ internal class PeripheralDelegate(
 			}
 			Logger("PeripheralDelegate").debug("set state as connected")
 			gattClient.listener?.onServicesDiscovered(listOf(BleGattService(didDiscoverCharacteristicsForService)))
+			gattClient.onPeerConnectedReady()
 			gattClient.listener?.onPeerConnected()
 		}
 		// TODO BM: connect to service uuid
@@ -67,6 +81,12 @@ internal class PeripheralDelegate(
 
 	@ObjCSignatureOverride
 	override fun peripheral(peripheral: CBPeripheral, didUpdateValueForCharacteristic: CBCharacteristic, error: NSError?) {
+		if (error != null) {
+			gattClient.reportConnectionError(
+				ProximityError.CharacteristicValueUpdateFailed
+			)
+			return
+		}
 		val value = didUpdateValueForCharacteristic.value()?.toByteArray()
 		val characteristic = BleGattCharacteristic(didUpdateValueForCharacteristic)
 		val charUuid = characteristic.uuid!!
@@ -96,7 +116,11 @@ internal class PeripheralDelegate(
 	}
 
 	override fun peripheral(peripheral: CBPeripheral, didWriteValueForDescriptor: CBDescriptor, error: NSError?) {
-//		Logger("PeripheralDelegate").debug("didWriteValueForDescriptor: $didWriteValueForDescriptor")
+		if (error != null) {
+			gattClient.reportConnectionError(
+				ProximityError.DescriptorWriteFailed
+			)
+		}
 	}
 
 

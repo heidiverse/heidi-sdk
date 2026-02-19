@@ -19,6 +19,8 @@ under the License.
  */
 package ch.ubique.heidi.proximity.verifier
 
+import ch.ubique.heidi.proximity.ProximityError
+
 sealed interface ProximityVerifierState {
 
 	/** Initial state */
@@ -49,7 +51,7 @@ sealed interface ProximityVerifierState {
 	data object Disconnected : ProximityVerifierState
 
 	/** An error has occured during the proximity verification */
-	data class Error(val throwable: Throwable) : ProximityVerifierState
+	data class Error(val error: ProximityError) : ProximityVerifierState
 
 }
 

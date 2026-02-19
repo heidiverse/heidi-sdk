@@ -20,6 +20,7 @@ under the License.
 package ch.ubique.heidi.proximity.verifier
 
 import ch.ubique.heidi.proximity.ProximityProtocol
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.documents.DocumentRequester
 import ch.ubique.heidi.proximity.protocol.EngagementBuilder
@@ -79,7 +80,12 @@ class ProximityVerifier<T> private constructor(
 					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey())
 					val coseKeyEncoded = encodeCbor(coseKey)
 
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, Uuid.parse(serviceUuid),   peripheralServerUuid?.let { Uuid.parse(it)}, publicKey)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.VERIFIER,
+						Uuid.parse(serviceUuid),
+						peripheralServerUuid?.let { Uuid.parse(it)},
+						publicKey
+					)
 					val engagementBuilder = MdlEngagementBuilder(
 						"",
 						coseKeyEncoded,
@@ -94,7 +100,11 @@ class ProximityVerifier<T> private constructor(
 				ProximityProtocol.OPENID4VP -> {
 					val serviceUuid = Uuid.random()
 					val engagementBuilder = OpenId4VpEngagementBuilder(verifierName,  base64UrlEncode(publicKey.publicKey()), serviceUuid)
-					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.VERIFIER, serviceUuid, requester)
+					val transportProtocol = OpenId4VpTransportProtocol(
+						TransportProtocol.Role.VERIFIER,
+						serviceUuid,
+						requester
+					)
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester)
 				}
 			}
@@ -113,13 +123,22 @@ class ProximityVerifier<T> private constructor(
 					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey())
 					val engagementData = qrcodeData ?: return null
 					val deviceEngagement = MdlEngagement.fromQrCode(engagementData)
-					val transportProtocol = MdlTransportProtocol(TransportProtocol.Role.VERIFIER, deviceEngagement?.centralClientUuid,  deviceEngagement?.peripheralServerUuid, publicKey)
+					val transportProtocol = MdlTransportProtocol(
+						TransportProtocol.Role.VERIFIER,
+						deviceEngagement?.centralClientUuid,
+						deviceEngagement?.peripheralServerUuid,
+						publicKey
+					)
 					ProximityVerifier(protocol, scope, deviceEngagement, transportProtocol, requester, readerKey = coseKey, isDcApi = preferDcApi)
 				}
 				ProximityProtocol.OPENID4VP -> {
 					val serviceUuid = Uuid.random()
 					val engagementBuilder = OpenId4VpEngagementBuilder(verifierName,  base64UrlEncode(publicKey.publicKey()), serviceUuid)
-					val transportProtocol = OpenId4VpTransportProtocol(TransportProtocol.Role.VERIFIER, serviceUuid, requester)
+					val transportProtocol = OpenId4VpTransportProtocol(
+						TransportProtocol.Role.VERIFIER,
+						serviceUuid,
+						requester
+					)
 					ProximityVerifier(protocol, scope, engagementBuilder, transportProtocol, requester)
 				}
 			}
@@ -172,7 +191,9 @@ class ProximityVerifier<T> private constructor(
 					if (message != null) {
 						processMessageReceived(message)
 					} else {
-						verifierStateMutable.update { ProximityVerifierState.Error(Error("Received message is null")) }
+						verifierStateMutable.update {
+							ProximityVerifierState.Error(ProximityError.InvalidData("Received message is null"))
+						}
 					}
 				}
 
@@ -180,7 +201,7 @@ class ProximityVerifier<T> private constructor(
 
 				}
 
-				override fun onError(error: Throwable) {
+				override fun onError(error: ProximityError) {
 					verifierStateMutable.update { ProximityVerifierState.Error(error) }
 				}
 			}
@@ -192,7 +213,7 @@ class ProximityVerifier<T> private constructor(
 			// The session transcript is needed to derive origin
 			val sessionTranscript = (transportProtocol as MdlTransportProtocolExtensions).sessionTranscript ?: run {
 				verifierStateMutable.update {
-					ProximityVerifierState.Error(Throwable("failed to get session transcript"))
+					ProximityVerifierState.Error(ProximityError.InvalidData("failed to get session transcript"))
 				}
 				return@launch
 			}
@@ -209,19 +230,19 @@ class ProximityVerifier<T> private constructor(
 					val serializedDcRequest = json.encodeToString(dcRequest)
 					val currentCipher = sessionCipher ?: run {
 						verifierStateMutable.update {
-							ProximityVerifierState.Error(Throwable("no session cipher"))
+							ProximityVerifierState.Error(ProximityError.InvalidData("no session cipher"))
 						}
 						return@launch
 					}
 					readerKey ?: run {
 						verifierStateMutable.update {
-							ProximityVerifierState.Error(Throwable("reader key is null"))
+							ProximityVerifierState.Error(ProximityError.InvalidData("reader key is null"))
 						}
 						return@launch
 					}
 					val encryptedData = currentCipher.encrypt(serializedDcRequest.encodeToByteArray()) ?: run {
 						verifierStateMutable.update {
-							ProximityVerifierState.Error(Throwable("failed to encrypt data"))
+							ProximityVerifierState.Error(ProximityError.InvalidData("failed to encrypt data"))
 						}
 						return@launch
 					}
@@ -243,7 +264,9 @@ class ProximityVerifier<T> private constructor(
 		verifierStateMutable.update { ProximityVerifierState.PreparingEngagement }
 
 		if (transportProtocol.isConnected) {
-			verifierStateMutable.update { ProximityVerifierState.Error(Error("Verifier is already connected")) }
+			verifierStateMutable.update {
+				ProximityVerifierState.Error(ProximityError.InvalidState("Verifier is already connected"))
+			}
 			return
 		}
 
@@ -319,7 +342,9 @@ class ProximityVerifier<T> private constructor(
 					}
 					val encryptedPayload = sessionData.data ?: run {
 						Logger.debug("processMessageReceived data is null, disconnecting")
-						verifierStateMutable.update { ProximityVerifierState.Error(Error("Received empty session data")) }
+						verifierStateMutable.update {
+							ProximityVerifierState.Error(ProximityError.InvalidData("Received empty session data"))
+						}
 						disconnect()
 						return@launch
 					}
@@ -339,7 +364,7 @@ class ProximityVerifier<T> private constructor(
 							} else {
 								// handle mdl device response
 								verifierStateMutable.update {
-									ProximityVerifierState.Error(Error("mdl not yet implemented"))
+									ProximityVerifierState.Error(ProximityError.InvalidState("mdl not yet implemented"))
 								}
 							}
 						}
@@ -350,7 +375,7 @@ class ProximityVerifier<T> private constructor(
 								ProximityMdlUtils.PayloadDecryptFailureType.MISSING_CIPHER -> "Missing session cipher"
 								ProximityMdlUtils.PayloadDecryptFailureType.DECRYPT_FAILED -> "Failed to decrypt session data"
 							}
-							verifierStateMutable.update { ProximityVerifierState.Error(Error(errorMessage)) }
+							verifierStateMutable.update { ProximityVerifierState.Error(ProximityError.InvalidData(errorMessage)) }
 							disconnect()
 							return@launch
 						}
@@ -364,7 +389,9 @@ class ProximityVerifier<T> private constructor(
 								val verificationResult = documentRequester.verifySubmittedDocuments(message)
 								ProximityVerifierState.VerificationResult(verificationResult)
 							}
-							else -> ProximityVerifierState.Error(Error("Received message in unexpected state: $current"))
+							else -> ProximityVerifierState.Error(
+								ProximityError.InvalidState("Received message in unexpected state: $current")
+							)
 						}
 					}
 				}

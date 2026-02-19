@@ -127,7 +127,7 @@ fun ProximityScreen(
 						Text("Disconnected")
 					}
 					is ProximityWalletState.Error -> {
-						Text(state.throwable.stackTraceToString())
+						Text(state.error.message)
 					}
 				}
 			}

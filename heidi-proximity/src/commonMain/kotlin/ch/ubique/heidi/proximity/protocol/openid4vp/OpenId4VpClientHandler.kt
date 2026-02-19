@@ -19,6 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.proximity.protocol.openid4vp
 
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.ble.client.BleGattClient
 import ch.ubique.heidi.proximity.ble.client.BleGattClientListener
 import ch.ubique.heidi.proximity.ble.gatt.BleGattCharacteristic
@@ -34,7 +35,7 @@ internal class OpenId4VpClientHandler(
 	private val onSessionTermination: () -> Unit,
 	private val onDisconnected: () -> Unit,
 	private val onMessageReceived: (ByteArray) -> Unit,
-	private val onError: (Throwable) -> Unit,
+	private val onError: (ProximityError) -> Unit,
 ) : BleGattClientListener {
 
 	/** The size in bytes of the document request the verifier wants to transmit */
@@ -55,7 +56,7 @@ internal class OpenId4VpClientHandler(
 			)
 			return uuids.mapNotNull { uuid -> service.characteristics.singleOrNull { it.uuid == uuid } }
 		} else {
-			onError.invoke(Error("Service not found"))
+			onError.invoke(ProximityError.Unknown("Service not found"))
 			return emptyList()
 		}
 	}
@@ -78,7 +79,7 @@ internal class OpenId4VpClientHandler(
 		onDisconnected.invoke()
 	}
 
-	override fun onError(error: Throwable) {
+	override fun onError(error: ProximityError) {
 		onError.invoke(error)
 	}
 
@@ -92,7 +93,7 @@ internal class OpenId4VpClientHandler(
 			OpenId4VpTransportProtocol.charRequestUuid -> {
 				val request = characteristic.value ?: TransportProtocol.EMPTY_MESSAGE
 				if (request.size != documentRequestSize) {
-					onError.invoke(Error("Request size mismatch"))
+					onError.invoke(ProximityError.Unknown("Request size mismatch"))
 				} else {
 					// The verifier document request was successfully read, let the wallet process it
 					onMessageReceived.invoke(request)

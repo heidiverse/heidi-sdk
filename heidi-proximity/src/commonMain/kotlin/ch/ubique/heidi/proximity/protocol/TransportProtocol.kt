@@ -19,6 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.proximity.protocol
 
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.util.log.Logger
 
 abstract class TransportProtocol(
@@ -109,7 +110,7 @@ abstract class TransportProtocol(
 		}
 	}
 
-	protected fun reportError(error: Throwable) {
+	protected fun reportError(error: ProximityError) {
 		if (!inhibitCallbacks) {
 			listener?.onError(error)
 		}
@@ -126,7 +127,7 @@ abstract class TransportProtocol(
 
 		fun onTransportSpecificSessionTermination()
 
-		fun onError(error: Throwable)
+		fun onError(error: ProximityError)
 	}
 
 }

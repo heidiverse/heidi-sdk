@@ -19,6 +19,7 @@ under the License.
  */
 package ch.ubique.heidi.proximity.wallet
 
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.verifier.ProximityVerifierState
 
@@ -48,5 +49,5 @@ sealed interface ProximityWalletState {
 	data object Disconnected : ProximityWalletState
 
 	/** An error has occured during the proximity verification */
-	data class Error(val throwable: Throwable) : ProximityWalletState
+	data class Error(val error: ProximityError) : ProximityWalletState
 }
