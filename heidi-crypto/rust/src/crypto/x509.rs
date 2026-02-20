@@ -18,11 +18,13 @@ specific language governing permissions and limitations
 under the License.
  */
 
-use crate::crypto::{base64_url_decode, base64_url_encode, SignatureCreator};
+use crate::crypto::{SignatureCreator, base64_url_decode, base64_url_encode};
+use base64::Engine;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use oid_registry::{OidEntry, OidRegistry};
+use p256::NistP256;
 use p256::pkcs8::der::Encode;
 use p256::pkcs8::{DecodePublicKey, EncodePublicKey};
-use p256::NistP256;
 use simple_x509::X509Builder;
 use std::sync::Arc;
 use x509_parser::der_parser::oid;
@@ -32,6 +34,7 @@ use x509_parser::oid_registry::OID_KEY_TYPE_EC_PUBLIC_KEY;
 pub struct X509Certificate {
     serial: String,
     subject: String,
+    authority_key_identifier: Option<String>,
     pub public_key: X509PublicKey,
     algo_oid: String,
     san: Vec<SanType>,
@@ -123,7 +126,7 @@ pub fn create_cert(
 pub fn extract_certs(buf: Vec<u8>) -> Vec<X509Certificate> {
     let mut oid_registry = OidRegistry::default().with_x509();
     let entry = OidEntry::new("organizationIdentifier", "organizationIdentifier");
-    oid_registry.insert(oid!(2.5.4 .97), entry);
+    oid_registry.insert(oid!(2.5.4.97), entry);
     let mut certificates = vec![];
     let mut remaining_buf = buf.as_slice();
     loop {
@@ -143,10 +146,16 @@ pub fn extract_certs(buf: Vec<u8>) -> Vec<X509Certificate> {
                 }
             }
         }
+        let aki = if let Ok(Some(extension)) = cert.get_extension_unique(&oid!(2.5.29.35)) {
+            Some(BASE64_URL_SAFE_NO_PAD.encode(extension.value))
+        } else {
+            None
+        };
         certificates.push(X509Certificate {
             original_cert: buf.clone(),
             algo_oid: cert.public_key().algorithm.oid().to_string(),
             serial: cert.serial.to_str_radix(16),
+            authority_key_identifier: aki,
             subject: cert
                 .subject
                 .to_string_with_registry(&oid_registry)
@@ -235,5 +244,37 @@ mod tests {
             base64::prelude::BASE64_STANDARD.encode(&certs[1].original_cert)
         );
         assert!(verify_chain(certs));
+    }
+    #[test]
+    fn test_x509_with_aki() {
+        let aki = "-----BEGIN CERTIFICATE-----
+MIIEWjCCA0KgAwIBAgIQC/2k+ogVBpMJ409phBMnDzANBgkqhkiG9w0BAQsFADA7
+MQswCQYDVQQGEwJVUzEeMBwGA1UEChMVR29vZ2xlIFRydXN0IFNlcnZpY2VzMQww
+CgYDVQQDEwNXUjIwHhcNMjYwMTI2MDg0MjAxWhcNMjYwNDIwMDg0MjAwWjAWMRQw
+EgYDVQQDDAsqLmdvb2dsZS5jaDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABHQx
+wYSi27+sZRyI/AGI0L1Z6CvizfNfnarZoVI4QAT8YduwMgoQ/33WkW7ItekFtCJF
+eU1dIx15o03FAhIw2LijggJIMIICRDAOBgNVHQ8BAf8EBAMCB4AwEwYDVR0lBAww
+CgYIKwYBBQUHAwEwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQU9/mNOJXx8ARmzVOn
+ZuJjFzvW0A8wHwYDVR0jBBgwFoAU3hse7XkV1D43JMMhu+w0OW1CsjAwWAYIKwYB
+BQUHAQEETDBKMCEGCCsGAQUFBzABhhVodHRwOi8vby5wa2kuZ29vZy93cjIwJQYI
+KwYBBQUHMAKGGWh0dHA6Ly9pLnBraS5nb29nL3dyMi5jcnQwIQYDVR0RBBowGIIL
+Ki5nb29nbGUuY2iCCWdvb2dsZS5jaDATBgNVHSAEDDAKMAgGBmeBDAECATA2BgNV
+HR8ELzAtMCugKaAnhiVodHRwOi8vYy5wa2kuZ29vZy93cjIvb0JGWVlhaHpnVkku
+Y3JsMIIBAwYKKwYBBAHWeQIEAgSB9ASB8QDvAHUA0W6ppWgHfmY1oD83pd28A6U8
+QRIU1IgY9ekxsyPLlQQAAAGb+a6DVQAABAMARjBEAiBEySufKvVNB3o8zjnF4WDa
+FOpB2KEGq7Gc0ky8UgFZWAIgVtZfbHKQDSR8+S1a979PpSt3s8WogGxi+5DFtyD+
+bX0AdgAOV5S8866pPjMbLJkHs/eQ35vCPXEyJd0hqSWsYcVOIQAAAZv5roJ+AAAE
+AwBHMEUCIQDSXZ6+nIrq2tOlc6nxZmnwo3k1J4xlk9s3VGa4gk42ugIgSEoQ831i
+nvNinxJCCn4EUNBAEQZZ83mn47F4TJoWc94wDQYJKoZIhvcNAQELBQADggEBAETx
+h2jqQoFB7fz9mGyHxbmbSfPwAjO3J8zSrqVWQXfAgyTlaL38XlQpmv/r5gQ7btGN
+wx5e4a3tj2QmP7PiWlSavedf01J9NsOyL9QEYEEFLYhrPp25NPXKh5XFUvbPIwVA
+8PM5mperE+9XYVlRfLmv9iGME1GnFgSYjB1jQcXXbe/+nHY3M5UPSDWgVYH8vAVI
+b5MVq6xm0SL7cGvK7HG9Vp9fcROjozkeoB1zIoB3j2Nrjw5rGhPZTBgnJVnc72s9
+Gne7v8ihgDj51jzj6AhXdVUwrQ4vOVAWWwZCZxvpJ+VAUVXcTxXj3g+DNuHZcJOy
+nnW2WuEYWxYBKIHcotA=
+-----END CERTIFICATE-----";
+        let (_, cert) = x509_parser::pem::parse_x509_pem(aki.as_bytes()).unwrap();
+        let certs = extract_certs(cert.contents);
+        println!("{:?}", certs);
     }
 }
