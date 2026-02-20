@@ -62,8 +62,22 @@ pub enum Meta {
 
 #[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
 pub struct TrustedAuthority {
-    pub r#type: String,
+    pub r#type: TrustedAuthorityQueryType,
     pub values: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Enum, PartialEq, Eq)]
+pub enum TrustedAuthorityQueryType {
+    #[serde(rename = "aki")]
+    AuthorityKeyIdentifier,
+    #[serde(rename = "esti_tl")]
+    EtsiTrustedList,
+    #[serde(rename = "openid_federation")]
+    OpenIDFederation,
+    #[serde(rename = "did")]
+    DecentralizedIdentifier,
+    #[serde(untagged)]
+    Other(String),
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
@@ -170,4 +184,41 @@ pub struct CredentialSetQuery {
 
 pub const fn default_required() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::models::TrustedAuthorityQueryType;
+
+    #[test]
+    fn test_parsing_trusted_authority_query_type() {
+        let json = r#""aki""#;
+        let query_type = serde_json::from_str::<TrustedAuthorityQueryType>(json).unwrap();
+        assert_eq!(
+            query_type,
+            TrustedAuthorityQueryType::AuthorityKeyIdentifier
+        );
+
+        let json = r#""esti_tl""#;
+        let query_type = serde_json::from_str::<TrustedAuthorityQueryType>(json).unwrap();
+        assert_eq!(query_type, TrustedAuthorityQueryType::EtsiTrustedList);
+
+        let json = r#""openid_federation""#;
+        let query_type = serde_json::from_str::<TrustedAuthorityQueryType>(json).unwrap();
+        assert_eq!(query_type, TrustedAuthorityQueryType::OpenIDFederation);
+
+        let json = r#""did""#;
+        let query_type = serde_json::from_str::<TrustedAuthorityQueryType>(json).unwrap();
+        assert_eq!(
+            query_type,
+            TrustedAuthorityQueryType::DecentralizedIdentifier
+        );
+
+        let json = r#""other""#;
+        let query_type = serde_json::from_str::<TrustedAuthorityQueryType>(json).unwrap();
+        assert_eq!(
+            query_type,
+            TrustedAuthorityQueryType::Other("other".to_string())
+        );
+    }
 }
