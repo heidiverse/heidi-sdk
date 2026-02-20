@@ -27,6 +27,7 @@ import ch.ubique.heidi.credentials.get
 import ch.ubique.heidi.credentials.toClaimsPointer
 import ch.ubique.heidi.dcql.checkDcqlPresentation
 import ch.ubique.heidi.dcql.getVpToken
+import ch.ubique.heidi.dcql.trustedAuthority.AkiAuthorityMatcher
 import ch.ubique.heidi.dcql.trustedAuthority.DidAuthorityMatcher
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.SignatureCreator
@@ -84,7 +85,7 @@ class TestDcql {
             " }"
     val matrikulationsBstMusterstadt = "{\n" +
             "  \"vct\": \"https://dev-ssi-schema-creator-ws.ubique.ch/v1/schema/matrikulations-bst/0.0.4\",\n" +
-            "  \"iss\": \"https://sprind-eudi-issuer-ws-dev.ubique.ch\",\n" +
+            "  \"iss\": \"did:example\",\n" +
             "  \"render\": {\n" +
             "    \"type\": \"OverlaysCaptureBundleV1\",\n" +
             "    \"oca\": \"https://sprind-eudi-issuer-ws-dev.ubique.ch/oca/IAJSyv3uxGsR98qGGLnrEHTN20Z4okSgV1l5qQoBw3yK7.json\"\n" +
@@ -241,6 +242,7 @@ class TestDcql {
         val query: DcqlQuery = Json.decodeFromString(uniQuery)
         // this should register the did matcher
         val didMatcher = DidAuthorityMatcher()
+        val akiMatcher = AkiAuthorityMatcher()
         val results = selectCredentials(query, store)[0].setOptions[0][0]
         assertEquals(results.options.size, 1)
         assertEquals(results.id, "confirmation-of-matriculation")
