@@ -17,6 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
  */
+pub mod trusted_authority;
 
 #[cfg(feature = "bbs")]
 use heidi_credentials_rust::bbs::{decode_bbs, BbsRust};
@@ -62,7 +63,7 @@ pub enum Meta {
 
 #[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
 pub struct TrustedAuthority {
-    pub r#type: TrustedAuthorityQueryType,
+    pub r#type: String,
     pub values: Vec<String>,
 }
 
@@ -76,8 +77,20 @@ pub enum TrustedAuthorityQueryType {
     OpenIDFederation,
     #[serde(rename = "did")]
     DecentralizedIdentifier,
-    #[serde(untagged)]
-    Other(String),
+    #[serde(other)]
+    Other,
+}
+
+impl<T: AsRef<str>> From<T> for TrustedAuthorityQueryType {
+    fn from(s: T) -> Self {
+        match s.as_ref() {
+            "aki" => TrustedAuthorityQueryType::AuthorityKeyIdentifier,
+            "esti_tl" => TrustedAuthorityQueryType::EtsiTrustedList,
+            "openid_federation" => TrustedAuthorityQueryType::OpenIDFederation,
+            "did" => TrustedAuthorityQueryType::DecentralizedIdentifier,
+            _ => TrustedAuthorityQueryType::Other,
+        }
+    }
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
@@ -214,11 +227,8 @@ mod tests {
             TrustedAuthorityQueryType::DecentralizedIdentifier
         );
 
-        let json = r#""other""#;
+        let json = r#""something_else""#;
         let query_type = serde_json::from_str::<TrustedAuthorityQueryType>(json).unwrap();
-        assert_eq!(
-            query_type,
-            TrustedAuthorityQueryType::Other("other".to_string())
-        );
+        assert_eq!(query_type, TrustedAuthorityQueryType::Other);
     }
 }
