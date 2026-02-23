@@ -27,11 +27,14 @@ import ch.ubique.heidi.credentials.get
 import ch.ubique.heidi.credentials.toClaimsPointer
 import ch.ubique.heidi.dcql.checkDcqlPresentation
 import ch.ubique.heidi.dcql.getVpToken
+import ch.ubique.heidi.dcql.trustedAuthority.AkiAuthorityMatcher
+import ch.ubique.heidi.dcql.trustedAuthority.DidAuthorityMatcher
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.SignatureCreator
 import uniffi.heidi_crypto_rust.SoftwareKeyPair
 import uniffi.heidi_dcql_rust.Credential
 import uniffi.heidi_dcql_rust.DcqlQuery
+import uniffi.heidi_dcql_rust.registerMatcher
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_dcql_rust.selectCredentials
 import kotlin.test.Test
@@ -57,6 +60,10 @@ class TestDcql {
             "        {\n" +
             "            \"id\" : \"confirmation-of-matriculation\",\n" +
             "            \"format\" :  \"dc+sd-jwt\",\n" +
+            "            \"trusted_authorities\" : [{" +
+            "              \"type\" : \"did\"," +
+            "               \"values\" : [\"did:example\"] " +
+            "            }]," +
             "            \"meta\" : {\n" +
             "                \"vct_values\" : [\"https://dev-ssi-schema-creator-ws.ubique.ch/v1/schema/matrikulations-bst/0.0.4\"]\n" +
             "            },\n" +
@@ -78,7 +85,7 @@ class TestDcql {
             " }"
     val matrikulationsBstMusterstadt = "{\n" +
             "  \"vct\": \"https://dev-ssi-schema-creator-ws.ubique.ch/v1/schema/matrikulations-bst/0.0.4\",\n" +
-            "  \"iss\": \"https://sprind-eudi-issuer-ws-dev.ubique.ch\",\n" +
+            "  \"iss\": \"did:example\",\n" +
             "  \"render\": {\n" +
             "    \"type\": \"OverlaysCaptureBundleV1\",\n" +
             "    \"oca\": \"https://sprind-eudi-issuer-ws-dev.ubique.ch/oca/IAJSyv3uxGsR98qGGLnrEHTN20Z4okSgV1l5qQoBw3yK7.json\"\n" +
@@ -233,6 +240,9 @@ class TestDcql {
         assertEquals(sdjwt1.innerJwt.disclosuresMap.size, 7)
         val store = listOf(sdjwt1.innerJwt.originalSdjwt, sdjwt2.innerJwt.originalSdjwt)
         val query: DcqlQuery = Json.decodeFromString(uniQuery)
+        // this should register the did matcher
+        val didMatcher = DidAuthorityMatcher()
+        val akiMatcher = AkiAuthorityMatcher()
         val results = selectCredentials(query, store)[0].setOptions[0][0]
         assertEquals(results.options.size, 1)
         assertEquals(results.id, "confirmation-of-matriculation")
