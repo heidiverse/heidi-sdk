@@ -3,15 +3,14 @@ package ch.ubique.heidi.dcql.trustedAuthority
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
 import uniffi.heidi_crypto_rust.getKidFromJwt
-import uniffi.heidi_crypto_rust.parseEncodedJwtHeader
 import uniffi.heidi_dcql_rust.Credential
 import uniffi.heidi_dcql_rust.TrustedAuthority
 import uniffi.heidi_dcql_rust.TrustedAuthorityMatcher
 import uniffi.heidi_dcql_rust.TrustedAuthorityQueryType
 import uniffi.heidi_dcql_rust.registerMatcher
 
-class DidAuthorityMatcher : TrustedAuthorityMatcher {
-	init {
+object DidAuthorityMatcher : TrustedAuthorityMatcher {
+	fun register() {
 		registerMatcher(this)
 	}
 
