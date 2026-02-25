@@ -23,19 +23,21 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_util_rust::value::Value;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use sha2::{digest::DynDigest, Digest, Sha256};
+use sha2::{Digest, Sha256, digest::DynDigest};
 
-const UNDISCLOSABLE_CLAIMS: [&str; 9] = [
+const UNDISCLOSABLE_CLAIMS: [&str; 10] = [
     // Regular JWT claims
     "iss",
     "iat",
     "exp",
     "nbf",
     "vct",
+    // SD-JWT claims
+    "cnf",
     // JSON-LD JWT claims
     "@context",
     "issuer",
@@ -43,12 +45,17 @@ const UNDISCLOSABLE_CLAIMS: [&str; 9] = [
     "validUntil",
 ];
 
+const ILLEGAL_CLAIM_NAMES: [&str; 2] = ["_sd", "..."];
+
 #[derive(Debug, uniffi::Error, Clone, Copy)]
 pub enum SdJwtDecodeError {
     NoDisclosures,
     InvalidBody,
     InvalidJwt,
     InvalidDisclosure,
+    DuplicateDisclosure,
+    DuplicateKey,
+    NotAllDisclosuresReferenced,
 }
 
 impl Display for SdJwtDecodeError {
@@ -137,14 +144,14 @@ fn parse_disclosure(disclosure: &str) -> Result<Disclosure, SdJwtDecodeError> {
 
 fn reconstruct(
     mut claims: JsonValue,
-    disclosure_map: &HashMap<String, Disclosure>,
-) -> (JsonValue, DisclosureTree) {
+    disclosure_map: &mut HashMap<String, Disclosure>,
+) -> Result<(JsonValue, DisclosureTree), SdJwtDecodeError> {
     fn inner(
         sdjwt: &mut JsonValue,
-        disclosure_map: &HashMap<String, Disclosure>,
+        disclosure_map: &mut HashMap<String, Disclosure>,
         disclosure_tree: &mut DisclosureTree,
         parent: Vec<Disclosure>,
-    ) {
+    ) -> Result<(), SdJwtDecodeError> {
         match sdjwt {
             JsonValue::Object(obj) => {
                 // Replace _sd disclosures with actual values
@@ -154,7 +161,7 @@ fn reconstruct(
                             continue;
                         };
 
-                        let Some(disclosure) = disclosure_map.get(&hash) else {
+                        let Some(disclosure) = disclosure_map.remove(&hash) else {
                             continue;
                         };
 
@@ -162,10 +169,16 @@ fn reconstruct(
                             continue;
                         };
 
-                        obj.insert(
-                            key.clone(),
-                            serde_json::to_value(&disclosure.value).unwrap(),
-                        );
+                        // if the key already exists in this position of the object, fail!
+                        if obj
+                            .insert(
+                                key.clone(),
+                                serde_json::to_value(&disclosure.value).unwrap(),
+                            )
+                            .is_some()
+                        {
+                            return Err(SdJwtDecodeError::DuplicateKey);
+                        }
                         let mut parent = parent.clone();
                         parent.push(disclosure.to_owned());
                         parent.sort_by(|a, b| a.enc.cmp(&b.enc));
@@ -195,7 +208,7 @@ fn reconstruct(
                     }
                     match node {
                         DisclosureNode::Node(subtree) => {
-                            inner(value, disclosure_map, subtree, parent.clone())
+                            inner(value, disclosure_map, subtree, parent.clone())?
                         }
                         DisclosureNode::Leaf(disclosure) => {
                             let mut subtree = DisclosureTree::new();
@@ -203,7 +216,7 @@ fn reconstruct(
                             parent.extend_from_slice(disclosure.as_slice());
                             parent.sort_by(|a, b| a.enc.cmp(&b.enc));
                             parent.dedup_by(|a, b| a.enc == b.enc);
-                            inner(value, disclosure_map, &mut subtree, parent);
+                            inner(value, disclosure_map, &mut subtree, parent)?;
                             let new_node = DisclosureNode::Node(subtree);
                             if !new_node.get_disclosures().is_empty() {
                                 *node = new_node;
@@ -222,7 +235,7 @@ fn reconstruct(
                     // Check for recursive disclosures
                     if let JsonValue::Object(obj) = value {
                         if let Some(JsonValue::String(hash)) = obj.get("...") {
-                            let Some(disclosure) = disclosure_map.get(hash) else {
+                            let Some(disclosure) = disclosure_map.remove(hash) else {
                                 continue;
                             };
                             let mut parent = parent.clone();
@@ -245,7 +258,7 @@ fn reconstruct(
 
                     match node {
                         DisclosureNode::Node(subtree) => {
-                            inner(value, disclosure_map, subtree, parent.clone())
+                            inner(value, disclosure_map, subtree, parent.clone())?
                         }
                         DisclosureNode::Leaf(disclosure) => {
                             let mut subtree = DisclosureTree::new();
@@ -253,7 +266,7 @@ fn reconstruct(
                             parent.extend_from_slice(disclosure.as_slice());
                             parent.sort_by(|a, b| a.enc.cmp(&b.enc));
                             parent.dedup_by(|a, b| a.enc == b.enc);
-                            inner(value, disclosure_map, &mut subtree, parent);
+                            inner(value, disclosure_map, &mut subtree, parent)?;
                             let new_node = DisclosureNode::Node(subtree);
                             if !new_node.get_disclosures().is_empty() {
                                 *node = new_node;
@@ -263,13 +276,17 @@ fn reconstruct(
                 }
             }
             _ => (),
-        }
+        };
+        Ok(())
     }
 
     let mut disclosure_tree = DisclosureTree::new();
 
-    inner(&mut claims, disclosure_map, &mut disclosure_tree, vec![]);
-    (claims, disclosure_tree)
+    inner(&mut claims, disclosure_map, &mut disclosure_tree, vec![])?;
+    if !disclosure_map.is_empty() {
+        return Err(SdJwtDecodeError::NotAllDisclosuresReferenced);
+    }
+    Ok((claims, disclosure_tree))
 }
 
 pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
@@ -285,9 +302,9 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
         .ok_or(SdJwtDecodeError::InvalidJwt)?;
 
     // Remove the key binding JWT
-    let (disclosures, kb_jwt) = match disclosures_and_kb_jwt.rsplit_once("~") {
+    let (disclosures_string, kb_jwt) = match disclosures_and_kb_jwt.rsplit_once("~") {
         Some((disclosures, kb_jwt)) => (disclosures, kb_jwt),
-        None => ("", ""),
+        None => ("", disclosures_and_kb_jwt),
     };
 
     let kb_jwt = if kb_jwt.trim().is_empty() {
@@ -296,18 +313,39 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
         Some(kb_jwt.to_string())
     };
 
-    let disclosures = disclosures
-        .split('~')
-        // Parse disclosures, ignoring invalid ones
-        .filter_map(|d| parse_disclosure(d).ok().map(|v| (d.to_string(), v)))
-        // Filter out undisclosable claims
-        .filter(|(_, v)| {
-            v.key
-                .as_deref()
-                .map(|k| !UNDISCLOSABLE_CLAIMS.contains(&k))
-                .unwrap_or(true)
-        })
-        .collect::<Vec<_>>();
+    let mut disclosures = vec![];
+    if !disclosures_string.is_empty() {
+        // Parse disclosures
+        for s in disclosures_string.split('~') {
+            // reject disclosurse that are not of the right form.
+            let Ok(parsed_disclosure) = parse_disclosure(s) else {
+                return Err(SdJwtDecodeError::InvalidDisclosure);
+            };
+            // if we have an object disclosure...
+            if let Some(key) = parsed_disclosure.key.as_ref() {
+                // ... check if the claimed disclosure is allowed to be disclosed
+                if UNDISCLOSABLE_CLAIMS.contains(&key.as_str()) {
+                    return Err(SdJwtDecodeError::InvalidDisclosure);
+                }
+                // ... and is not a illegal claim name (which would overwrite sdjwt claim names)
+                if ILLEGAL_CLAIM_NAMES.contains(&key.as_str()) {
+                    return Err(SdJwtDecodeError::InvalidDisclosure);
+                }
+            }
+            disclosures.push((s.to_string(), parsed_disclosure));
+        }
+    }
+
+    // if we have any duplicate disclosures we should reject the sdjwt (same hash in the _sd array)
+    if disclosures.len()
+        != disclosures
+            .iter()
+            .map(|a| a.0.clone())
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    {
+        return Err(SdJwtDecodeError::DuplicateDisclosure);
+    }
 
     // Parse the JWT, ignore the header and signature
     let claims = {
@@ -341,7 +379,7 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
         }
     };
 
-    let disclosure_map = disclosures
+    let mut disclosure_map = disclosures
         .into_iter()
         .map(|(enc, val)| {
             digest.update(enc.as_bytes());
@@ -353,7 +391,7 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
     let num_disclosures = disclosure_map.len();
     // let num_total_disclosures = get_total_num_disclosures(&claims);
 
-    let (reconstructed, disclosure_tree) = reconstruct(claims, &disclosure_map);
+    let (reconstructed, disclosure_tree) = reconstruct(claims, &mut disclosure_map)?;
 
     Ok(ParsedSdJwt {
         claims: reconstructed,
