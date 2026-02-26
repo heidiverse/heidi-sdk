@@ -26,13 +26,9 @@ import ch.ubique.heidi.credentials.models.identity.IdentityModel
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
 
 import ch.ubique.heidi.credentials.models.metadata.Tokens
-import ch.ubique.heidi.issuance.metadata.data.AuthorizationServerMetadata
 import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
 import ch.ubique.heidi.trust.TrustFrameworkController
-import ch.ubique.heidi.trust.framework.swiss.model.TrustData
-import ch.ubique.heidi.trust.framework.swiss.model.TrustedIdentity
-import ch.ubique.heidi.util.log.Logger
 import ch.ubique.heidi.util.random.RandomGenerator
 import ch.ubique.heidi.visualization.layout.LayoutData
 import ch.ubique.heidi.visualization.layout.LayoutType
@@ -48,7 +44,6 @@ import ch.ubique.heidi.wallet.credentials.identity.IdentityRepository
 import ch.ubique.heidi.wallet.credentials.issuer.IssuerRepository
 import ch.ubique.heidi.wallet.credentials.metadata.asMetadataFormat
 import ch.ubique.heidi.wallet.credentials.metadata.fromNative
-import ch.ubique.heidi.wallet.credentials.metadata.fromNative
 import ch.ubique.heidi.wallet.credentials.oca.OcaRepository
 import ch.ubique.heidi.wallet.credentials.oca.networking.OcaServiceController
 import ch.ubique.heidi.wallet.crypto.SecureHardwareAccess
@@ -57,12 +52,10 @@ import ch.ubique.heidi.wallet.crypto.SigningProvider
 import ch.ubique.heidi.wallet.environment.EnvironmentController
 import ch.ubique.heidi.wallet.extensions.asErrorState
 import ch.ubique.heidi.wallet.extensions.decodeMetadata
-import ch.ubique.heidi.wallet.keyvalue.KeyValueEntry
 import ch.ubique.heidi.wallet.keyvalue.KeyValueRepository
 import ch.ubique.heidi.wallet.process.issuance.IssuanceProcess
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.http.HttpStatusCode
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import uniffi.heidi_wallet_rust.*
 
@@ -136,7 +129,7 @@ open class EaaIssuanceProcess(
             val deferredCredential = deferredCredentialsRepository.getForTransactionId(transactionId)!!
             val subjects = deferredCredential.decodeMetadata()!!
             val credentialIssuerMetadata : CredentialIssuerMetadata = json.decodeFromString(identity.issuer.credentialIssuerMetadata)
-            trustFlowFromSaved(credentialIssuerMetadata.credentialIssuer, json.decodeFromString(identity.credentialConfigurationIds!!), credentialIssuerMetadata)
+            trustFlowFromSaved(credentialIssuerMetadata.claims.credentialIssuer, json.decodeFromString(identity.credentialConfigurationIds!!), credentialIssuerMetadata)
 
             val oidcMetadata =
                 OidcMetadata(
@@ -340,7 +333,7 @@ open class EaaIssuanceProcess(
         return try {
             // Always fallback to 1 credential, if the batch credential endpoint isn't available
             var numberOfCredentials =
-                credentialIssuerMetadata.batchCredentialIssuance?.batchSize?.let { it / 2 }
+                credentialIssuerMetadata.claims.batchCredentialIssuance?.batchSize?.let { it / 2 }
                     ?: 1
 			numberOfCredentials = maxOf(numberOfCredentials, 1)
 
@@ -382,7 +375,7 @@ open class EaaIssuanceProcess(
             if (credentials.transactionIds().isNotEmpty()) {
                 val d = credentials.deferred().first()
                 val credConfig =
-                    credentialIssuerMetadata.credentialConfigurationsSupported[d.credentialConfigurationId]
+                    credentialIssuerMetadata.claims.credentialConfigurationsSupported[d.credentialConfigurationId]
                 val credentialMetadatas = credentials.subjects().map { signer ->
                     if (signer.privateKeyExportable()) {
                         CredentialMetadata(

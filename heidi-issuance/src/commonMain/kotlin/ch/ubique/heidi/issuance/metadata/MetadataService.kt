@@ -22,14 +22,21 @@ package ch.ubique.heidi.issuance.metadata
 
 import ch.ubique.heidi.issuance.metadata.data.AuthorizationServerMetadata
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
+import ch.ubique.heidi.util.extensions.json
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.appendPathSegments
 import org.koin.core.module.dsl.factoryOf
 import org.koin.dsl.module
+import uniffi.heidi_crypto_rust.parseEncodedJwtPayload
 import uniffi.heidi_util_rust.FederationResult
 import uniffi.heidi_util_rust.fetchMetadataFromIssuerUrl
 
@@ -91,8 +98,23 @@ internal class MetadataService(
     suspend fun doAuthorizationServerMetadataRequest(url: Url): AuthorizationServerMetadata {
         return httpClient.get(url).body<AuthorizationServerMetadata>()
     }
-    suspend fun doCredentialIssuerMetadataRequest(url: Url): CredentialIssuerMetadata {
-        return httpClient.get(url).body<CredentialIssuerMetadata>()
+    suspend fun doCredentialIssuerMetadataRequest(url: Url, signed: Boolean): CredentialIssuerMetadata {
+        val resp = httpClient.get(url) {
+            if (signed) {
+                header(HttpHeaders.Accept, "application/jwt")
+            } else {
+                header(HttpHeaders.Accept, ContentType.Application.Json)
+            }
+        }
+
+        return if (signed) {
+            val jwt = resp.bodyAsText()
+            val payload = parseEncodedJwtPayload(jwt) ?: throw Exception("Couldn't parse jwt")
+            val claims = json.decodeFromString<CredentialIssuerMetadataClaims>(payload)
+            CredentialIssuerMetadata.Signed(claims, jwt, url.toString())
+        } else {
+            CredentialIssuerMetadata.Unsigned(resp.body<CredentialIssuerMetadataClaims>())
+        }
     }
 
 	suspend fun resolveOpenIdFederation(baseUrl: String) : FederationResult {

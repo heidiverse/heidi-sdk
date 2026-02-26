@@ -66,6 +66,7 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
     init {
         // Add German-Registrar trust anchor
         trustAnchorProvider.addCertificate("MIIBdTCCARugAwIBAgIUHsSmbGuWAVZVXjqoidqAVClGx4YwCgYIKoZIzj0EAwIwGzEZMBcGA1UEAwwQR2VybWFuIFJlZ2lzdHJhcjAeFw0yNTAzMzAxOTU4NTFaFw0yNjAzMzAxOTU4NTFaMBsxGTAXBgNVBAMMEEdlcm1hbiBSZWdpc3RyYXIwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASQWCESFd0Ywm9sK87XxqxDP4wOAadEKgcZFVX7npe3ALFkbjsXYZJsTGhVp0+B5ZtUao2NsyzJCKznPwTz2wJcoz0wOzAaBgNVHREEEzARgg9mdW5rZS13YWxsZXQuZGUwHQYDVR0OBBYEFMxnKLkGifbTKrxbGXcFXK6RFQd3MAoGCCqGSM49BAMCA0gAMEUCIQD4RiLJeuVDrEHSvkPiPfBvMxAXRC6PuExopUGCFdfNLQIgHGSa5u5ZqUtCrnMiaEageO71rjzBlov0YUH4+6ELioY=")
+        trustAnchorProvider.addCertificate("MIICLzCCAdSgAwIBAgIUHyRjE466YA7tc888k03Ou2QodF4wCgYIKoZIzj0EAwIwKDELMAkGA1UEBhMCREUxGTAXBgNVBAMMEEdlcm1hbiBSZWdpc3RyYXIwHhcNMjYwMTE2MTExNTU0WhcNMjgwMTE2MTExNTU0WjAoMQswCQYDVQQGEwJERTEZMBcGA1UEAwwQR2VybWFuIFJlZ2lzdHJhcjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABMefY2X4ixfRkWEvp9grF2i21z6PKZsr8zzBaJ/+GnotCeH2cJ6GtLhxXhHfJjrETsMNIGhVaJoHoHcZTBHJrfyjgdswgdgwHQYDVR0OBBYEFKnCo9ovbaxU7s65TugsySwAg4AzMB8GA1UdIwQYMBaAFKnCo9ovbaxU7s65TugsySwAg4AzMBIGA1UdEwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/BAQDAgEGMCoGA1UdEgQjMCGGH2h0dHBzOi8vc2FuZGJveC5ldWRpLXdhbGxldC5vcmcwRgYDVR0fBD8wPTA7oDmgN4Y1GHRUcHM6Ly9zYW5kYm94LmV1ZGktd2FsbGV0Lm9yZy9zdGF0dXMtbWFuYWdlbWVudC9jcmwwCgYIKoZIzj0EAwIDSQAwRgIhAIY7ERpRrDRl0lr5H5uxjJ83JR4qua2sfPKxX+pl4Qw+AiEA2qL6LXVORA2r2VZjSEknfciwIG7laA12kjnyGAD3V/A=")
     }
 
     override suspend fun getIssuerInformation(
@@ -74,12 +75,18 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         credentialIssuerMetadata: CredentialIssuerMetadata
     ): AgentInformation? {
         val host = runCatching { Url(baseUrl).host }.getOrDefault(baseUrl)
-        val isTrusted = trustedDomains.contains(host)
+        val isTrusted = when (credentialIssuerMetadata) {
+            is CredentialIssuerMetadata.Signed -> isMetadataSignatureTrustedX509(
+                credentialIssuerMetadata.originalJwt,
+                trustAnchorProvider
+            )
+            is CredentialIssuerMetadata.Unsigned -> trustedDomains.contains(host)
+        }
         if(!isTrusted) {
             return null
         }
-        val displayName = credentialIssuerMetadata.display?.firstOrNull()?.name ?: baseUrl
-        val displayLogo = credentialIssuerMetadata.display?.firstOrNull()?.logo?.uri
+        val displayName = credentialIssuerMetadata.claims.display?.firstOrNull()?.name ?: baseUrl
+        val displayLogo = credentialIssuerMetadata.claims.display?.firstOrNull()?.logo?.uri
         val mutableMap = mutableMapOf<String, Value>()
         mutableMap.apply {
             put("entityName", Value.Object(mapOf(
