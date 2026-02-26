@@ -19,8 +19,9 @@ under the License.
  */
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::{Display, Formatter},
+    hash::RandomState,
 };
 
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
@@ -55,6 +56,7 @@ pub enum SdJwtDecodeError {
     InvalidDisclosure,
     DuplicateDisclosure,
     DuplicateKey,
+    DuplicateHash,
     NotAllDisclosuresReferenced,
 }
 
@@ -150,6 +152,7 @@ fn reconstruct(
         sdjwt: &mut JsonValue,
         disclosure_map: &mut HashMap<String, Disclosure>,
         disclosure_tree: &mut DisclosureTree,
+        encountered_hashes: &mut Vec<String>,
         parent: Vec<Disclosure>,
     ) -> Result<(), SdJwtDecodeError> {
         match sdjwt {
@@ -160,6 +163,7 @@ fn reconstruct(
                         let JsonValue::String(hash) = hash else {
                             continue;
                         };
+                        encountered_hashes.push(hash.clone());
 
                         let Some(disclosure) = disclosure_map.remove(&hash) else {
                             continue;
@@ -207,16 +211,26 @@ fn reconstruct(
                         continue;
                     }
                     match node {
-                        DisclosureNode::Node(subtree) => {
-                            inner(value, disclosure_map, subtree, parent.clone())?
-                        }
+                        DisclosureNode::Node(subtree) => inner(
+                            value,
+                            disclosure_map,
+                            subtree,
+                            encountered_hashes,
+                            parent.clone(),
+                        )?,
                         DisclosureNode::Leaf(disclosure) => {
                             let mut subtree = DisclosureTree::new();
                             let mut parent = parent.clone();
                             parent.extend_from_slice(disclosure.as_slice());
                             parent.sort_by(|a, b| a.enc.cmp(&b.enc));
                             parent.dedup_by(|a, b| a.enc == b.enc);
-                            inner(value, disclosure_map, &mut subtree, parent)?;
+                            inner(
+                                value,
+                                disclosure_map,
+                                &mut subtree,
+                                encountered_hashes,
+                                parent,
+                            )?;
                             let new_node = DisclosureNode::Node(subtree);
                             if !new_node.get_disclosures().is_empty() {
                                 *node = new_node;
@@ -257,16 +271,26 @@ fn reconstruct(
                     }
 
                     match node {
-                        DisclosureNode::Node(subtree) => {
-                            inner(value, disclosure_map, subtree, parent.clone())?
-                        }
+                        DisclosureNode::Node(subtree) => inner(
+                            value,
+                            disclosure_map,
+                            subtree,
+                            encountered_hashes,
+                            parent.clone(),
+                        )?,
                         DisclosureNode::Leaf(disclosure) => {
                             let mut subtree = DisclosureTree::new();
                             let mut parent = parent.clone();
                             parent.extend_from_slice(disclosure.as_slice());
                             parent.sort_by(|a, b| a.enc.cmp(&b.enc));
                             parent.dedup_by(|a, b| a.enc == b.enc);
-                            inner(value, disclosure_map, &mut subtree, parent)?;
+                            inner(
+                                value,
+                                disclosure_map,
+                                &mut subtree,
+                                encountered_hashes,
+                                parent,
+                            )?;
                             let new_node = DisclosureNode::Node(subtree);
                             if !new_node.get_disclosures().is_empty() {
                                 *node = new_node;
@@ -281,8 +305,22 @@ fn reconstruct(
     }
 
     let mut disclosure_tree = DisclosureTree::new();
+    let mut encountered_hashes = Vec::new();
 
-    inner(&mut claims, disclosure_map, &mut disclosure_tree, vec![])?;
+    inner(
+        &mut claims,
+        disclosure_map,
+        &mut disclosure_tree,
+        &mut encountered_hashes,
+        vec![],
+    )?;
+    let original_num_hashes = encountered_hashes.len();
+    let encountered_hashes_hash_set =
+        HashSet::<&String, RandomState>::from_iter(encountered_hashes.iter());
+    let encountered_hashes_no_duplicates = encountered_hashes_hash_set.len();
+    if original_num_hashes != encountered_hashes_no_duplicates {
+        return Err(SdJwtDecodeError::DuplicateHash);
+    }
     if !disclosure_map.is_empty() {
         return Err(SdJwtDecodeError::NotAllDisclosuresReferenced);
     }
