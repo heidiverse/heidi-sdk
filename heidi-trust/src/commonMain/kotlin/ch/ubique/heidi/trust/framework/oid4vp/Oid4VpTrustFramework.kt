@@ -81,8 +81,8 @@ class Oid4VpTrustFramework(
     ): AgentInformation {
         val host = runCatching { Url(baseUrl).host }.getOrDefault(baseUrl)
         val isTrusted = trustedDomains.contains(host)
-        val displayName = credentialIssuerMetadata.display?.firstOrNull()?.name ?: baseUrl
-        val displayLogo = credentialIssuerMetadata.display?.firstOrNull()?.logo?.uri
+        val displayName = credentialIssuerMetadata.claims.display?.firstOrNull()?.name ?: baseUrl
+        val displayLogo = credentialIssuerMetadata.claims.display?.firstOrNull()?.logo?.uri
         val mutableMap = mutableMapOf<String, Value>()
         mutableMap.apply {
             put("entityName", Value.Object(mapOf(

@@ -22,6 +22,8 @@ package ch.ubique.heidi.issuance.metadata
 
 import ch.ubique.heidi.issuance.credential.offer.CredentialOfferParameters
 import ch.ubique.heidi.issuance.di.HeidiIssuanceKoinComponent
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.util.extensions.transform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -63,27 +65,34 @@ class MetadataRepository: HeidiIssuanceKoinComponent {
 		metadataService.doAuthorizationServerMetadataRequest(oidcFallbackUrl)
 	}
 
-	suspend fun getCredentialIssuerMetadata(baseUrl: String) = withContext(Dispatchers.IO) {
+	suspend fun getCredentialIssuerMetadata(baseUrl: String): CredentialIssuerMetadata = withContext(Dispatchers.IO) {
 		val result = runCatching { metadataService.resolveOpenIdFederation(baseUrl) }.getOrNull()
 		result?.let {
 			//TODO UBAM: remove force unwrap
 			val metadata = it.metadata.get("openid_credential_issuer")
 			metadata?.let {
-				return@withContext metadata.transform()!!
+                val claims = metadata.transform<CredentialIssuerMetadataClaims>()!!
+				return@withContext CredentialIssuerMetadata.Unsigned(claims)
 			}
 		}
 
         // Try IETF Approach
         // https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-credential-issuer-metadata-
         val ietfUrl = MetadataService.ietfCredentialIssuerEndpoint(baseUrl)
-        runCatching { metadataService.doCredentialIssuerMetadataRequest(ietfUrl) }
+        runCatching { metadataService.doCredentialIssuerMetadataRequest(ietfUrl, signed = true) }
+            .getOrNull()
+            ?.let { return@withContext it }
+        runCatching { metadataService.doCredentialIssuerMetadataRequest(ietfUrl, signed = false) }
             .getOrNull()
             ?.let { return@withContext it }
 
         // Try OIDC Approach
         // https://openid.net/specs/openid-connect-discovery-1_0-final.html#ProviderConfig
         val oidcUrl = MetadataService.oidcCredentialIssuerEndpoint(baseUrl)
-        metadataService.doCredentialIssuerMetadataRequest(oidcUrl)
+        runCatching { metadataService.doCredentialIssuerMetadataRequest(oidcUrl, signed = true) }
+            .getOrNull()
+            ?.let { return@withContext it }
+        metadataService.doCredentialIssuerMetadataRequest(oidcUrl, signed = false)
 	}
 
 	fun getAuthorizationServerBaseUrl(

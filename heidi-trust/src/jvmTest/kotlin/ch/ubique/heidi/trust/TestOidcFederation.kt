@@ -1,6 +1,7 @@
 package ch.ubique.heidi.trust.framework.oidcfederation
 
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.trust.model.AgentInformation
 import kotlin.test.Test
 import kotlin.test.*
@@ -18,11 +19,11 @@ class TestOidcFederation {
         return framework.getIssuerInformation(
             "https://heidi-issuer-ws-dev.ubique.ch/zvv/c",
             credentialConfigurationIds,
-            CredentialIssuerMetadata(
+            CredentialIssuerMetadata.Unsigned(CredentialIssuerMetadataClaims(
                 credentialIssuer = "https://heidi-issuer-ws-dev.ubique.ch/zvv/c",
                 credentialEndpoint = "",
                 credentialConfigurationsSupported = mapOf()
-            )
+            ))
         );
     }
 

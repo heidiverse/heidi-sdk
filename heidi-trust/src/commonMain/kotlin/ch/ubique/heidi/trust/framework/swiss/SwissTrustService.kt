@@ -50,7 +50,7 @@ internal class SwissTrustService(
 		private const val TRUST_STATEMENT_PATH = "$WELL_KNOWN_PATH/trust-statement"
 		private const val TRUST_API_BASE_URL = "https://trust-reg.trust-infra.swiyu-int.admin.ch"
 		private const val TRUST_API_PATH = "/api/v1/truststatements"
-		private val DID_REGEX = Regex("did:(tdw|webvh):(?<integrity>.+?):(?<domain>([A-z-_0-9.]+))(:(?<path>.+)?)")
+		private val DID_REGEX = Regex("did:(tdw|webvh):(?<integrity>[^:]+):(?<domain>[A-z0-9-_.]+)(:(?<path>[^#]+))?(#(?<fragment>.*))?")
 	}
 
 	suspend fun getIssuanceTrustStatements(baseUrl: String): IssuanceTrustStatementsDto {

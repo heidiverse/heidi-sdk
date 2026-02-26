@@ -51,7 +51,6 @@ import ch.ubique.heidi.wallet.extensions.asErrorState
 import ch.ubique.heidi.wallet.keyvalue.KeyValueEntry
 import ch.ubique.heidi.wallet.keyvalue.KeyValueRepository
 import io.ktor.client.plugins.ResponseException
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -112,7 +111,7 @@ class EaaRefreshProcess(
 
 			val agentInformation = credentialIssuerMetadata?.let {
 				trustController.startIssuanceFlow(
-					it.credentialIssuer,
+					it.claims.credentialIssuer,
 					identity.credentialConfigurationIds?.let { json.decodeFromString<List<String>>(it) } ?: emptyList(),
 					it
 				).agentInformation
@@ -120,7 +119,7 @@ class EaaRefreshProcess(
 
 			identityRepository.updateTokens(identity.id, Tokens.fromNative(tokens))
 			val numberOfCredentials =
-				credentialIssuerMetadata?.batchCredentialIssuance?.batchSize?.let { it.toUInt() / 2u } ?: keyValueRepository.getFor(
+				credentialIssuerMetadata?.claims?.batchCredentialIssuance?.batchSize?.let { it.toUInt() / 2u } ?: keyValueRepository.getFor(
 					KeyValueEntry.MAX_CREDENTIALS
 				)
 					?.toUIntOrNull() ?: 1u
