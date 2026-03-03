@@ -7,8 +7,8 @@ import uniffi.heidi_dcql_rust.TrustedAuthorityMatcher
 import uniffi.heidi_dcql_rust.TrustedAuthorityQueryType
 import uniffi.heidi_dcql_rust.registerMatcher
 
-class AkiAuthorityMatcher : TrustedAuthorityMatcher {
-	init {
+object AkiAuthorityMatcher : TrustedAuthorityMatcher {
+	fun register() {
 		registerMatcher(this)
 	}
 

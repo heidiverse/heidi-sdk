@@ -241,7 +241,7 @@ class TestDcql {
         val query: DcqlQuery = Json.decodeFromString(uniQuery)
         // this should register the did matcher
 		val didMatcher = DidAuthorityMatcher.register()
-        val akiMatcher = AkiAuthorityMatcher()
+        val akiMatcher = AkiAuthorityMatcher.register()
         val results = selectCredentials(query, store)[0].setOptions[0][0]
         assertEquals(results.options.size, 1)
         assertEquals(results.id, "confirmation-of-matriculation")
