@@ -30,6 +30,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import uniffi.heidi_dcql_rust.DcqlQuery
 import uniffi.heidi_util_rust.Value
+import uniffi.heidi_credentials_rust.generateNonce
 
 /**
  * Data class to hold both the OID4VP draft version and the parsed PresentationRequest
@@ -46,6 +47,9 @@ data class PresentationRequest @OptIn(ExperimentalSerializationApi::class) const
 	@EncodeDefault
 	@SerialName("response_type")
 	val responseType: String = "vp_token",
+	@EncodeDefault
+	@SerialName("nonce")
+	val nonce: String = generateNonce(32UL),
 	@EncodeDefault
 	@SerialName("response_mode")
 	val responseMode: String = "direct_post.jwt",
