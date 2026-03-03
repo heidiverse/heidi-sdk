@@ -34,7 +34,6 @@ import uniffi.heidi_credentials_rust.SignatureCreator
 import uniffi.heidi_crypto_rust.SoftwareKeyPair
 import uniffi.heidi_dcql_rust.Credential
 import uniffi.heidi_dcql_rust.DcqlQuery
-import uniffi.heidi_dcql_rust.registerMatcher
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_dcql_rust.selectCredentials
 import kotlin.test.Test
@@ -241,7 +240,7 @@ class TestDcql {
         val store = listOf(sdjwt1.innerJwt.originalSdjwt, sdjwt2.innerJwt.originalSdjwt)
         val query: DcqlQuery = Json.decodeFromString(uniQuery)
         // this should register the did matcher
-        val didMatcher = DidAuthorityMatcher()
+		val didMatcher = DidAuthorityMatcher.register()
         val akiMatcher = AkiAuthorityMatcher()
         val results = selectCredentials(query, store)[0].setOptions[0][0]
         assertEquals(results.options.size, 1)
