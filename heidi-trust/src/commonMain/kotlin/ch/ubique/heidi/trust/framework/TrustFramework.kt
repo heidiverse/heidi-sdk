@@ -21,10 +21,11 @@ under the License.
 package ch.ubique.heidi.trust.framework
 
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
-import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
 import ch.ubique.heidi.presentation.request.PresentationRequest
 import ch.ubique.heidi.trust.model.AgentInformation
+import uniffi.heidi_crypto_rust.getX509FromJwt
+import uniffi.heidi_crypto_rust.validateJwtWithPubKey
 
 interface TrustFramework {
 	val frameworkId : String
@@ -50,4 +51,17 @@ interface TrustFramework {
 		includeUsedCredentials: Boolean,
 	): List<CredentialModel>
 
+
+    fun isMetadataSignatureTrustedX509(
+        metadataJwt: String,
+        trustAnchorProvider: X509TrustAnchorProvider,
+    ): Boolean {
+        val certs = getX509FromJwt(metadataJwt)
+        val isChainValid = certs?.let { trustAnchorProvider.verifyChain(it)  } ?: false
+        val isSigned = certs?.getOrNull(0)?.publicKey?.let {
+            validateJwtWithPubKey(metadataJwt, it)
+        } ?: false
+        val isTrusted = isSigned and isChainValid
+        return isTrusted
+    }
 }

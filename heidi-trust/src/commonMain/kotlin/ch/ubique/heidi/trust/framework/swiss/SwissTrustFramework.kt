@@ -21,7 +21,6 @@ under the License.
 package ch.ubique.heidi.trust.framework.swiss
 
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
-import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
 import ch.ubique.heidi.presentation.request.PresentationRequest
 import ch.ubique.heidi.trust.di.HeidiTrustKoinComponent
@@ -50,10 +49,14 @@ class SwissTrustFramework(
 		credentialConfigurationIds: List<String>,
 		credentialIssuerMetadata: CredentialIssuerMetadata
 	): AgentInformation? {
+        if (credentialIssuerMetadata is CredentialIssuerMetadata.Signed) {
+            return trustRepository.getIssuerInformationFromSignedMetadata(credentialIssuerMetadata)
+        }
+
 		val trustData = trustRepository.getIssuanceTrustData(
 			baseUrl,
 			credentialConfigurationIds,
-			credentialIssuerMetadata.credentialConfigurationsSupported
+			credentialIssuerMetadata.claims.credentialConfigurationsSupported
 		) ?: return null
 
 		return fromTrustData(trustData)

@@ -30,7 +30,7 @@ class OidcFederationTrustFramerwork(
 	): AgentInformation? {
 		// TODO: get credentialIssuerMetadata from here instead of fetching it earlier.
 		val trustInfo = try {
-			oidcfTrustChainFromUrl(credentialIssuerMetadata.credentialIssuer);
+			oidcfTrustChainFromUrl(credentialIssuerMetadata.claims.credentialIssuer);
 		} catch (e: FederationException.FetchingFailed) {
 			return null
 		}
