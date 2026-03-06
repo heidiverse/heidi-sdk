@@ -21,7 +21,8 @@ under the License.
 pub mod models;
 pub mod verify;
 
-use crate::models::SetOption;
+use crate::models::trusted_authority::{TrustedAuthorityMatcher, REGISTERED_MATCHERS};
+use crate::models::{SetOption, TrustedAuthority};
 #[cfg(feature = "bbs")]
 use heidi_credentials_rust::bbs::BbsRust;
 use heidi_credentials_rust::models::{Pointer, PointerPart};
@@ -172,6 +173,7 @@ pub enum DcqlCredentialQueryMismatch {
     SomeCredentialQueriesDoNotHaveAnId,
 
     UnsatisfiedClaimQueries(Vec<DcqlClaimQueryMismatch>),
+    UnstatisfiedTrustedAuthority(Vec<TrustedAuthority>),
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
@@ -242,6 +244,10 @@ impl DcqlQuery {
         credential_store: impl CredentialStore,
     ) -> DcqlMatchResponse {
         let credentials = credential_store.get();
+        let current_matchers: Vec<Arc<dyn TrustedAuthorityMatcher>> = REGISTERED_MATCHERS
+            .lock()
+            .map(|a| a.clone())
+            .unwrap_or(vec![]);
 
         match (&self.credential_sets, &self.credentials) {
             (Some(sets), Some(queries)) => {
@@ -271,6 +277,30 @@ impl DcqlQuery {
                             let mut matching_creds = Vec::<Disclosure>::new();
 
                             for cred in &credentials {
+                                if let Some(trusted_authority) = query.trusted_authorities.as_ref()
+                                {
+                                    let mut has_match: bool = false;
+                                    'authority_loop: for authority in trusted_authority {
+                                        let matchers_for_type = current_matchers
+                                            .iter()
+                                            .filter(|a| {
+                                                a.query_type() == authority.r#type.as_str().into()
+                                            })
+                                            .collect::<Vec<_>>();
+                                        for matcher in matchers_for_type {
+                                            if let Some(true) =
+                                                matcher.matches(cred.clone(), authority.clone())
+                                            {
+                                                has_match = true;
+                                                break 'authority_loop;
+                                            }
+                                        }
+                                    }
+                                    if !has_match {
+                                        mismatches.push(DcqlQueryMismatch::UnsatisfiedCredentialQuery { query_id: id.clone(), credential: cred.clone(), reason: DcqlCredentialQueryMismatch::UnstatisfiedTrustedAuthority(trusted_authority.clone())});
+                                        continue;
+                                    }
+                                }
                                 match cred.is_satisfied(query) {
                                     Ok(claims) => matching_creds.push(Disclosure {
                                         credential: cred.clone(),
@@ -335,6 +365,34 @@ impl DcqlQuery {
                     let mut matches = Vec::<Disclosure>::new();
 
                     for credential in &credentials {
+                        if let Some(trusted_authority) = query.trusted_authorities.as_ref() {
+                            let mut has_match: bool = false;
+                            'authority_loop: for authority in trusted_authority {
+                                let matchers_for_type = current_matchers
+                                    .iter()
+                                    .filter(|a| a.query_type() == authority.r#type.as_str().into())
+                                    .collect::<Vec<_>>();
+                                for matcher in matchers_for_type {
+                                    if let Some(true) =
+                                        matcher.matches(credential.clone(), authority.clone())
+                                    {
+                                        has_match = true;
+                                        break 'authority_loop;
+                                    }
+                                }
+                            }
+                            if !has_match {
+                                mismatches.push(DcqlQueryMismatch::UnsatisfiedCredentialQuery {
+                                    query_id: query.id.clone(),
+                                    credential: credential.clone(),
+                                    reason:
+                                        DcqlCredentialQueryMismatch::UnstatisfiedTrustedAuthority(
+                                            trusted_authority.clone(),
+                                        ),
+                                });
+                                continue;
+                            }
+                        }
                         match credential.is_satisfied(query) {
                             Ok(claims) => matches.push(Disclosure {
                                 credential: credential.clone(),
