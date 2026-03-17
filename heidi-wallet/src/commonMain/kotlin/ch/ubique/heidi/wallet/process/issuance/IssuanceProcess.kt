@@ -32,6 +32,7 @@ import ch.ubique.heidi.issuance.credential.offer.CredentialOfferRepository
 import ch.ubique.heidi.issuance.metadata.MetadataRepository
 import ch.ubique.heidi.issuance.metadata.data.AuthorizationServerMetadata
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.trust.TrustFlow
 import ch.ubique.heidi.trust.TrustFrameworkController
 import ch.ubique.heidi.util.extensions.asString
@@ -46,7 +47,6 @@ import ch.ubique.heidi.wallet.credentials.metadata.asMetadataFormat
 import ch.ubique.heidi.wallet.credentials.oca.OcaRepository
 import ch.ubique.heidi.wallet.credentials.oca.networking.OcaServiceController
 import io.ktor.client.plugins.ResponseException
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -86,7 +86,7 @@ abstract class IssuanceProcess(
 		credentialIssuerMetadata = metadataRepository.getCredentialIssuerMetadata(credentialOffer.credentialIssuer)
 
 		val authorizationServerUrl = metadataRepository.getAuthorizationServerBaseUrl(
-			credentialIssuerMetadata.authorizationServers ?: emptyList(),
+			credentialIssuerMetadata.claims.authorizationServers ?: emptyList(),
 			credentialOffer
 		) ?: return Result.failure(IllegalStateException("No authorization server found"))
 		authorizationServerMetadata = metadataRepository.getAuthorizationServerMetadata(authorizationServerUrl)
@@ -137,7 +137,7 @@ abstract class IssuanceProcess(
 		metadata: CredentialMetadata,
 	): CredentialInsertion? {
 		val ocaBundleUrl =
-			loadOcaBundleForCredential(credential) ?: loadOcaFromMetadata(credentialIssuerMetadata, credential, metadata)
+			loadOcaBundleForCredential(credential) ?: loadOcaFromMetadata(credentialIssuerMetadata.claims, credential, metadata)
 
 		val credentialType = credential.credential.asMetadataFormat()
 		val credentialPayload = credential.credential.getPayload()
@@ -197,9 +197,9 @@ abstract class IssuanceProcess(
 	}
 
 	private suspend fun loadOcaFromMetadata(
-		credentialIssuerMetadata: CredentialIssuerMetadata,
-		credential: Credential,
-		metadata: CredentialMetadata,
+        credentialIssuerMetadata: CredentialIssuerMetadataClaims,
+        credential: Credential,
+        metadata: CredentialMetadata,
 	): String? {
 		val credentialType = credential.credential.asMetadataFormat()
 		val credentialPayload = when (credential.credential) {

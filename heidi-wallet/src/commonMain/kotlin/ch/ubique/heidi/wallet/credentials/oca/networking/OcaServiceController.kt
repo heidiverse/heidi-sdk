@@ -23,7 +23,7 @@ package ch.ubique.heidi.wallet.credentials.oca.networking
 import ch.ubique.heidi.credentials.SdJwt
 import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
-import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.wallet.credentials.format.mdoc.MdocUtils
 import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
@@ -38,7 +38,6 @@ import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.util.encodeBase64
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
@@ -62,7 +61,7 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 		return client.get(Url(url.trim('"'))).bodyAsText()
 	}
 
-	suspend fun getOcaFromMetadata(locale: String, metadata: CredentialIssuerMetadata?, credential: Credential,  credentialMetadata: CredentialMetadata) : String? {
+	suspend fun getOcaFromMetadata(locale: String, metadata: CredentialIssuerMetadataClaims?, credential: Credential, credentialMetadata: CredentialMetadata) : String? {
 		val credentialType = credential.credential.asMetadataFormat()
 		val jsonContent = when (credentialType) {
 			CredentialType.SdJwt -> uniffi.heidi_wallet_rust.SdJwt((credential.credential as CredentialFormat.SdJwt).v1).getJson() ?: return null

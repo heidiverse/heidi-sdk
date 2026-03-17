@@ -21,7 +21,7 @@ under the License.
 package ch.ubique.heidi.wallet.credentials.issuer
 
 import ch.ubique.heidi.credentials.models.issuer.IssuerModel
-import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.util.locale.LocaleMatcher
 import kotlinx.serialization.json.Json
 
@@ -30,7 +30,7 @@ fun IssuerModel.getDisplayName(userLocale: String): String {
 		ignoreUnknownKeys = true
 		explicitNulls = false
 	}
-	val parsedIssuerMetadata = json.decodeFromString<CredentialIssuerMetadata>(this.credentialIssuerMetadata)
+	val parsedIssuerMetadata = json.decodeFromString<CredentialIssuerMetadataClaims>(this.credentialIssuerMetadata)
 
 	return parsedIssuerMetadata.display?.firstOrNull { display ->
 		val locale = display.locale

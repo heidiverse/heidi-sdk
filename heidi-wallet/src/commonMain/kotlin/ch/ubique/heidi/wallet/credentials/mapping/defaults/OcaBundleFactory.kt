@@ -22,9 +22,8 @@ package ch.ubique.heidi.wallet.credentials.mapping.defaults
 
 import ch.ubique.heidi.issuance.extensions.getLocalizedLabel
 import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
-import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.issuance.metadata.data.CredentialMetadataClaim
-import ch.ubique.heidi.issuance.metadata.data.Display
 import ch.ubique.heidi.visualization.oca.OcaType
 import ch.ubique.heidi.visualization.oca.model.CaptureBase
 import ch.ubique.heidi.visualization.oca.model.OcaBundleJson
@@ -71,12 +70,12 @@ internal object OcaBundleFactory {
 	 */
 	@OptIn(ExperimentalStdlibApi::class)
 	fun createOcaFromDisplayMetadata(
-		locale: String,
-		stringResourceProvider: StringResourceProvider,
-		backgroundImage: String?,
-		metadata: CredentialIssuerMetadata?,
-		vct: String,
-		jsonContent: String,
+        locale: String,
+        stringResourceProvider: StringResourceProvider,
+        backgroundImage: String?,
+        metadata: CredentialIssuerMetadataClaims?,
+        vct: String,
+        jsonContent: String,
 	): OcaBundleJson? {
 		val captureBaseSaid = ""
 		val propertyType = mutableMapOf<String, AttributeType>()
@@ -195,10 +194,10 @@ internal object OcaBundleFactory {
 	}
 
 	private fun getCredentialMetadataClusterOrderingOverlay(
-		metadata: CredentialIssuerMetadata?,
-		vct: String,
-		locale: String,
-		captureBaseSaid: String,
+        metadata: CredentialIssuerMetadataClaims?,
+        vct: String,
+        locale: String,
+        captureBaseSaid: String,
 	): ClusterOrderingOverlay? {
 
 		if (metadata == null || metadata.credentialMetadata?.claims == null) {
