@@ -78,7 +78,6 @@ internal class SwissTrustRepository(
             domain = host,
             displayName = displayName,
             logoUri = displayLogo,
-            // I guess we trust it?
             isTrusted = true,
             isVerified = verified,
             trustFrameworkId = SWISS_TRUST_FRAMEWORK_ID
