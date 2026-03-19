@@ -303,6 +303,12 @@ pub async fn get_credential(
             proofs.push(jwt);
         }
     }
+    //TODO: check that number of proofs equals number of subjects
+    let credential_proofs = if proofs.is_empty() {
+        CredentialProofs::NoProof
+    } else {
+        CredentialProofs::Proofs(KeyProofsType::Jwt(proofs))
+    };
 
     get_credential_with_proofs(
         client,
@@ -311,7 +317,7 @@ pub async fn get_credential(
         credential_configuration_id,
         credential_format,
         content_decryptor,
-        CredentialProofs::Proofs(KeyProofsType::Jwt(proofs)),
+        credential_proofs,
     )
     .await
 }

@@ -33,7 +33,7 @@ pub use issuance::*;
 
 #[cfg(feature = "uniffi")]
 mod issuance {
-    use anyhow::{anyhow, Context};
+    use anyhow::{anyhow, bail, Context};
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
     use heidi_util_rust::value::Value;
 
@@ -70,6 +70,7 @@ mod issuance {
         try_get_deferred_credential,
     };
     use crate::jwx::EncryptionParameters;
+    use crate::log_error;
     use crate::{
         backend::WalletBackend,
         dpop::{DpopAuth, DpopWrapper},
@@ -2112,6 +2113,13 @@ mod issuance {
                             "ISSUANCE",
                             &format!("failed to get cred on first try: {e:?}")
                         );
+                        log_warn!(
+                            "ISSUANCE",
+                            &format!(
+                                "Using encryption: {:?}",
+                                credential_issuer_metadata.credential_response_encryption
+                            )
+                        );
                         let mut credential_issuer_metadata = credential_issuer_metadata.clone();
                         credential_issuer_metadata.nonce_endpoint = None;
                         let content_decryptor: Option<Box<dyn ContentDecryptor>> =
@@ -2121,6 +2129,13 @@ mod issuance {
                                     enc_values_supported,
                                     encryption_required: _,
                                 }) => {
+                                    if alg_values_supported.is_empty()
+                                        || enc_values_supported.is_empty()
+                                    {
+                                        return Err(
+                                            anyhow::anyhow!("failed to get encryption").into()
+                                        );
+                                    }
                                     let decryption_parameters = EncryptionParameters::new_decryptor(
                                         &alg_values_supported[0],
                                         &enc_values_supported[0],
