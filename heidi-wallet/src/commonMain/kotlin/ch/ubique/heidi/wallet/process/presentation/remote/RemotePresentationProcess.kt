@@ -24,6 +24,7 @@ import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterialType
+import ch.ubique.heidi.dcql.toReadableString
 import ch.ubique.heidi.trust.TrustFrameworkController
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
@@ -63,6 +64,7 @@ import uniffi.heidi_wallet_rust.VerifiableCredential
 import ch.ubique.heidi.wallet.crypto.SecureHardwareAccess
 import ch.ubique.heidi.wallet.credentials.oca.OcaRepository
 import ch.ubique.heidi.wallet.credentials.oca.networking.OcaServiceController
+import ch.ubique.heidi.wallet.credentials.presentation.ZkpUiModel
 import ch.ubique.heidi.wallet.process.refresh.eaa.EaaRefreshProcess
 import ch.ubique.heidi.wallet.process.refresh.eaa.EaaRefreshProcessStep
 import org.koin.core.component.KoinComponent
@@ -269,7 +271,8 @@ class RemotePresentationProcess(
                                                     keyAssurance = presentableCredential.keyAssurance,
                                                     credential = presentableCredential.credential,
                                                     presentableCredential = presentableCredential.presentableCredential,
-                                                    responseId = presentableCredential.responseId
+                                                    responseId = presentableCredential.responseId,
+                                                    requiresCryptographicHolderBinding = true,
                                                 )
                                             }
                                         }
@@ -297,42 +300,54 @@ class RemotePresentationProcess(
                     val nonEmptySetOption =
                         cs.dcqlSetOptions.setOptions.find { it.all { other -> other.credentialOptions.isNotEmpty() } }
                             ?: cs.dcqlSetOptions.setOptions[0]
-                    CredentialUseCaseUiModel(cs.purpose, nonEmptySetOption.associate {
-                        it.queryId to it.credentialOptions.map { matchingCredential ->
-                            allIdentities.first { identity ->
-                                identity is IdentityUiModel.IdentityUiCredentialModel &&
-                                        identity.credentials.map { it.id }
-                                            .contains(matchingCredential.selectedVerifiableCredential.id)
-                            }.let { identity ->
-                                val ocaBundleUrl =
-                                    credentialsRepository.getById(matchingCredential.selectedVerifiableCredential.id)?.fk_oca_bundle_url
-                                val credentialQuery =
-                                    cs.dcqlQuery.credentials?.first { cq -> cq.id == it.queryId }
-                                if (credentialQuery == null) {
-                                    return RemotePresentationProcessStep.CredentialSelection(
-                                        PresentationUiModel(
-                                            clientId = presentationProcess.getClientId(),
-                                            credentialUseCases = emptyList(),
-                                            purpose = "",
-                                            name = "",
-                                            loA = trustFlow.agentInformation.getRequestedLoa(),
-                                            authorizationRequestForDiagnostics = presentationProcess.getAuthorizationRequestForDiagnostics(),
-                                        ),
-                                        trustFlow.agentInformation,
-                                        validationInfo = validationInfo,
+                    val zkpOptions = cs.dcqlSetOptions.zkpOptions
+                    CredentialUseCaseUiModel(
+                        cs.purpose,
+                        nonEmptySetOption.associate {
+                            it.queryId to it.credentialOptions.map { matchingCredential ->
+                                allIdentities.first { identity ->
+                                    identity is IdentityUiModel.IdentityUiCredentialModel &&
+                                            identity.credentials.map { it.id }
+                                                .contains(matchingCredential.selectedVerifiableCredential.id)
+                                }.let { identity ->
+                                    val ocaBundleUrl =
+                                        credentialsRepository.getById(matchingCredential.selectedVerifiableCredential.id)?.fk_oca_bundle_url
+                                    val credentialQuery =
+                                        cs.dcqlQuery.credentials?.first { cq -> cq.id == it.queryId }
+                                    if (credentialQuery == null) {
+                                        return RemotePresentationProcessStep.CredentialSelection(
+                                            PresentationUiModel(
+                                                clientId = presentationProcess.getClientId(),
+                                                credentialUseCases = emptyList(),
+                                                purpose = "",
+                                                name = "",
+                                                loA = trustFlow.agentInformation.getRequestedLoa(),
+                                                authorizationRequestForDiagnostics = presentationProcess.getAuthorizationRequestForDiagnostics(),
+                                            ),
+                                            trustFlow.agentInformation,
+                                            validationInfo = validationInfo,
+                                        )
+                                    }
+                                    viewModelFactory.getPresentableCredentialUiModelFromDcql(
+                                        it.queryId,
+                                        credentialQuery,
+                                        matchingCredential.selectedVerifiableCredential,
+                                        matchingCredential.selectedCredential,
+                                        identity,
+                                        ocaBundleUrl,
+                                        zkpOptions
                                     )
                                 }
-                                viewModelFactory.getPresentableCredentialUiModelFromDcql(
-                                    it.queryId,
-                                    credentialQuery,
-                                    matchingCredential.selectedVerifiableCredential,
-                                    matchingCredential.selectedCredential,
-                                    identity,
-                                    ocaBundleUrl
-                                )
                             }
-                        }
-                    }, cs)
+                        },
+                        credentialSelection = cs,
+                        zkpInfo = cs.dcqlSetOptions.zkpOptions?.let {
+                            ZkpUiModel(
+                                equalityProofs = it.equalityProofClaims.map { claim ->
+                                    claim.path.joinToString("/") { p -> p.toReadableString() }
+                                }
+                            )
+                        })
                 }
                 is CredentialSelection.PexCredentialSelection -> {
                     //TODO: handle multiple sets. currently we just chose the first available one
@@ -383,7 +398,8 @@ class RemotePresentationProcess(
                                                     keyAssurance = presentableCredential.keyAssurance,
                                                     credential = presentableCredential.credential,
                                                     presentableCredential = presentableCredential.presentableCredential,
-                                                    responseId = presentableCredential.responseId
+                                                    responseId = presentableCredential.responseId,
+                                                    requiresCryptographicHolderBinding = true
                                                 )
                                             }
                                         }

@@ -32,7 +32,9 @@ data class CredentialUseCaseUiModel(
 	val purpose: String?,
 	val credentials:  Map<String, List<CredentialSelectionUiModel>>,
 	val credentialSelection : CredentialSelection,
-	val optional: Boolean = false)
+	val optional: Boolean = false,
+    val zkpInfo: ZkpUiModel? = null,
+)
 
 data class PresentationUiModel(
     val clientId: String,
@@ -40,7 +42,11 @@ data class PresentationUiModel(
     val purpose : String?,
     val name : String?,
     val loA: LoA,
-    val authorizationRequestForDiagnostics: AuthorizationRequestDiagnostics?
+    val authorizationRequestForDiagnostics: AuthorizationRequestDiagnostics?,
+)
+
+data class ZkpUiModel(
+    val equalityProofs: List<String>
 )
 
 sealed interface AuthorizationRequestDiagnostics {

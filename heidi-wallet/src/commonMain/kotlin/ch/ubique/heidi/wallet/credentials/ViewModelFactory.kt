@@ -30,6 +30,7 @@ import ch.ubique.heidi.credentials.models.identity.DeferredIdentity
 import ch.ubique.heidi.credentials.models.identity.IdentityModel
 import ch.ubique.heidi.credentials.models.metadata.KeyAssurance
 import ch.ubique.heidi.credentials.toJson
+import ch.ubique.heidi.dcql.toReadableString
 import ch.ubique.heidi.trust.revocation.RevocationCheck
 import ch.ubique.heidi.util.extensions.asLong
 import ch.ubique.heidi.util.extensions.asObject
@@ -62,6 +63,7 @@ import ch.ubique.heidi.wallet.credentials.oca.OcaRepository
 import ch.ubique.heidi.wallet.credentials.presentation.CredentialSelectionUiModel
 import ch.ubique.heidi.wallet.credentials.signature.Signature
 import ch.ubique.heidi.wallet.credentials.signature.SignatureValidationState
+import ch.ubique.heidi.wallet.process.presentation.ZkpOptions
 import ch.ubique.heidi.wallet.resources.StringResourceProvider
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DateTimePeriod
@@ -429,6 +431,7 @@ class ViewModelFactory private constructor(
 		credential: Credential,
 		identity: IdentityUiModel,
 		ocaBundleUrl: String? = null,
+        zkpOptions: ZkpOptions?,
 	): CredentialSelectionUiModel {
 		val metadata = CredentialMetadata.fromString(verifiableCredential.metadata)
 		val credentialType = metadata?.credentialType ?: CredentialType.Unknown
@@ -446,7 +449,10 @@ class ViewModelFactory private constructor(
 
 		val valueMaps = getRequestedAttributes(credentialQuery, credential)
 		val vm = valueMaps.asObject()!!.mapValues { Json.encodeToString(it) }
-		val attributes = mapPresentableValues(vm, processor)
+        val hiddenAttributesList = zkpOptions?.equalityProofClaims?.map { claim ->
+            getDisclosurePath(claim.path.joinToString("/") { it.toReadableString() })
+        } ?: emptyList()
+		val attributes = mapPresentableValues(vm, hiddenAttributesList, processor)
 
 		return CredentialSelectionUiModel(
 			verifiableCredential.id,
@@ -455,7 +461,8 @@ class ViewModelFactory private constructor(
 			credentialType,
 			keyAssurance ?: KeyAssurance.SoftwareLow,
 			verifiableCredential,
-			responseId = queryId
+			responseId = queryId,
+            requiresCryptographicHolderBinding = credentialQuery.requireCryptographicHolderBinding != false
 		)
 
 	}
@@ -479,7 +486,7 @@ class ViewModelFactory private constructor(
 			jsonPayload?.let { OcaProcessor(languageKey, it, bundle) }
 		}
 
-		val attributes = mapPresentableValues(presentableCredential.values, processor)
+		val attributes = mapPresentableValues(presentableCredential.values, emptyList(), processor)
 
 		return CredentialSelectionUiModel(
 			presentableCredential.credential.id,
@@ -489,8 +496,8 @@ class ViewModelFactory private constructor(
 			keyAssurance ?: KeyAssurance.SoftwareLow,
 			presentableCredential.credential,
 			presentableCredential,
-			presentableCredential.responseId
-
+			presentableCredential.responseId,
+            requiresCryptographicHolderBinding = true
 		)
 	}
 
@@ -519,6 +526,7 @@ class ViewModelFactory private constructor(
 
 	private fun mapPresentableValues(
 		map: Map<String, String>,
+        hiddenAttributes: List<String>,
 		processor: OcaProcessor?,
 	): List<ProcessedAttribute> {
 		val mDocTranslation = mapOf(
@@ -571,7 +579,7 @@ class ViewModelFactory private constructor(
 			val disclosurePath = getDisclosurePath(entry.key)
 
 			// Try to use the OCA processor to process the attribute or fallback to the old manual mapping
-			processor?.processAttribute(disclosurePath)
+			val attribute = processor?.processAttribute(disclosurePath)
 				?: processor?.processAttribute(disclosurePath.trim('/'))
 				?: run {
 					val name = disclosurePath.trim('/')
@@ -584,6 +592,7 @@ class ViewModelFactory private constructor(
 						label = label
 					)
 				}
+            attribute.copy(isHidden = hiddenAttributes.contains(disclosurePath))
 		}
 
 		return sortProcessedAttributes(localizedKeyValues)
