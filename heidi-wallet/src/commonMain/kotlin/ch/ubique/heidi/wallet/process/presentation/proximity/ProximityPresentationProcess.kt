@@ -22,6 +22,7 @@ package ch.ubique.heidi.wallet.process.presentation.proximity
 
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
+import ch.ubique.heidi.dcql.toReadableString
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.trust.TrustFrameworkController
 import ch.ubique.heidi.trust.framework.ValidationInfo
@@ -41,6 +42,7 @@ import ch.ubique.heidi.wallet.credentials.presentation.CredentialSelectionUiMode
 import ch.ubique.heidi.wallet.credentials.presentation.CredentialUseCaseUiModel
 import ch.ubique.heidi.wallet.credentials.presentation.LoA
 import ch.ubique.heidi.wallet.credentials.presentation.PresentationUiModel
+import ch.ubique.heidi.wallet.credentials.presentation.ZkpUiModel
 import ch.ubique.heidi.wallet.crypto.SigningProvider
 import ch.ubique.heidi.wallet.extensions.asErrorState
 import ch.ubique.heidi.wallet.extensions.decodeMetadata
@@ -161,35 +163,47 @@ class ProximityPresentationProcess(
                             val nonEmptySetOption =
                                 cs.dcqlSetOptions.setOptions.find { it.all { other -> other.credentialOptions.isNotEmpty() } }
                                     ?: cs.dcqlSetOptions.setOptions[0]
-                            CredentialUseCaseUiModel(cs.purpose, nonEmptySetOption.associate {
-                                it.queryId to it.credentialOptions.map { matchingCredential ->
-                                    allIdentities.first { identity ->
-                                        if(identity !is IdentityUiModel.IdentityUiCredentialModel) {
-                                            TODO("Handle deferred")
-                                        }
-                                        identity.credentials.map { it.id }
-                                            .contains(matchingCredential.selectedVerifiableCredential.id)
-                                    }.let { identity ->
-                                        val ocaBundleUrl =
-                                            credentialsRepository.getById(matchingCredential.selectedVerifiableCredential.id)?.fk_oca_bundle_url
-                                        val credentialQuery =
-                                            cs.dcqlQuery.credentials?.first { cq -> cq.id == it.queryId }
-                                        if (credentialQuery == null) {
-                                            return ProximityPresentationProcessStep.Error(
-                                                errorMessage = "Matching Credential query not found; this should not happen"
+                            CredentialUseCaseUiModel(
+                                cs.purpose,
+                                nonEmptySetOption.associate {
+                                    it.queryId to it.credentialOptions.map { matchingCredential ->
+                                        allIdentities.first { identity ->
+                                            if(identity !is IdentityUiModel.IdentityUiCredentialModel) {
+                                                TODO("Handle deferred")
+                                            }
+                                            identity.credentials.map { it.id }
+                                                .contains(matchingCredential.selectedVerifiableCredential.id)
+                                        }.let { identity ->
+                                            val ocaBundleUrl =
+                                                credentialsRepository.getById(matchingCredential.selectedVerifiableCredential.id)?.fk_oca_bundle_url
+                                            val credentialQuery =
+                                                cs.dcqlQuery.credentials?.first { cq -> cq.id == it.queryId }
+                                            if (credentialQuery == null) {
+                                                return ProximityPresentationProcessStep.Error(
+                                                    errorMessage = "Matching Credential query not found; this should not happen"
+                                                )
+                                            }
+                                            viewModelFactory.getPresentableCredentialUiModelFromDcql(
+                                                it.queryId,
+                                                credentialQuery,
+                                                matchingCredential.selectedVerifiableCredential,
+                                                matchingCredential.selectedCredential,
+                                                identity,
+                                                ocaBundleUrl,
+                                                cs.dcqlSetOptions.zkpOptions
                                             )
                                         }
-                                        viewModelFactory.getPresentableCredentialUiModelFromDcql(
-                                            it.queryId,
-                                            credentialQuery,
-                                            matchingCredential.selectedVerifiableCredential,
-                                            matchingCredential.selectedCredential,
-                                            identity,
-                                            ocaBundleUrl
-                                        )
                                     }
+                                },
+                                credentialSelection = cs,
+                                zkpInfo = cs.dcqlSetOptions.zkpOptions?.let {
+                                    ZkpUiModel(
+                                        equalityProofs = it.equalityProofClaims.map { claim ->
+                                            claim.path.joinToString("/") { p -> p.toReadableString() }
+                                        }
+                                    )
                                 }
-                            }, cs)
+                            )
                         }
 
                         is CredentialSelection.PexCredentialSelection -> {
@@ -255,7 +269,8 @@ class ProximityPresentationProcess(
                                                                         keyAssurance = presentableCredential.keyAssurance,
                                                                         credential = presentableCredential.credential,
                                                                         presentableCredential = presentableCredential.presentableCredential,
-                                                                        responseId = presentableCredential.responseId
+                                                                        responseId = presentableCredential.responseId,
+                                                                        requiresCryptographicHolderBinding = true
                                                                     )
                                                             }
                                                         }

@@ -68,6 +68,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import uniffi.heidi_credentials_rust.SignatureCreator
 import uniffi.heidi_credentials_rust.w3cCredentialAsJson
+import uniffi.heidi_dcql_rust.ClaimsQuery
+import uniffi.heidi_dcql_rust.CredentialQuery
 import uniffi.heidi_dcql_rust.CredentialSetOption
 import uniffi.heidi_dcql_rust.selectCredentialsWithInfo
 import uniffi.heidi_util_rust.encodeCbor
@@ -346,7 +348,7 @@ class PresentationProcessKt private constructor(
             val result = selectCredentialsWithInfo(dcqlQuery, tmpList)
 
             // Prioritize ZKP proofs for claim-based credentials
-            val setOptions = prioritizeBbsClaimBasedProofs(dcqlQuery, result.setOptions)
+            val (setOptions, zkpOptions) = prioritizeBbsClaimBasedProofs(dcqlQuery, result.setOptions)
 
             this.dcqlMismatchInfo = DcqlMismatchInfo(
                 query = dcqlQuery,
@@ -397,12 +399,13 @@ class PresentationProcessKt private constructor(
                                         }
                                         CredentialSetOptionsKt.SetOptionKt.DisclosureKt(
                                             selectedCredential = it.credential,
-                                            c
+                                            selectedVerifiableCredential = c,
                                         )
                                     }
                                 )
                             }
-                        }
+                        },
+                        zkpOptions = zkpOptions
                     )
                 )
             }
@@ -414,7 +417,7 @@ class PresentationProcessKt private constructor(
                        resultOptions.add(CredentialSelection.DcqlCredentialSelection(
                            dcqlQuery,
                            null,
-                           CredentialSetOptionsKt(setOptions = emptyList())
+                           CredentialSetOptionsKt(setOptions = emptyList(), zkpOptions = null)
                        ))
                    }
                }
@@ -428,10 +431,10 @@ class PresentationProcessKt private constructor(
     fun prioritizeBbsClaimBasedProofs(
         dcqlQuery: DcqlQuery,
         setOptions: List<CredentialSetOption>
-    ): List<CredentialSetOption> {
+    ): Pair<List<CredentialSetOption>, ZkpOptions?> {
         // We need to present exactly two credentials
         if (setOptions.size != 2) {
-            return setOptions
+            return Pair(setOptions, null)
         }
 
         val (first, second) = Pair(setOptions[0], setOptions[1])
@@ -448,14 +451,23 @@ class PresentationProcessKt private constructor(
         } ?: listOf()
         // They must have at least some overlapping claims
         if (overlappingClaims.isEmpty()) {
-            return setOptions
+            return Pair(setOptions, null)
         }
 
         val req = Pair(q1?.requireCryptographicHolderBinding, q2?.requireCryptographicHolderBinding)
         // Exactly one of the credentials must prove device binding
         if (req != Pair(true, false)
             && req != Pair(false, true)) {
-            return setOptions
+            return Pair(setOptions, null)
+        }
+        if (q1 == null || q2 == null) {
+            return Pair(setOptions, null)
+        }
+
+        val zkBridgeQuery = if (q1.requireCryptographicHolderBinding == true) {
+            q1
+        } else {
+            q2
         }
 
         val firstBbs = first.setOptions.firstNotNullOf {
@@ -468,11 +480,14 @@ class PresentationProcessKt private constructor(
         val secondOptions = secondBbs.options.filter { it.credential is Credential.BbsCredential }
 
         bbsPresentTwo = true
+        val zkpOptions = ZkpOptions(
+            equalityProofClaims = overlappingClaims
+        )
 
-        return listOf(
+        return Pair(listOf(
             CredentialSetOption(first.purpose, listOf(listOf(firstBbs.copy(options = firstOptions)))),
             CredentialSetOption(second.purpose, listOf(listOf(secondBbs.copy(options = secondOptions))))
-        )
+        ), zkpOptions)
     }
 
     fun putPin(credRepresentative: String, pin: String) {
@@ -1113,7 +1128,10 @@ sealed interface CredentialSelection {
     }
 }
 
-data class CredentialSetOptionsKt(val setOptions: List<List<SetOptionKt>>) {
+data class CredentialSetOptionsKt(
+    val setOptions: List<List<SetOptionKt>>,
+    val zkpOptions: ZkpOptions?,
+) {
     data class SetOptionKt(val queryId: String, val credentialOptions: List<DisclosureKt>) {
         data class DisclosureKt(
             val selectedCredential: uniffi.heidi_dcql_rust.Credential,
@@ -1121,3 +1139,5 @@ data class CredentialSetOptionsKt(val setOptions: List<List<SetOptionKt>>) {
         )
     }
 }
+
+data class ZkpOptions(val equalityProofClaims: List<ClaimsQuery>)
