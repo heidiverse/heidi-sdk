@@ -33,7 +33,7 @@ pub use issuance::*;
 
 #[cfg(feature = "uniffi")]
 mod issuance {
-    use anyhow::{anyhow, bail, Context};
+    use anyhow::{anyhow, Context};
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
     use heidi_util_rust::value::Value;
 
@@ -70,7 +70,6 @@ mod issuance {
         try_get_deferred_credential,
     };
     use crate::jwx::EncryptionParameters;
-    use crate::log_error;
     use crate::{
         backend::WalletBackend,
         dpop::{DpopAuth, DpopWrapper},
