@@ -1,5 +1,7 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
+use heidi_crypto_rust::crypto::SignatureCreator;
+use multibase::Base;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
@@ -220,6 +222,14 @@ impl ElementGetter for JsonValue {
     }
 }
 
+#[derive(Debug)]
+pub enum LdpError {
+    UnsupportedCryptosuite,
+    NotDataIntegrityProof,
+    JoinError(String),
+    JsonError(String),
+}
+
 #[derive(Debug, uniffi::Error)]
 pub enum ProofVerificationError {
     NoProof,
@@ -240,7 +250,44 @@ pub enum ProofVerificationError {
     NetworkError(String),
 }
 
+#[derive(Debug, uniffi::Error)]
+pub enum ProofCreationError {
+    UnsupportedCryptosuite,
+    NotDataIntegrityProof,
+    JoinError(String),
+    JsonError(String),
+    SignatureError(String),
+}
+
+impl From<LdpError> for ProofVerificationError {
+    fn from(value: LdpError) -> Self {
+        match value {
+            LdpError::UnsupportedCryptosuite => ProofVerificationError::UnsupportedCryptosuite,
+            LdpError::NotDataIntegrityProof => ProofVerificationError::NotDataIntegrityProof,
+            LdpError::JoinError(e) => ProofVerificationError::JoinError(e),
+            LdpError::JsonError(e) => ProofVerificationError::JsonError(e),
+        }
+    }
+}
+
+impl From<LdpError> for ProofCreationError {
+    fn from(value: LdpError) -> Self {
+        match value {
+            LdpError::UnsupportedCryptosuite => ProofCreationError::UnsupportedCryptosuite,
+            LdpError::NotDataIntegrityProof => ProofCreationError::NotDataIntegrityProof,
+            LdpError::JoinError(e) => ProofCreationError::JoinError(e),
+            LdpError::JsonError(e) => ProofCreationError::JsonError(e),
+        }
+    }
+}
+
 impl Display for ProofVerificationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Display for ProofCreationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
@@ -287,14 +334,76 @@ pub async fn verify_secured_document_proof(
     Ok(())
 }
 
+pub async fn sign_unsecured_document(
+    unsecured_document: JsonValue,
+    proof_options: JsonValue,
+    signer: Arc<dyn SignatureCreator>,
+) -> Result<JsonValue, ProofCreationError> {
+    // Let proof be a clone of the proof options, options.
+    let mut proof = proof_options.clone();
+
+    // Let proofConfig be the result of running the algorithm in Section 3.2.5 Proof Configuration
+    // (eddsa-rdfc-2022) with options passed as a parameter.
+    let proof_config = match proof_options["cryptosuite"].as_str() {
+        Some("eddsa-rdfc-2022") => {
+            eddsa_rdfc_2022::proof_config(&unsecured_document, &proof_options).await?
+        }
+        _ => return Err(ProofCreationError::UnsupportedCryptosuite),
+    };
+
+    // Let transformedData be the result of running the algorithm in Section 3.2.3 Transformation
+    // (eddsa-rdfc-2022) with unsecuredDocument, proofConfig, and options passed as parameters.
+    let transformed_data = match proof_options["cryptosuite"].as_str() {
+        Some("eddsa-rdfc-2022") => {
+            eddsa_rdfc_2022::transform(&unsecured_document, &proof_options).await?
+        }
+        _ => return Err(ProofCreationError::UnsupportedCryptosuite),
+    };
+
+    // Let hashData be the result of running the algorithm in Section 3.2.4 Hashing (eddsa-rdfc-2022)
+    // with transformedData and proofConfig passed as a parameters.
+    let hash_data = match proof_options["cryptosuite"].as_str() {
+        Some("eddsa-rdfc-2022") => eddsa_rdfc_2022::hash(transformed_data, proof_config),
+        _ => return Err(ProofCreationError::UnsupportedCryptosuite),
+    };
+
+    // Let proofBytes be the result of running the algorithm in Section 3.2.6 Proof Serialization
+    // (eddsa-rdfc-2022) with hashData and options passed as parameters.
+    let proof_bytes = match proof_options["cryptosuite"].as_str() {
+        Some("eddsa-rdfc-2022") => eddsa_rdfc_2022::proof_serialization(signer, hash_data)?,
+        _ => return Err(ProofCreationError::UnsupportedCryptosuite),
+    };
+
+    // Let proof.proofValue be a base58-btc-encoded Multibase value of the proofBytes.
+    proof["proofValue"] = JsonValue::String(multibase::encode(Base::Base58Btc, proof_bytes));
+
+    // Return proof as the data integrity proof.
+    Ok(proof)
+}
+
 async fn retrieve_public_key(
     verification_method: String,
 ) -> Result<String, ProofVerificationError> {
-    let (document_url, _fragment) = verification_method.split_once('#').ok_or(
+    let (document_url, fragment) = verification_method.split_once('#').ok_or(
         ProofVerificationError::InvalidVerificationMethod(
             "Missing fragment in verificationMethod".to_string(),
         ),
     )?;
+
+    // Handle did:key identifiers
+    if document_url.starts_with("did:key") {
+        let Some(public_key_multibase) = document_url.strip_prefix("did:key:") else {
+            return Err(ProofVerificationError::InvalidVerificationMethod(
+                "Invalid did:key format".to_string(),
+            ));
+        };
+        if public_key_multibase != fragment {
+            return Err(ProofVerificationError::InvalidVerificationMethod(
+                "Fragment does not match did:key identifier".to_string(),
+            ));
+        }
+        return Ok(public_key_multibase.to_string());
+    }
 
     let doc = reqwest::get(document_url)
         .await
@@ -335,11 +444,18 @@ pub async fn verify_secured_document_string(document: String) -> bool {
     let Ok(json) = serde_json::from_str::<JsonValue>(&document) else {
         return false;
     };
-    verify_secured_document_proof(json).await.is_ok()
+    if let Err(e) = verify_secured_document_proof(json).await {
+        println!("Proof verification error: {}", e);
+        false
+    } else {
+        true
+    }
 }
 
 mod eddsa_rdfc_2022 {
-    use heidi_crypto_rust::crypto::{eddsa::EdDsaPublicKey, sha256};
+    use std::sync::Arc;
+
+    use heidi_crypto_rust::crypto::{SignatureCreator, eddsa::EdDsaPublicKey, sha256};
     use json_ld::{ChainLoader, ReqwestLoader};
     use serde_json::Value as JsonValue;
     use tokio::{
@@ -349,7 +465,7 @@ mod eddsa_rdfc_2022 {
 
     use crate::{
         json_ld::{JsonLdDocument, loader::StaticLoader},
-        ldp::{ProofVerificationError, retrieve_public_key},
+        ldp::{LdpError, ProofCreationError, ProofVerificationError, retrieve_public_key},
         w3c::CONTEXT_W3C_VCDM2,
     };
 
@@ -380,18 +496,18 @@ mod eddsa_rdfc_2022 {
         Ok(())
     }
 
-    async fn transform(
+    pub async fn transform(
         unsecured_document: &JsonValue,
         options: &JsonValue,
-    ) -> Result<String, ProofVerificationError> {
+    ) -> Result<String, LdpError> {
         // If options.type is not set to the string DataIntegrityProof and options.cryptosuite is
         // not set to the string eddsa-rdfc-2022, an error MUST be raised
         if options["type"].as_str().as_deref() != Some("DataIntegrityProof") {
-            return Err(ProofVerificationError::NotDataIntegrityProof);
+            return Err(LdpError::NotDataIntegrityProof);
         }
 
         if options["cryptosuite"].as_str().as_deref() != Some("eddsa-rdfc-2022") {
-            return Err(ProofVerificationError::UnsupportedCryptosuite);
+            return Err(LdpError::UnsupportedCryptosuite);
         }
 
         // Let canonicalDocument be the result of converting unsecuredDocument to RDF statements,
@@ -399,30 +515,30 @@ mod eddsa_rdfc_2022 {
         // serializing the result to a serialized canonical form [RDF-CANON].
         let canonical_document = canonicalize(
             serde_json::to_string(&unsecured_document)
-                .map_err(|e| ProofVerificationError::JsonError(e.to_string()))?,
+                .map_err(|e| LdpError::JsonError(e.to_string()))?,
         )
         .await
-        .map_err(|e| ProofVerificationError::JoinError(e.to_string()))?;
+        .map_err(|e| LdpError::JoinError(e.to_string()))?;
 
         // Return canonicalDocument as the transformed data document.
         Ok(canonical_document)
     }
 
-    async fn proof_config(
+    pub async fn proof_config(
         unsecured_document: &JsonValue,
         options: &JsonValue,
-    ) -> Result<String, ProofVerificationError> {
+    ) -> Result<String, LdpError> {
         // Let proofConfig be a clone of the options object.
         let mut proof_config = options.clone();
 
         // If proofConfig.type is not set to DataIntegrityProof and/or proofConfig.cryptosuite is
         // not set to eddsa-rdfc-2022, an error MUST be raised.
         if options["type"].as_str().as_deref() != Some("DataIntegrityProof") {
-            return Err(ProofVerificationError::NotDataIntegrityProof);
+            return Err(LdpError::NotDataIntegrityProof);
         }
 
         if options["cryptosuite"].as_str().as_deref() != Some("eddsa-rdfc-2022") {
-            return Err(ProofVerificationError::UnsupportedCryptosuite);
+            return Err(LdpError::UnsupportedCryptosuite);
         }
 
         // TODO: Check for created and exires fields and validity
@@ -433,11 +549,10 @@ mod eddsa_rdfc_2022 {
         // Let canonicalProofConfig be the result of applying the RDF Dataset Canonicalization
         // Algorithm [RDF-CANON] to the proofConfig.
         let canonical_proof_config = canonicalize(
-            serde_json::to_string(&proof_config)
-                .map_err(|e| ProofVerificationError::JsonError(e.to_string()))?,
+            serde_json::to_string(&proof_config).map_err(|e| LdpError::JsonError(e.to_string()))?,
         )
         .await
-        .map_err(|e| ProofVerificationError::JoinError(e.to_string()))?;
+        .map_err(|e| LdpError::JoinError(e.to_string()))?;
 
         // Return canonicalProofConfig.
         Ok(canonical_proof_config)
@@ -463,7 +578,7 @@ mod eddsa_rdfc_2022 {
         .await
     }
 
-    fn hash(transformed_data: String, proof_config: String) -> Vec<u8> {
+    pub fn hash(transformed_data: String, proof_config: String) -> Vec<u8> {
         // Let proofConfigHash be the result of applying the SHA-256 (SHA-2 with 256-bit output)
         // cryptographic hashing algorithm [RFC6234] to the canonicalProofConfig. proofConfigHash
         // will be exactly 32 bytes in size.
@@ -482,6 +597,21 @@ mod eddsa_rdfc_2022 {
 
         // Return hashData as the hash data.
         hash_data
+    }
+
+    pub fn proof_serialization(
+        signer: Arc<dyn SignatureCreator>,
+        hash_data: Vec<u8>,
+    ) -> Result<Vec<u8>, ProofCreationError> {
+        // Let proofBytes be the result of applying the Edwards-Curve Digital Signature Algorithm
+        // (EdDSA) [RFC8032], using the Ed25519 variant (Pure EdDSA), with hashData as the data to
+        // be signed using the private key specified by privateKeyBytes. proofBytes will be exactly
+        // 64 bytes in size.
+        let proof_bytes = signer
+            .sign(hash_data)
+            .map_err(|e| ProofCreationError::SignatureError(e.to_string()))?;
+
+        Ok(proof_bytes)
     }
 
     async fn verify_proof(

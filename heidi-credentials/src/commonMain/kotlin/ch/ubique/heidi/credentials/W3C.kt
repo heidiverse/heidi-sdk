@@ -202,6 +202,14 @@ sealed class W3C {
                 return OpenBadge303(Data(credential, isValid))
             }
 
+            fun create(
+                claims: Value,
+                keyId: String,
+                key: SignatureCreator,
+            ) {
+
+            }
+
             fun parseSerialized(credential: String): OpenBadge303 =
                 OpenBadge303(Json.decodeFromString(credential))
         }

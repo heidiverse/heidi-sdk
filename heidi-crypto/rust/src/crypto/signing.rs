@@ -18,11 +18,11 @@ specific language governing permissions and limitations
 under the License.
  */
 
-use std::sync::Arc;
-use p256::ecdsa::{signature::Signer, Signature, SigningKey, VerifyingKey};
-use p256::ecdsa::signature::Verifier;
+use crate::crypto::{SignatureCreator, base64_url_decode};
+use p256::ecdsa::{Signature, SigningKey, VerifyingKey, signature::Signer};
+use p256::{ecdsa::signature::Verifier, elliptic_curve::sec1::ToEncodedPoint};
 use rand::rngs::OsRng;
-use crate::crypto::{base64_url_decode, SignatureCreator};
+use std::sync::Arc;
 
 pub enum KeyType {
     P256,
@@ -60,7 +60,6 @@ pub fn from_private_jwk_string(private_key: &str) -> Option<KeyPair> {
     })
 }
 
-
 impl KeyPair {
     pub fn sign_with_key(&self, message: Vec<u8>) -> Result<Vec<u8>, SigningError> {
         match self {
@@ -87,6 +86,16 @@ impl KeyPair {
             } => public_key.to_sec1_bytes().to_vec(),
         }
     }
+
+    pub fn public_key_compressed(&self) -> Vec<u8> {
+        match self {
+            Self::P256 {
+                private_key: _,
+                public_key,
+            } => public_key.to_encoded_point(true).as_bytes().to_vec(),
+        }
+    }
+
     pub fn jwk_string(&self) -> String {
         match self {
             Self::P256 {
@@ -124,19 +133,18 @@ impl VerificationKey {
         let mut key_bytes = vec![0x04];
         key_bytes.extend_from_slice(x_bytes.as_slice());
         key_bytes.extend_from_slice(y_bytes.as_slice());
-        let vp : VerifyingKey = VerifyingKey::from_sec1_bytes(&key_bytes).unwrap();
+        let vp: VerifyingKey = VerifyingKey::from_sec1_bytes(&key_bytes).unwrap();
         Self(vp)
     }
 
     fn verify(self: Arc<Self>, signature: Vec<u8>, data: Vec<u8>) -> bool {
-        let sig = if let Ok(sig) = Signature::from_slice(&signature)  {
+        let sig = if let Ok(sig) = Signature::from_slice(&signature) {
             println!("normal");
             sig
         } else if let Ok(sig) = Signature::from_der(&signature) {
             println!("from der");
             sig
-        }
-        else {
+        } else {
             return false;
         };
         self.0.verify(&data, &sig).map(|_| true).unwrap_or(false)
@@ -157,7 +165,9 @@ impl SoftwareKeyPair {
     }
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     pub fn from_jwk_string(jwk_string: &str) -> Arc<Self> {
-      Arc::new(Self(from_private_jwk_string(jwk_string).unwrap_or(generate_keypair())))
+        Arc::new(Self(
+            from_private_jwk_string(jwk_string).unwrap_or(generate_keypair()),
+        ))
     }
 
     pub fn sign_with_key(&self, message: Vec<u8>) -> Result<Vec<u8>, SigningError> {
@@ -168,6 +178,9 @@ impl SoftwareKeyPair {
     }
     pub fn public_key_sec1(&self) -> Vec<u8> {
         self.0.public_key_sec1()
+    }
+    pub fn public_key_compressed(&self) -> Vec<u8> {
+        self.0.public_key_compressed()
     }
     pub fn private_key_bytes(&self) -> Vec<u8> {
         self.0.private_key_bytes()
@@ -182,7 +195,9 @@ impl SoftwareKeyPair {
 
 impl SignatureCreator for SoftwareKeyPair {
     fn alg(&self) -> String {
-        match self.0 { KeyPair::P256 { .. } => { String::from("ES256")} }
+        match self.0 {
+            KeyPair::P256 { .. } => String::from("ES256"),
+        }
     }
 
     fn sign(&self, bytes: Vec<u8>) -> Result<Vec<u8>, SigningError> {
