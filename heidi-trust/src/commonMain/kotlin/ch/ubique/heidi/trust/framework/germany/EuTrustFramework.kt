@@ -140,7 +140,7 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         val isValid = if (san == null) {
             // check if we have x509_hash
             if(presentationRequest.clientId.startsWith("x509_hash")) {
-                val clientIdHash = presentationRequest.clientId.replace("x509_hash", "")
+                val clientIdHash = presentationRequest.clientId.replace("x509_hash:", "")
                 certs?.getOrNull(0)?.let {
                     base64UrlEncode(sha256Rs(it.originalCert)) == clientIdHash
                 } ?: false
