@@ -38,6 +38,17 @@ pub struct EncryptionParameters {
 }
 
 impl EncryptionParameters {
+    pub fn new_encryptor(jwk: josekit::jwk::Jwk, enc: &str) -> Option<Self> {
+        let Some(alg) = jwk.algorithm() else {
+            return None;
+        };
+        let alg = alg.to_string();
+        Some(Self {
+            jwk: jwk,
+            authorization_encrytped_response_alg: alg,
+            authorization_encrypted_response_enc: enc.to_string(),
+        })
+    }
     pub fn new_decryptor(alg: &str, enc: &str) -> Option<Self> {
         match alg {
             "ECDH-ES" | "ECDH-ES+A128KW" | "ECDH-ES+A192KW" | "ECDH-ES+A256KW" => Some(Self {
@@ -500,5 +511,41 @@ mod tests {
             "{:?}",
             josekit::jwt::decode_with_decrypter(JWE_INPUT, &decrypter).unwrap()
         );
+    }
+    #[test]
+    fn test_request_encryption() {
+        let metadata : serde_json::Value = serde_json::from_str(r#"{
+            "jwks": {
+              "keys": [
+                {
+                  "kid": "JFZjVF7uiqM7IR2z9k0yT0wwzjoYHgavHJlDCLVfHyE",
+                  "kty": "RSA",
+                  "alg": "RSA-OAEP",
+                  "use": "enc",
+                  "x5c": [
+                    "MIICozCCAYsCBgGcTToZZzANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDDApwaWQtaXNzdWVyMB4XDTI2MDIxMTE1MDExOVoXDTM2MDIxMTE1MDI1OVowFTETMBEGA1UEAwwKcGlkLWlzc3VlcjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALVVrBMBe6ZD13liumIVpnQ7N/PbXdUlSajwy7dDIsilP7zEy34xLAJm9YUOHWufhULGRMGVO6Aqqp0bnRqZwt+kMwG94HSINZp+NkSSFd+Dkb9B52wkYNQxzK0x+COpqqVG+FFXgJhkQNvBP770F7BJ6lw8BtdSgwV0SrcCyQYtQHvFbvF0IB9wfQHrqkp8p088ggbXyf91xXLA1zHzapdJNFzarXHKpM+CwEwHDCcYcQVmcUhBe25VfQCm5HDYNAvvHNhxChQIY9xBTdLFUEApsOQuG48+8/t8NObUQ4OwiHQXERTHn49UrMq+EzjkvaqdKSQqLjJct5f5wCaGLaECAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAd6voT3v8Io4tWL09pJMeU0kKwJd1uT+R24SnkeCybTIsrU/5h8S/9PmzYFezeIQ/JWt4Zmr/8xS9QQtagPsS8CHCUr6GWlkKYoeQ0PITbvgOSwOQ7T8sytUjkNmNhXJugxNqI1bTFA3ysQckyQKtmiR9BPS74r6QZVKDC0wsbsHqvEqHq5SU2KrSNXp3yZfbNrISOQibNL2W/R/066msRwxbOTtNEBLxKVf+GPpoyK/NeGjHCuM2fVurFk/iU8oWDy7BjcSnvNKqQ2TkoG+6TXbRMoeGa0pZFyvx2TGDzVUShnIbO6XbCEcgsIni5Tu571saO6td+fqh5rFngm0JFg=="
+                  ],
+                  "x5t": "EKM-dnD4NewOZKw5p83l00TxYDo",
+                  "x5t#S256": "Zgd476k8P8e0F0jCVQ1Lm-h6rrrJUkhRaLs6i68oTpQ",
+                  "n": "tVWsEwF7pkPXeWK6YhWmdDs389td1SVJqPDLt0MiyKU_vMTLfjEsAmb1hQ4da5-FQsZEwZU7oCqqnRudGpnC36QzAb3gdIg1mn42RJIV34ORv0HnbCRg1DHMrTH4I6mqpUb4UVeAmGRA28E_vvQXsEnqXDwG11KDBXRKtwLJBi1Ae8Vu8XQgH3B9AeuqSnynTzyCBtfJ_3XFcsDXMfNql0k0XNqtccqkz4LATAcMJxhxBWZxSEF7blV9AKbkcNg0C-8c2HEKFAhj3EFN0sVQQCmw5C4bjz7z-3w05tRDg7CIdBcRFMefj1Ssyr4TOOS9qp0pJCouMly3l_nAJoYtoQ",
+                  "e": "AQAB"
+                }
+              ]
+            },
+            "enc_values_supported": [
+              "A256GCM"
+            ],
+            "encryption_required": false
+          }"#).unwrap();
+
+        let jwk: josekit::jwk::Jwk =
+            serde_json::from_value(metadata["jwks"]["keys"][0].clone()).unwrap();
+        let enc = metadata["enc_values_supported"][0].as_str().unwrap();
+        let encryptor = EncryptionParameters::new_encryptor(jwk, enc).unwrap();
+        let mut obj = serde_json::Map::new();
+        obj.insert("test".to_string(), json!("bla"));
+
+        let data = encryptor.encrypt(obj, None, None).unwrap();
+        println!("{}", data);
     }
 }
