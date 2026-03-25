@@ -9,6 +9,7 @@ import ch.ubique.heidi.trust.framework.TrustFramework
 import ch.ubique.heidi.trust.framework.ValidationInfo
 import ch.ubique.heidi.trust.model.AgentInformation
 import ch.ubique.heidi.trust.model.AgentType
+import ch.ubique.heidi.util.log.Logger
 import uniffi.heidi_trust_rust.FederationException
 import uniffi.heidi_trust_rust.oidcfTrustChainFromPresentationRequest
 import uniffi.heidi_trust_rust.oidcfTrustChainFromUrl
@@ -31,7 +32,8 @@ class OidcFederationTrustFramerwork(
 		// TODO: get credentialIssuerMetadata from here instead of fetching it earlier.
 		val trustInfo = try {
 			oidcfTrustChainFromUrl(credentialIssuerMetadata.claims.credentialIssuer);
-		} catch (e: FederationException.FetchingFailed) {
+		} catch (e: FederationException) {
+			Logger("Federation").error("Federation failed, skipping it", e)
 			return null
 		}
 
