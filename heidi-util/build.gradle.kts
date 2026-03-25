@@ -51,6 +51,7 @@ kotlin {
 
 		androidMain.dependencies {
 			implementation(libs.koin.android)
+			implementation("net.java.dev.jna:jna:5.18.1@aar") // Android-compatible
 		}
 	}
 }
@@ -63,6 +64,7 @@ android {
 
 	defaultConfig {
 		minSdk = libs.versions.android.minSdk.get().toInt()
+		consumerProguardFiles(rootProject.file("consumer-jna-rules.pro"))
 	}
 
 	compileOptions {
