@@ -33,19 +33,19 @@ pub use issuance::*;
 
 #[cfg(feature = "uniffi")]
 mod issuance {
-    use anyhow::{anyhow, Context};
+    use anyhow::{Context, anyhow};
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
     use heidi_util_rust::value::Value;
 
-    use super::auth::{build_refresh_request, ClientAttestation};
+    use super::auth::{ClientAttestation, build_refresh_request};
     use super::metadata::MetadataFetcher;
 
     use reqwest::{
-        redirect::{Attempt, Policy},
         StatusCode, Url,
+        redirect::{Attempt, Policy},
     };
     use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-    use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+    use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
     use serde::{Deserialize, Serialize};
 
     use std::collections::HashSet;
@@ -58,18 +58,25 @@ mod issuance {
 
     use crate::issuance::helper::base64_encode_bytes;
     use crate::issuance::models::{
-        self, credential_formats, AuthorizationRequestReference,
-        CredentialConfigurationsSupportedObject, CredentialIssuerMetadata, CredentialOffer,
-        CredentialOfferParameters, CredentialProofs, CredentialRequestEncryption,
-        CredentialResponseEncryption, CredentialResponseType, ErrorDetails, InputMode,
-        KeyAttestationMetadata, KeyProofsType, PreAuthorizedCode, ProofType,
-        PushedAuthorizationRequest, StringOrInt, TokenRequest, TokenResponse,
+        self, AuthorizationRequestReference, CredentialConfigurationsSupportedObject,
+        CredentialIssuerMetadata, CredentialOffer, CredentialOfferParameters, CredentialProofs,
+        CredentialRequestEncryption, CredentialResponseEncryption, CredentialResponseType,
+        ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType, PreAuthorizedCode,
+        ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest, TokenResponse,
+        credential_formats,
     };
     use crate::issuance::requests::{
         get_access_token, get_credential, get_credential_with_proofs, get_proof_body,
         try_get_deferred_credential,
     };
     use crate::jwx::EncryptionParameters;
+    use crate::{
+        ApiError,
+        error::CredentialError,
+        lock,
+        signing::SecureSubject,
+        util::{generate_code_challenge, generate_code_verifier},
+    };
     use crate::{
         backend::WalletBackend,
         dpop::{DpopAuth, DpopWrapper},
@@ -81,13 +88,6 @@ mod issuance {
         log_debug, log_warn,
         signing::{BatchSigner, KeyType, NativeSigner, SignerFactory},
         uniffi_reqwest::HsmSupportObject,
-    };
-    use crate::{
-        error::CredentialError,
-        lock,
-        signing::SecureSubject,
-        util::{generate_code_challenge, generate_code_verifier},
-        ApiError,
     };
 
     const RESPONSE_TYPE_CODE: &str = "code";
@@ -2019,9 +2019,11 @@ mod issuance {
                         jwks,
                         enc_values_supported,
                         zip_values_supported: _,
-                        encryption_required: _,
+                        encryption_required,
                     }) => {
-                        if let Some(jwk) = jwks.keys[0].transform() {
+                        // Only activate request/response encryption if required...
+                        // Too many issues out there, and we still have TLS
+                        if *encryption_required && let Some(jwk) = jwks.keys[0].transform() {
                             let encryption_parameters =
                                 EncryptionParameters::new_encryptor(jwk, &enc_values_supported[0]);
                             encryption_parameters.map(|a| {
@@ -2179,7 +2181,7 @@ mod issuance {
                     return Ok(CredentialResponseTypeInternal::Deferred(Deferred {
                         transaction_code: transaction_id.to_string(),
                         credential_configuration_id: credential_configuration_id.clone(),
-                    }))
+                    }));
                 }
             };
             log_warn!("ISSUANCE", &format!("{:?}", credential_response));
@@ -2626,7 +2628,7 @@ mod issuance {
         use crate::{crypto::signing::SoftwareKeyPair, issuance::models::Grants};
         use reqwest::Url;
         use reqwest_middleware::ClientBuilder;
-        use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+        use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
         use serde_json::json;
         use std::{
             io::BufReader,
@@ -2655,34 +2657,41 @@ mod issuance {
 
             let err_cases = [""];
             let ok_cases = [
-            (
-                "openid-credential-offer://?credential_offer=%7B%22credential_issuer%22%3A%22https%3A%2F%2Fdemo.pid-issuer.bundesdruckerei.de%2Fc1%22%2C%22credential_configuration_ids%22%3A%5B%22pid-sd-jwt%22%5D%2C%22grants%22%3A%7B%22authorization_code%22%3A%7B%7D%7D%7D",
-                CredentialOfferParameters {
-                    credential_issuer: "https://demo.pid-issuer.bundesdruckerei.de/c1".parse().unwrap(),
-                    credential_configuration_ids: vec![
-                        "pid-sd-jwt".to_string(),
-                    ],
-                    grants: Some(Grants {
-                        authorization_code: Some(AuthorizationCode{ issuer_state: None, authorization_server: None }),
-                        pre_authorized_code: None,
-                    }),
-                },
-            ), (
-                // Created via: https://issuer.eudiw.dev/credential_offer
-                "https://tester.issuer.eudiw.dev/credential_offer?credential_offer={%22credential_issuer%22:%20%22https://issuer.eudiw.dev%22,%20%22credential_configuration_ids%22:%20[%22eu.europa.ec.eudi.pid_jwt_vc_json%22,%20%22eu.europa.ec.eudi.loyalty_mdoc%22],%20%22grants%22:%20{%22authorization_code%22:%20{}}}",
-                CredentialOfferParameters {
-                    credential_issuer: "https://issuer.eudiw.dev".parse().unwrap(),
-                    credential_configuration_ids: vec![
-                        "eu.europa.ec.eudi.pid_jwt_vc_json".to_string(),
-                        "eu.europa.ec.eudi.loyalty_mdoc".to_string(),
-                    ],
-                    grants: Some(Grants {
-                        authorization_code: Some(AuthorizationCode{ issuer_state: None, authorization_server: None }),
-                        pre_authorized_code: None,
-                    }),
-                },
-            )
-        ];
+                (
+                    "openid-credential-offer://?credential_offer=%7B%22credential_issuer%22%3A%22https%3A%2F%2Fdemo.pid-issuer.bundesdruckerei.de%2Fc1%22%2C%22credential_configuration_ids%22%3A%5B%22pid-sd-jwt%22%5D%2C%22grants%22%3A%7B%22authorization_code%22%3A%7B%7D%7D%7D",
+                    CredentialOfferParameters {
+                        credential_issuer: "https://demo.pid-issuer.bundesdruckerei.de/c1"
+                            .parse()
+                            .unwrap(),
+                        credential_configuration_ids: vec!["pid-sd-jwt".to_string()],
+                        grants: Some(Grants {
+                            authorization_code: Some(AuthorizationCode {
+                                issuer_state: None,
+                                authorization_server: None,
+                            }),
+                            pre_authorized_code: None,
+                        }),
+                    },
+                ),
+                (
+                    // Created via: https://issuer.eudiw.dev/credential_offer
+                    "https://tester.issuer.eudiw.dev/credential_offer?credential_offer={%22credential_issuer%22:%20%22https://issuer.eudiw.dev%22,%20%22credential_configuration_ids%22:%20[%22eu.europa.ec.eudi.pid_jwt_vc_json%22,%20%22eu.europa.ec.eudi.loyalty_mdoc%22],%20%22grants%22:%20{%22authorization_code%22:%20{}}}",
+                    CredentialOfferParameters {
+                        credential_issuer: "https://issuer.eudiw.dev".parse().unwrap(),
+                        credential_configuration_ids: vec![
+                            "eu.europa.ec.eudi.pid_jwt_vc_json".to_string(),
+                            "eu.europa.ec.eudi.loyalty_mdoc".to_string(),
+                        ],
+                        grants: Some(Grants {
+                            authorization_code: Some(AuthorizationCode {
+                                issuer_state: None,
+                                authorization_server: None,
+                            }),
+                            pre_authorized_code: None,
+                        }),
+                    },
+                ),
+            ];
 
             for c in err_cases.into_iter() {
                 assert!(resolve_credential_offer(c, &client).await.is_err());
