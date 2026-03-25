@@ -305,6 +305,7 @@ pub async fn get_credential(
         cryptographic_binding_methods_supported.contains(&DID_JWK_BINDING_METHOD.to_string());
 
     let mut proofs = vec![];
+    let mut attestations = vec![];
     for subject in &subjects {
         let mut builder = KeyProofType::builder()
             .proof_type(ProofType::Jwt)
@@ -340,11 +341,15 @@ pub async fn get_credential(
         };
         if let KeyProofType::Jwt { jwt } = kpt {
             proofs.push(jwt);
+        } else if let KeyProofType::Attestation { attestation } = kpt {
+            attestations.push(attestation);
         }
     }
     //TODO: check that number of proofs equals number of subjects
-    let credential_proofs = if proofs.is_empty() {
+    let credential_proofs = if proofs.is_empty() && attestations.is_empty() {
         CredentialProofs::NoProof
+    } else if proofs.is_empty() && !attestations.is_empty() {
+        CredentialProofs::Proofs(KeyProofsType::Attestation(attestations))
     } else {
         CredentialProofs::Proofs(KeyProofsType::Jwt(proofs))
     };

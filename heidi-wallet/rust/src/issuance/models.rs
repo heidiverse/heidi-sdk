@@ -1,7 +1,7 @@
 #![allow(async_fn_in_trait)]
 use std::{collections::HashMap, sync::Arc};
 
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_jwt::jwt::creator::JwtCreator;
 use heidi_util_rust::value::Value;
 use reqwest::Url;
@@ -410,6 +410,12 @@ pub struct CredentialResponse {
     pub credential: CredentialResponseType,
     pub c_nonce: Option<String>,
     pub c_nonce_expires_in: Option<StringOrInt>,
+}
+// https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-nonce-response
+#[skip_serializing_none]
+#[derive(Serialize, Debug, PartialEq, Deserialize, Clone)]
+pub struct NonceResponse {
+    pub c_nonce: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
