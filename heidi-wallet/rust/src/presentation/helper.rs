@@ -301,6 +301,7 @@ pub fn encrypt_submission(
         object,
         Some(mdoc_generated_nonce.as_bytes().to_vec()),
         Some(nonce),
+        None,
     )?;
     Ok(response)
 }

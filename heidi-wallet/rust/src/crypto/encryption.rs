@@ -7,7 +7,7 @@ use crate::{
 
 pub trait ContentEncryptor: Send + Sync {
     fn encrypt(&self, claims: serde_json::Map<String, serde_json::Value>)
-        -> anyhow::Result<String>;
+    -> anyhow::Result<String>;
 }
 
 pub trait CloneableEncryptor<T>: Send + Sync
@@ -28,7 +28,7 @@ impl ContentEncryptor for EncryptionParameters {
         &self,
         claims: serde_json::Map<String, serde_json::Value>,
     ) -> anyhow::Result<String> {
-        self.encrypt(claims, None, None)
+        self.encrypt(claims, None, None, None)
             .context("failed to encrypt")
     }
 }

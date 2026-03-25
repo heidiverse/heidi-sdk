@@ -638,6 +638,7 @@ pub fn create_submission_encrypted(
         object,
         Some(mdoc_generated_nonce),
         Some(nonce.as_bytes().to_vec()),
+        None,
     )?;
     return Ok(Oid4vpParams::Jwt { response });
 }
