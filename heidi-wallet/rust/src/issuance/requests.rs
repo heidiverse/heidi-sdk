@@ -4,12 +4,13 @@ use std::{
 };
 
 use anyhow::bail;
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_util_rust::{log_warn, value::Value};
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
+    ApiError,
     crypto::encryption::{ContentDecryptor, ContentEncryptor},
     issuance::models::{
         CredentialErrorResponse, CredentialIssuerMetadata, CredentialProofs, CredentialRequest,
@@ -19,7 +20,6 @@ use crate::{
     },
     log_debug,
     signing::SecureSubject,
-    ApiError,
 };
 
 const DID_JWK_BINDING_METHOD: &str = "did:jwk";
@@ -214,6 +214,7 @@ pub async fn get_credential_with_proofs(
                 })?;
         client
             .post(credential_issuer_metadata.credential_endpoint.clone())
+            .header("Content-Type", "application/jwt")
             .bearer_auth(access_token.clone())
             .body(credential_request)
             .send()
