@@ -132,7 +132,7 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         val isTrusted = isSigned and isChainValid
         val san = if (presentationRequest.clientId.startsWith("x509_san_uri")){
             SanType.Uri(presentationRequest.clientId.replace("x509_san_uri:", ""))
-        } else if (presentationRequest.clientId.startsWith("x509_san_uri"))  {
+        } else if (presentationRequest.clientId.startsWith("x509_san_dns"))  {
             SanType.Dns(presentationRequest.clientId.replace("x509_san_dns:", ""))
         } else {
             null
