@@ -61,9 +61,9 @@ mod issuance {
         self, AuthorizationRequestReference, CredentialConfigurationsSupportedObject,
         CredentialIssuerMetadata, CredentialOffer, CredentialOfferParameters, CredentialProofs,
         CredentialRequestEncryption, CredentialResponseEncryption, CredentialResponseType,
-        ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType, PreAuthorizedCode,
-        ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest, TokenResponse,
-        credential_formats,
+        ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType, NonceResponse,
+        PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest,
+        TokenResponse, credential_formats,
     };
     use crate::issuance::requests::{
         get_access_token, get_credential, get_credential_with_proofs, get_proof_body,
@@ -258,6 +258,7 @@ mod issuance {
         client: ClientWithMiddleware,
         wallet_backend: Arc<WalletBackend>,
         dpop_client: Mutex<Arc<ClientWithMiddleware>>,
+        _dpop_auth: Arc<DpopAuth>,
         auth_key: Arc<dyn NativeSigner>,
         oidc_settings: Arc<OidcSettings>,
         chosen_cred_config_ids: Arc<Mutex<Vec<String>>>,
@@ -276,6 +277,33 @@ mod issuance {
         Ok(credential_issuer_metadata.credential_issuer.to_string())
     }
 
+    impl OID4VciIssuance {
+        async fn request_nonce(
+            &self,
+            c_nonce: Option<String>,
+            subjects: &Vec<Arc<SecureSubject>>,
+            cred_issuer_meta: &CredentialIssuerMetadata,
+            client: Arc<ClientWithMiddleware>,
+        ) -> Result<Option<String>, ApiError> {
+            if let Some(c_nonce) = c_nonce.as_ref() {
+                Ok(Some(c_nonce.clone()))
+            } else if let Some(nonce_endpoint) = cred_issuer_meta.nonce_endpoint.as_ref() {
+                let nonce_result = client
+                    .post(nonce_endpoint)
+                    .send()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("failed to get nonce: {e:?}"))?
+                    .json::<NonceResponse>()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("failed to get nonce: {e:?}"))?;
+                Ok(Some(nonce_result.c_nonce.clone()))
+            } else if subjects.is_empty() {
+                Ok(None)
+            } else {
+                Err(anyhow::anyhow!("failed to get nonce:").into())
+            }
+        }
+    }
     #[uniffi::export(async_runtime = "tokio")]
     impl OID4VciIssuance {
         #[uniffi::constructor]
@@ -299,6 +327,7 @@ mod issuance {
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
             .build();
             let retry_policy = ExponentialBackoff::builder().build_with_max_retries(1);
+            let dpop_auth = Arc::new(DpopAuth::new(auth_key.clone(), None));
             let dpop_client = ClientBuilder::new(
                 get_reqwest_client()
                     .redirect(Policy::none())
@@ -306,7 +335,7 @@ mod issuance {
                     .unwrap(),
             )
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .with(DpopWrapper(Arc::new(DpopAuth::new(auth_key.clone(), None))))
+            .with(DpopWrapper(dpop_auth.clone()))
             .build();
             let metadata_fetcher = MetadataFetcher::new(client.clone());
 
@@ -315,6 +344,7 @@ mod issuance {
                 client,
                 wallet_backend,
                 dpop_client: Mutex::new(Arc::new(dpop_client)),
+                _dpop_auth: dpop_auth,
                 oidc_settings,
                 auth_key,
                 credential_issuer_metadata: Arc::new(Mutex::new(None)),
@@ -340,6 +370,7 @@ mod issuance {
                 .with(RetryTransientMiddleware::new_with_policy(retry_policy))
                 .build();
             let retry_policy = ExponentialBackoff::builder().build_with_max_retries(1);
+            let dpop_auth = Arc::new(DpopAuth::new(auth_key.clone(), None));
             let dpop_client = ClientBuilder::new(
                 get_reqwest_client()
                     .redirect(Policy::none())
@@ -347,7 +378,7 @@ mod issuance {
                     .unwrap(),
             )
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
-            .with(DpopWrapper(Arc::new(DpopAuth::new(auth_key.clone(), None))))
+            .with(DpopWrapper(dpop_auth.clone()))
             .build();
             let metadata_fetcher = MetadataFetcher::new(client.clone());
             let credential_issuer_metadata =
@@ -362,6 +393,7 @@ mod issuance {
                 client,
                 wallet_backend,
                 dpop_client: Mutex::new(Arc::new(dpop_client)),
+                _dpop_auth: dpop_auth,
                 oidc_settings: Arc::new(oidc_settings),
                 auth_key,
                 credential_issuer_metadata: Arc::new(Mutex::new(Some(credential_issuer_metadata))),
@@ -903,13 +935,21 @@ mod issuance {
             let Some(access_token) = device_bound_tokens.access_token.as_ref() else {
                 return Err(anyhow!("No accesstoken").into());
             };
+            let c_nonce = self
+                .request_nonce(
+                    device_bound_tokens.c_nonce.clone(),
+                    &subjects,
+                    &cred_issuer_meta,
+                    dpop_client.clone(),
+                )
+                .await?;
 
             let credential = match get_credential(
                 dpop_client.clone(),
                 subjects.clone(),
                 cred_issuer_meta.clone(),
                 access_token.clone(),
-                device_bound_tokens.c_nonce.clone(),
+                c_nonce,
                 credential_configuration_id.clone(),
                 credential_configuration.credential_format.clone(),
                 None,
@@ -921,6 +961,14 @@ mod issuance {
             {
                 Ok(c) => c,
                 Err(_) => {
+                    let c_nonce = self
+                        .request_nonce(
+                            device_bound_tokens.c_nonce.clone(),
+                            &subjects,
+                            &cred_issuer_meta,
+                            dpop_client.clone(),
+                        )
+                        .await?;
                     let mut cred_issuer_meta = cred_issuer_meta.clone();
                     cred_issuer_meta.nonce_endpoint = None;
                     get_credential(
@@ -928,7 +976,7 @@ mod issuance {
                         subjects.clone(),
                         cred_issuer_meta.clone(),
                         access_token.clone(),
-                        device_bound_tokens.c_nonce.clone(),
+                        c_nonce,
                         credential_configuration_id.clone(),
                         credential_configuration.credential_format.clone(),
                         None,
@@ -2139,18 +2187,31 @@ mod issuance {
                                     credential_issuer_metadata.credential_response_encryption
                                 )
                             );
+
                             let mut credential_issuer_metadata = credential_issuer_metadata.clone();
                             credential_issuer_metadata.nonce_endpoint = None;
 
                             if content_encryptor.is_none() {
                                 content_decryptor = None
                             }
+                            let c_nonce = if let Some(nonce) = e.c_nonce {
+                                Some(nonce)
+                            } else {
+                                self.request_nonce(
+                                    token_response.c_nonce.clone(),
+                                    &subjects,
+                                    &credential_issuer_metadata,
+                                    client.clone(),
+                                )
+                                .await?
+                            };
+
                             get_credential(
                                 client,
                                 subjects,
                                 credential_issuer_metadata.clone(),
                                 token_response.access_token.clone(),
-                                e.c_nonce,
+                                c_nonce,
                                 credential_configuration_id.clone(),
                                 credential_format.clone(),
                                 content_encryptor.as_ref().map(|a| a.clone_inner()),
