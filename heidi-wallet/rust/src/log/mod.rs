@@ -15,12 +15,12 @@ software distributed under the License is distributed on an
 "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
-under the License.   
+under the License.
  */
 
 //! Provide logging facilities for iOS and Android using the options
 //! available for the respective platform.
-//! 
+//!
 //! For iOS this means we just use println to print to stdout. On Android
 //! we use [__android_log_write] to print to logcat.
 
@@ -89,7 +89,7 @@ pub fn log(prio: LogPriority, tag: &str, text: &str) {
 
 #[cfg(target_os = "android")]
 #[link(name = "log")]
-extern "C" {
+unsafe extern "C" {
     fn __android_log_write(prio: c_int, tag: *const c_char, text: *const c_char) -> c_int;
 }
 

@@ -19,8 +19,8 @@ under the License.
  */
 //! Various util functions
 
-use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use rand::random;
 use rand::rngs::OsRng;
 use sha2::Digest;
@@ -79,7 +79,7 @@ pub fn encode_jwt(header: &serde_json::Value, body: &serde_json::Value) -> Strin
 pub fn generate_uuid_v4() -> String {
     let rng = &mut OsRng;
     use rand::Rng;
-    uuid::Builder::from_random_bytes(rng.gen())
+    uuid::Builder::from_random_bytes(rng.r#gen())
         .into_uuid()
         .to_string()
 }

@@ -4,13 +4,14 @@ use std::{
 };
 
 use anyhow::bail;
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_util_rust::{log_warn, value::Value};
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
-    crypto::encryption::ContentDecryptor,
+    ApiError,
+    crypto::encryption::{ContentDecryptor, ContentEncryptor},
     issuance::models::{
         CredentialErrorResponse, CredentialIssuerMetadata, CredentialProofs, CredentialRequest,
         CredentialResponseEncryptionSpecification, CredentialResponseType,
@@ -19,7 +20,6 @@ use crate::{
     },
     log_debug,
     signing::SecureSubject,
-    ApiError,
 };
 
 const DID_JWK_BINDING_METHOD: &str = "did:jwk";
@@ -173,6 +173,7 @@ pub async fn get_credential_with_proofs(
     access_token: String,
     credential_configuration_id: String,
     credential_format: Value,
+    content_encryptor: Option<Box<dyn ContentEncryptor>>,
     content_decryptor: Option<Box<dyn ContentDecryptor>>,
     proofs: CredentialProofs,
 ) -> Result<crate::issuance::models::CredentialResponse, CredentialErrorResponse> {
@@ -191,20 +192,57 @@ pub async fn get_credential_with_proofs(
         proofs,
     );
 
-    let response = client
-        .post(credential_issuer_metadata.credential_endpoint.clone())
-        .bearer_auth(access_token.clone())
-        .json(&credential_request)
-        .send()
-        .await
-        .map_err(|e| CredentialErrorResponse {
-            error: "unknown_error_during_send".to_string(),
-            error_description: Some(format!("{e}")),
-            c_nonce: None,
-            c_nonce_expires_in: None,
-        })?
-        .as_credential_error_response()
-        .await?;
+    let response = if let Some(content_encryption) = content_encryptor {
+        let credential_request: serde_json::Value = serde_json::to_value(credential_request)
+            .map_err(|e| CredentialErrorResponse {
+                error: "unknown_error".to_string(),
+                error_description: Some(format!("{e}")),
+                c_nonce: None,
+                c_nonce_expires_in: None,
+            })?;
+        let Some(obj) = credential_request.as_object() else {
+            unreachable!("Credential Request is an object");
+        };
+        let credential_request =
+            content_encryption
+                .encrypt(obj.clone())
+                .map_err(|e| CredentialErrorResponse {
+                    error: "unknown_error".to_string(),
+                    error_description: Some(format!("{e}")),
+                    c_nonce: None,
+                    c_nonce_expires_in: None,
+                })?;
+        client
+            .post(credential_issuer_metadata.credential_endpoint.clone())
+            .header("Content-Type", "application/jwt")
+            .bearer_auth(access_token.clone())
+            .body(credential_request)
+            .send()
+            .await
+            .map_err(|e| CredentialErrorResponse {
+                error: "unknown_error_during_send".to_string(),
+                error_description: Some(format!("{e}")),
+                c_nonce: None,
+                c_nonce_expires_in: None,
+            })?
+            .as_credential_error_response()
+            .await?
+    } else {
+        client
+            .post(credential_issuer_metadata.credential_endpoint.clone())
+            .bearer_auth(access_token.clone())
+            .json(&credential_request)
+            .send()
+            .await
+            .map_err(|e| CredentialErrorResponse {
+                error: "unknown_error_during_send".to_string(),
+                error_description: Some(format!("{e}")),
+                c_nonce: None,
+                c_nonce_expires_in: None,
+            })?
+            .as_credential_error_response()
+            .await?
+    };
     let text = response.text().await.map_err(|e| CredentialErrorResponse {
         error: "unknown_error_during_text".to_string(),
         error_description: Some(format!("{e}")),
@@ -247,6 +285,7 @@ pub async fn get_credential(
     c_nonce: Option<String>,
     credential_configuration_id: String,
     credential_format: Value,
+    content_encryptor: Option<Box<dyn ContentEncryptor>>,
     content_decryptor: Option<Box<dyn ContentDecryptor>>,
     client_id: String,
     is_for_pre_authorized: bool,
@@ -316,6 +355,7 @@ pub async fn get_credential(
         access_token,
         credential_configuration_id,
         credential_format,
+        content_encryptor,
         content_decryptor,
         credential_proofs,
     )

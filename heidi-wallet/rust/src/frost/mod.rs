@@ -25,24 +25,23 @@ under the License.
 //! registry.
 //!
 //! Currently we don't directly use EdDSA signature for Keybinding, as the issuer used does not yet support it, though this could be easily made possible in the future.
-use aes_gcm::{aead::Aead, KeyInit, Nonce};
+use aes_gcm::{KeyInit, Nonce, aead::Aead};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use base64::Engine;
-use bip39_dict::{seed_from_mnemonics, Entropy, Mnemonics, ENGLISH};
+use bip39_dict::{ENGLISH, Entropy, Mnemonics, seed_from_mnemonics};
 use elliptic_curve::generic_array::GenericArray;
 use frost_ed25519::{
-    self as frost,
+    self as frost, Identifier, Signature, SigningPackage,
     keys::{KeyPackage, PublicKeyPackage},
     round1::{SigningCommitments, SigningNonces},
     round2::SignatureShare,
-    Identifier, Signature, SigningPackage,
 };
 use rand::rngs::OsRng;
 #[cfg(feature = "reqwest")]
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::Sha256;
 use std::{
     collections::BTreeMap,
@@ -51,9 +50,9 @@ use std::{
 use std::{fmt::Debug, io::Cursor};
 
 use crate::{
+    ApiError,
     error::{FrostError, FrostHsmError, HsmError},
     util::encode_jwt,
-    ApiError,
 };
 #[cfg(target_family = "wasm")]
 pub mod wasm;
@@ -628,7 +627,7 @@ impl FrostHsm {
         let exp = expires.as_secs();
         let rng = &mut OsRng;
         use rand::Rng;
-        let uuid = uuid::Builder::from_random_bytes(rng.gen())
+        let uuid = uuid::Builder::from_random_bytes(rng.r#gen())
             .into_uuid()
             .to_string();
 
@@ -904,9 +903,11 @@ mod test {
                 "test@example.ch".to_string(),
             )
             .unwrap();
-        assert!(frost_signer
-            .verify(signature_msg.clone(), signature.clone())
-            .is_ok());
+        assert!(
+            frost_signer
+                .verify(signature_msg.clone(), signature.clone())
+                .is_ok()
+        );
 
         // can we verify the signature with edward?
         let mut vk_bytes: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] =
@@ -952,13 +953,15 @@ mod test {
             pub_key_package,
         ));
         // we cannot sign with fewer than min_signer signers
-        assert!(frost_signer
-            .sign(
-                signature_msg.clone(),
-                pass_phrase.clone(),
-                "test@example.ch".to_string(),
-            )
-            .is_err());
+        assert!(
+            frost_signer
+                .sign(
+                    signature_msg.clone(),
+                    pass_phrase.clone(),
+                    "test@example.ch".to_string(),
+                )
+                .is_err()
+        );
     }
 
     #[tokio::test]

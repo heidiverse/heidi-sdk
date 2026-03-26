@@ -90,12 +90,27 @@ pub struct CredentialIssuerMetadata {
     pub batch_credential_endpoint: Option<String>,
     pub deferred_credential_endpoint: Option<String>,
     pub notification_endpoint: Option<String>,
+    pub credential_request_encryption: Option<CredentialRequestEncryption>,
     pub credential_response_encryption: Option<CredentialResponseEncryption>,
     pub credential_identifiers_supported: Option<bool>,
     pub signed_metadata: Option<String>,
     pub display: Option<Vec<Value>>,
     pub credential_configurations_supported:
         HashMap<String, CredentialConfigurationsSupportedObject>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct CredentialRequestEncryption {
+    pub jwks: KeySet,
+    pub enc_values_supported: Vec<String>,
+    pub zip_values_supported: Option<Vec<String>>,
+    pub encryption_required: bool,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct KeySet {
+    pub keys: Vec<Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -438,7 +453,6 @@ pub struct CredentialRequest {
 pub struct CredentialResponseEncryptionSpecification {
     pub jwk: josekit::jwk::Jwk,
     pub enc: String,
-    pub alg: String,
 }
 
 pub mod credential_formats {

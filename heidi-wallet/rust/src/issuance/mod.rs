@@ -33,43 +33,50 @@ pub use issuance::*;
 
 #[cfg(feature = "uniffi")]
 mod issuance {
-    use anyhow::{anyhow, Context};
+    use anyhow::{Context, anyhow};
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
     use heidi_util_rust::value::Value;
 
-    use super::auth::{build_refresh_request, ClientAttestation};
+    use super::auth::{ClientAttestation, build_refresh_request};
     use super::metadata::MetadataFetcher;
 
     use reqwest::{
-        redirect::{Attempt, Policy},
         StatusCode, Url,
+        redirect::{Attempt, Policy},
     };
     use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-    use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+    use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
     use serde::{Deserialize, Serialize};
 
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
     use uniffi::Object;
 
-    use crate::crypto::encryption::ContentDecryptor;
+    use crate::crypto::encryption::{CloneableDecryptor, CloneableEncryptor};
     use crate::error::{BackendError, NetworkError};
     use crate::formats::{CredentialResult, Deferred};
 
     use crate::issuance::helper::base64_encode_bytes;
     use crate::issuance::models::{
-        self, credential_formats, AuthorizationRequestReference,
-        CredentialConfigurationsSupportedObject, CredentialIssuerMetadata, CredentialOffer,
-        CredentialOfferParameters, CredentialProofs, CredentialResponseEncryption,
-        CredentialResponseType, ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType,
-        PreAuthorizedCode, ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest,
-        TokenResponse,
+        self, AuthorizationRequestReference, CredentialConfigurationsSupportedObject,
+        CredentialIssuerMetadata, CredentialOffer, CredentialOfferParameters, CredentialProofs,
+        CredentialRequestEncryption, CredentialResponseEncryption, CredentialResponseType,
+        ErrorDetails, InputMode, KeyAttestationMetadata, KeyProofsType, PreAuthorizedCode,
+        ProofType, PushedAuthorizationRequest, StringOrInt, TokenRequest, TokenResponse,
+        credential_formats,
     };
     use crate::issuance::requests::{
         get_access_token, get_credential, get_credential_with_proofs, get_proof_body,
         try_get_deferred_credential,
     };
     use crate::jwx::EncryptionParameters;
+    use crate::{
+        ApiError,
+        error::CredentialError,
+        lock,
+        signing::SecureSubject,
+        util::{generate_code_challenge, generate_code_verifier},
+    };
     use crate::{
         backend::WalletBackend,
         dpop::{DpopAuth, DpopWrapper},
@@ -81,13 +88,6 @@ mod issuance {
         log_debug, log_warn,
         signing::{BatchSigner, KeyType, NativeSigner, SignerFactory},
         uniffi_reqwest::HsmSupportObject,
-    };
-    use crate::{
-        error::CredentialError,
-        lock,
-        signing::SecureSubject,
-        util::{generate_code_challenge, generate_code_verifier},
-        ApiError,
     };
 
     const RESPONSE_TYPE_CODE: &str = "code";
@@ -603,6 +603,7 @@ mod issuance {
                 credential_configuration_id.clone(),
                 credential_configuration.credential_format.clone(),
                 None,
+                None,
                 CredentialProofs::Proofs(KeyProofsType::Jwt(proofs.clone())),
             )
             .await
@@ -619,6 +620,7 @@ mod issuance {
                         access_token.clone(),
                         credential_configuration_id.clone(),
                         credential_configuration.credential_format.clone(),
+                        None,
                         None,
                         CredentialProofs::Proofs(KeyProofsType::Jwt(proofs)),
                     )
@@ -911,6 +913,7 @@ mod issuance {
                 credential_configuration_id.clone(),
                 credential_configuration.credential_format.clone(),
                 None,
+                None,
                 self.oidc_settings.client_id.clone(),
                 is_for_pre_authorized_code,
             )
@@ -928,6 +931,7 @@ mod issuance {
                         device_bound_tokens.c_nonce.clone(),
                         credential_configuration_id.clone(),
                         credential_configuration.credential_format.clone(),
+                        None,
                         None,
                         self.oidc_settings.client_id.clone(),
                         is_for_pre_authorized_code,
@@ -1994,7 +1998,7 @@ mod issuance {
             is_for_pre_authorized_code: bool,
         ) -> Result<CredentialResponseTypeInternal, ApiError> {
             // STEP 5: Exchange access token for credentials
-            let content_decryptor: Option<Box<dyn ContentDecryptor>> =
+            let mut content_decryptor: Option<Box<dyn CloneableDecryptor<_>>> =
                 match &credential_issuer_metadata.credential_response_encryption {
                     Some(CredentialResponseEncryption {
                         alg_values_supported,
@@ -2005,10 +2009,36 @@ mod issuance {
                             &alg_values_supported[0],
                             &enc_values_supported[0],
                         );
-                        decryption_parameters.map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
+                        decryption_parameters.map(|a| Box::new(a) as Box<dyn CloneableDecryptor<_>>)
                     }
                     _ => None,
                 };
+            let content_encryptor: Option<Box<dyn CloneableEncryptor<_>>> =
+                match &credential_issuer_metadata.credential_request_encryption {
+                    Some(CredentialRequestEncryption {
+                        jwks,
+                        enc_values_supported,
+                        zip_values_supported: _,
+                        encryption_required,
+                    }) => {
+                        // Only activate request/response encryption if required...
+                        // Too many issues out there, and we still have TLS
+                        if *encryption_required && let Some(jwk) = jwks.keys[0].transform() {
+                            let encryption_parameters =
+                                EncryptionParameters::new_encryptor(jwk, &enc_values_supported[0]);
+                            encryption_parameters.map(|a| {
+                                Box::new(a) as Box<dyn CloneableEncryptor<EncryptionParameters>>
+                            })
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+            // if we have no request encryption, don't encrypt the response
+            if content_encryptor.is_none() {
+                content_decryptor = None;
+            }
             log_warn!("ISSUANCE", &format!("Cnonce: {:?}", token_response.c_nonce));
             let c_nonce = if token_response.c_nonce.is_some() {
                 token_response.c_nonce.clone()
@@ -2036,133 +2066,105 @@ mod issuance {
                 None
             };
 
-            let credential_response = if let Some(key_attestation_metadata) =
-                key_attestations_required
-            {
-                let issuer_id = credential_issuer_metadata.credential_issuer.to_string();
-                let key_attestation = self
-                    .wallet_backend
-                    .get_key_attestation(
-                        c_nonce.clone(),
-                        Some(issuer_id),
-                        key_attestation_metadata.key_storage.clone(),
-                        key_attestation_metadata.user_authentication.clone(),
-                        subjects.clone(),
-                    )
-                    .await?;
-
-                let proof = if key_type == KeyType::None {
-                    CredentialProofs::NoProof
-                } else {
-                    CredentialProofs::Proofs(KeyProofsType::Attestation(vec![key_attestation]))
-                };
-                get_credential_with_proofs(
-                    client.clone(),
-                    credential_issuer_metadata.clone(),
-                    token_response.access_token.clone(),
-                    credential_configuration_id.clone(),
-                    credential_format.clone(),
-                    content_decryptor,
-                    proof,
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
-            } else {
-                log_warn!("ISSUANCE", &format!("start issuing"));
-                let subjects = subjects
-                    .iter()
-                    .map(|s| Arc::new(SecureSubject::with_signer(s.clone())))
-                    .collect::<Vec<Arc<SecureSubject>>>();
-                log_warn!(
-                    "ISSUANCE",
-                    &format!("gathered all subjects ({})", subjects.len())
-                );
-                let content_decryptor: Option<Box<dyn ContentDecryptor>> =
-                    match &credential_issuer_metadata.credential_response_encryption {
-                        Some(CredentialResponseEncryption {
-                            alg_values_supported,
-                            enc_values_supported,
-                            encryption_required: _,
-                        }) => {
-                            let decryption_parameters = EncryptionParameters::new_decryptor(
-                                &alg_values_supported[0],
-                                &enc_values_supported[0],
-                            );
-                            decryption_parameters.map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
-                        }
-                        _ => None,
-                    };
-                let result = match get_credential(
-                    client.clone(),
-                    subjects.clone(),
-                    credential_issuer_metadata.clone(),
-                    token_response.access_token.clone(),
-                    c_nonce.clone(),
-                    credential_configuration_id.clone(),
-                    credential_format.clone(),
-                    content_decryptor,
-                    self.oidc_settings.client_id.clone(),
-                    is_for_pre_authorized_code,
-                )
-                .await
-                {
-                    Ok(c) => c,
-                    Err(e) => {
-                        log_warn!(
-                            "ISSUANCE",
-                            &format!("failed to get cred on first try: {e:?}")
-                        );
-                        log_warn!(
-                            "ISSUANCE",
-                            &format!(
-                                "Using encryption: {:?}",
-                                credential_issuer_metadata.credential_response_encryption
-                            )
-                        );
-                        let mut credential_issuer_metadata = credential_issuer_metadata.clone();
-                        credential_issuer_metadata.nonce_endpoint = None;
-                        let content_decryptor: Option<Box<dyn ContentDecryptor>> =
-                            match &credential_issuer_metadata.credential_response_encryption {
-                                Some(CredentialResponseEncryption {
-                                    alg_values_supported,
-                                    enc_values_supported,
-                                    encryption_required: _,
-                                }) => {
-                                    if alg_values_supported.is_empty()
-                                        || enc_values_supported.is_empty()
-                                    {
-                                        return Err(
-                                            anyhow::anyhow!("failed to get encryption").into()
-                                        );
-                                    }
-                                    let decryption_parameters = EncryptionParameters::new_decryptor(
-                                        &alg_values_supported[0],
-                                        &enc_values_supported[0],
-                                    );
-                                    decryption_parameters
-                                        .map(|a| Box::new(a) as Box<dyn ContentDecryptor>)
-                                }
-                                _ => None,
-                            };
-                        get_credential(
-                            client,
-                            subjects,
-                            credential_issuer_metadata.clone(),
-                            token_response.access_token.clone(),
-                            e.c_nonce,
-                            credential_configuration_id.clone(),
-                            credential_format.clone(),
-                            content_decryptor,
-                            self.oidc_settings.client_id.clone(),
-                            is_for_pre_authorized_code,
+            let credential_response =
+                if let Some(key_attestation_metadata) = key_attestations_required {
+                    let issuer_id = credential_issuer_metadata.credential_issuer.to_string();
+                    let key_attestation = self
+                        .wallet_backend
+                        .get_key_attestation(
+                            c_nonce.clone(),
+                            Some(issuer_id),
+                            key_attestation_metadata.key_storage.clone(),
+                            key_attestation_metadata.user_authentication.clone(),
+                            subjects.clone(),
                         )
-                        .await
-                        .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
+                        .await?;
+
+                    let proof = if key_type == KeyType::None {
+                        CredentialProofs::NoProof
+                    } else {
+                        CredentialProofs::Proofs(KeyProofsType::Attestation(vec![key_attestation]))
+                    };
+                    get_credential_with_proofs(
+                        client.clone(),
+                        credential_issuer_metadata.clone(),
+                        token_response.access_token.clone(),
+                        credential_configuration_id.clone(),
+                        credential_format.clone(),
+                        content_encryptor.map(|a| a.clone_inner()),
+                        content_decryptor.map(|a| a.clone_inner()),
+                        proof,
+                    )
+                    .await
+                    .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
+                } else {
+                    log_warn!("ISSUANCE", &format!("start issuing"));
+                    let subjects = subjects
+                        .iter()
+                        .map(|s| Arc::new(SecureSubject::with_signer(s.clone())))
+                        .collect::<Vec<Arc<SecureSubject>>>();
+                    log_warn!(
+                        "ISSUANCE",
+                        &format!("gathered all subjects ({})", subjects.len())
+                    );
+
+                    if content_encryptor.is_none() {
+                        content_decryptor = None
                     }
+                    let result = match get_credential(
+                        client.clone(),
+                        subjects.clone(),
+                        credential_issuer_metadata.clone(),
+                        token_response.access_token.clone(),
+                        c_nonce.clone(),
+                        credential_configuration_id.clone(),
+                        credential_format.clone(),
+                        content_encryptor.as_ref().map(|a| a.clone_inner()),
+                        content_decryptor.as_ref().map(|a| a.clone_inner()),
+                        self.oidc_settings.client_id.clone(),
+                        is_for_pre_authorized_code,
+                    )
+                    .await
+                    {
+                        Ok(c) => c,
+                        Err(e) => {
+                            log_warn!(
+                                "ISSUANCE",
+                                &format!("failed to get cred on first try: {e:?}")
+                            );
+                            log_warn!(
+                                "ISSUANCE",
+                                &format!(
+                                    "Using encryption: {:?}",
+                                    credential_issuer_metadata.credential_response_encryption
+                                )
+                            );
+                            let mut credential_issuer_metadata = credential_issuer_metadata.clone();
+                            credential_issuer_metadata.nonce_endpoint = None;
+
+                            if content_encryptor.is_none() {
+                                content_decryptor = None
+                            }
+                            get_credential(
+                                client,
+                                subjects,
+                                credential_issuer_metadata.clone(),
+                                token_response.access_token.clone(),
+                                e.c_nonce,
+                                credential_configuration_id.clone(),
+                                credential_format.clone(),
+                                content_encryptor.as_ref().map(|a| a.clone_inner()),
+                                content_decryptor.as_ref().map(|a| a.clone_inner()),
+                                self.oidc_settings.client_id.clone(),
+                                is_for_pre_authorized_code,
+                            )
+                            .await
+                            .map_err(|e| anyhow::anyhow!("failed to get cred: {e:?}"))?
+                        }
+                    };
+                    log_warn!("ISSUANCE", &format!("finished request"));
+                    result
                 };
-                log_warn!("ISSUANCE", &format!("finished request"));
-                result
-            };
             log_warn!("ISSUANCE", &format!("got everything"));
             // let tokens = Some(DeviceBoundTokens {
             //     access_token: Some(token_response.access_token.to_string()),
@@ -2179,7 +2181,7 @@ mod issuance {
                     return Ok(CredentialResponseTypeInternal::Deferred(Deferred {
                         transaction_code: transaction_id.to_string(),
                         credential_configuration_id: credential_configuration_id.clone(),
-                    }))
+                    }));
                 }
             };
             log_warn!("ISSUANCE", &format!("{:?}", credential_response));
@@ -2626,7 +2628,7 @@ mod issuance {
         use crate::{crypto::signing::SoftwareKeyPair, issuance::models::Grants};
         use reqwest::Url;
         use reqwest_middleware::ClientBuilder;
-        use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+        use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
         use serde_json::json;
         use std::{
             io::BufReader,
@@ -2655,34 +2657,41 @@ mod issuance {
 
             let err_cases = [""];
             let ok_cases = [
-            (
-                "openid-credential-offer://?credential_offer=%7B%22credential_issuer%22%3A%22https%3A%2F%2Fdemo.pid-issuer.bundesdruckerei.de%2Fc1%22%2C%22credential_configuration_ids%22%3A%5B%22pid-sd-jwt%22%5D%2C%22grants%22%3A%7B%22authorization_code%22%3A%7B%7D%7D%7D",
-                CredentialOfferParameters {
-                    credential_issuer: "https://demo.pid-issuer.bundesdruckerei.de/c1".parse().unwrap(),
-                    credential_configuration_ids: vec![
-                        "pid-sd-jwt".to_string(),
-                    ],
-                    grants: Some(Grants {
-                        authorization_code: Some(AuthorizationCode{ issuer_state: None, authorization_server: None }),
-                        pre_authorized_code: None,
-                    }),
-                },
-            ), (
-                // Created via: https://issuer.eudiw.dev/credential_offer
-                "https://tester.issuer.eudiw.dev/credential_offer?credential_offer={%22credential_issuer%22:%20%22https://issuer.eudiw.dev%22,%20%22credential_configuration_ids%22:%20[%22eu.europa.ec.eudi.pid_jwt_vc_json%22,%20%22eu.europa.ec.eudi.loyalty_mdoc%22],%20%22grants%22:%20{%22authorization_code%22:%20{}}}",
-                CredentialOfferParameters {
-                    credential_issuer: "https://issuer.eudiw.dev".parse().unwrap(),
-                    credential_configuration_ids: vec![
-                        "eu.europa.ec.eudi.pid_jwt_vc_json".to_string(),
-                        "eu.europa.ec.eudi.loyalty_mdoc".to_string(),
-                    ],
-                    grants: Some(Grants {
-                        authorization_code: Some(AuthorizationCode{ issuer_state: None, authorization_server: None }),
-                        pre_authorized_code: None,
-                    }),
-                },
-            )
-        ];
+                (
+                    "openid-credential-offer://?credential_offer=%7B%22credential_issuer%22%3A%22https%3A%2F%2Fdemo.pid-issuer.bundesdruckerei.de%2Fc1%22%2C%22credential_configuration_ids%22%3A%5B%22pid-sd-jwt%22%5D%2C%22grants%22%3A%7B%22authorization_code%22%3A%7B%7D%7D%7D",
+                    CredentialOfferParameters {
+                        credential_issuer: "https://demo.pid-issuer.bundesdruckerei.de/c1"
+                            .parse()
+                            .unwrap(),
+                        credential_configuration_ids: vec!["pid-sd-jwt".to_string()],
+                        grants: Some(Grants {
+                            authorization_code: Some(AuthorizationCode {
+                                issuer_state: None,
+                                authorization_server: None,
+                            }),
+                            pre_authorized_code: None,
+                        }),
+                    },
+                ),
+                (
+                    // Created via: https://issuer.eudiw.dev/credential_offer
+                    "https://tester.issuer.eudiw.dev/credential_offer?credential_offer={%22credential_issuer%22:%20%22https://issuer.eudiw.dev%22,%20%22credential_configuration_ids%22:%20[%22eu.europa.ec.eudi.pid_jwt_vc_json%22,%20%22eu.europa.ec.eudi.loyalty_mdoc%22],%20%22grants%22:%20{%22authorization_code%22:%20{}}}",
+                    CredentialOfferParameters {
+                        credential_issuer: "https://issuer.eudiw.dev".parse().unwrap(),
+                        credential_configuration_ids: vec![
+                            "eu.europa.ec.eudi.pid_jwt_vc_json".to_string(),
+                            "eu.europa.ec.eudi.loyalty_mdoc".to_string(),
+                        ],
+                        grants: Some(Grants {
+                            authorization_code: Some(AuthorizationCode {
+                                issuer_state: None,
+                                authorization_server: None,
+                            }),
+                            pre_authorized_code: None,
+                        }),
+                    },
+                ),
+            ];
 
             for c in err_cases.into_iter() {
                 assert!(resolve_credential_offer(c, &client).await.is_err());
