@@ -48,6 +48,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.koin.core.component.inject
 import uniffi.heidi_crypto_rust.SanType
+import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_crypto_rust.getX509FromJwt
 import uniffi.heidi_crypto_rust.validateJwtWithPubKey
 import uniffi.heidi_dcql_rust.ClaimsQuery
@@ -55,6 +56,7 @@ import uniffi.heidi_dcql_rust.CredentialQuery
 import uniffi.heidi_dcql_rust.DcqlQuery
 import uniffi.heidi_dcql_rust.Meta
 import uniffi.heidi_crypto_rust.parseEncodedJwtPayload
+import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 
 const val EU_TRUST_FRAMEWORK_ID : String = "eudi_basic_trust"
@@ -130,12 +132,27 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         val isTrusted = isSigned and isChainValid
         val san = if (presentationRequest.clientId.startsWith("x509_san_uri")){
             SanType.Uri(presentationRequest.clientId.replace("x509_san_uri:", ""))
-        } else  {
+        } else if (presentationRequest.clientId.startsWith("x509_san_dns"))  {
             SanType.Dns(presentationRequest.clientId.replace("x509_san_dns:", ""))
+        } else {
+            null
         }
-        val isValid = certs?.getOrNull(0)?.san?.contains(
-            san
-        )?:false
+        val isValid = if (san == null) {
+            // check if we have x509_hash
+            if(presentationRequest.clientId.startsWith("x509_hash")) {
+                val clientIdHash = presentationRequest.clientId
+                    .replace("x509_hash:", "")
+                    // remove potential padding characters
+                    .trim { it == '='}
+                certs?.getOrNull(0)?.let {
+                    base64UrlEncode(sha256Rs(it.originalCert)) == clientIdHash
+                } ?: false
+            } else {
+                false
+            }
+        } else {
+            certs?.getOrNull(0)?.san?.contains(san)?:false
+        }
 
         val baseUrl = certs?.getOrNull(0)?.subject ?: requestUri
 
@@ -145,7 +162,7 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
             put(
                 "entityName", Value.Object(
                     mapOf(
-                        "de" to Value.String(presentationRequest.clientMetadata?.clientName ?: san.getString())
+                        "de" to Value.String(presentationRequest.clientMetadata?.clientName ?: san?.getString() ?: "<UNKNOWN>")
                     )
                 ),
             )
@@ -205,7 +222,7 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         return AgentInformation(
             type = AgentType.VERIFIER,
             domain = baseUrl,
-            displayName = presentationRequest.clientMetadata?.clientName ?: san.getString(),
+            displayName = presentationRequest.clientMetadata?.clientName ?: san?.getString() ?: "<UNKNOWN>",
             logoUri = presentationRequest.clientMetadata?.logoUri,
             isTrusted = isTrusted,
             isVerified = isValid,
