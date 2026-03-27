@@ -20,7 +20,7 @@ under the License.
 
 //! Helper functions for the wallet.
 #![deny(clippy::unwrap_used, clippy::expect_used)]
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::AtomicBool};
 
 pub use crate::error::ApiError;
 #[cfg(all(feature = "reqwest", feature = "oid4vp", feature = "uniffi"))]
@@ -127,6 +127,12 @@ pub mod uniffi_reqwest {
             .map(|mut a| *a = Arc::new(Proxy::all(format!("http://{ip_address}:{port}")).ok()));
         UNSAFE_TLS.store(true, std::sync::atomic::Ordering::Relaxed);
     }
+    #[cfg_attr(feature = "uniffi", uniffi::export)]
+    /// Set if reqwest should accept invalid certs
+    pub fn set_unsafe_tls(accept_invalid_certs: bool) {
+        UNSAFE_TLS.store(accept_invalid_certs, std::sync::atomic::Ordering::Relaxed);
+    }
+
     #[cfg_attr(feature = "uniffi", uniffi::export)]
     pub fn unset_proxy() {
         let _ = PROXY.lock().map(|mut a| *a = Arc::new(None));
