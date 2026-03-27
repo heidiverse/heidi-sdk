@@ -130,13 +130,23 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
             validateJwtWithPubKey(originalRequest, it)
         } ?: false
         val isTrusted = isSigned and isChainValid
+        var fallbackName = "<UNKNOWN>"
         val san = if (presentationRequest.clientId.startsWith("x509_san_uri")){
+            fallbackName = presentationRequest.clientId.replace("x509_san_uri:", "")
             SanType.Uri(presentationRequest.clientId.replace("x509_san_uri:", ""))
         } else if (presentationRequest.clientId.startsWith("x509_san_dns"))  {
+            fallbackName = presentationRequest.clientId.replace("x509_san_dns:", "")
             SanType.Dns(presentationRequest.clientId.replace("x509_san_dns:", ""))
         } else {
+            certs?.getOrNull(0)?.san?.firstOrNull()?.let {
+                fallbackName = when(it){
+                    is SanType.Dns -> it.v1
+                    is SanType.Uri -> it.v1
+                }
+            }
             null
         }
+
         val isValid = if (san == null) {
             // check if we have x509_hash
             if(presentationRequest.clientId.startsWith("x509_hash")) {
@@ -162,7 +172,7 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
             put(
                 "entityName", Value.Object(
                     mapOf(
-                        "de" to Value.String(presentationRequest.clientMetadata?.clientName ?: san?.getString() ?: "<UNKNOWN>")
+                        "de" to Value.String(fallbackName)
                     )
                 ),
             )
@@ -176,39 +186,45 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
                 )
             }
         }
-        val verifierAttestations = presentationRequest.verifierAttestations ?: return null
-        val trustedStatements = mutableListOf<JsonElement>()
-        for(attestation in verifierAttestations) {
-            val att = attestation["data"].asString() ?: continue
-            val attestationCerts = getX509FromJwt(att) ?: continue
-            if(attestationCerts.isEmpty()) {
-                continue
+        val verifierAttestations = presentationRequest.verifierAttestations ?: presentationRequest.verifierInfo
+        if (verifierAttestations != null) {
+            val trustedStatements = mutableListOf<JsonElement>()
+            for (attestation in verifierAttestations) {
+                val att = attestation["data"].asString() ?: continue
+                val attestationCerts = getX509FromJwt(att) ?: continue
+                if (attestationCerts.isEmpty()) {
+                    continue
+                }
+                val isTrusted = trustAnchorProvider.isTrusted(attestationCerts)
+                if (!isTrusted) {
+                    continue
+                }
+                val verifiedJwt = validateJwtWithPubKey(att, attestationCerts[0].publicKey)
+                if (!verifiedJwt) {
+                    continue
+                }
+                val jwtPayloadString = parseEncodedJwtPayload(att) ?: continue
+                val jwtPayload = runCatching { json.parseToJsonElement(jwtPayloadString) }.getOrNull() ?: continue
+                val subject = kotlin.runCatching { jwtPayload.jsonObject["sub"]?.jsonPrimitive?.content }.getOrNull() ?: continue
+                val prSubject = certs?.getOrNull(0)?.subject ?: continue
+                if (subject != prSubject) {
+                    continue
+                }
+                val statusListUri =
+                    kotlin.runCatching { jwtPayload.jsonObject["status"]?.jsonObject?.get("status_list")?.jsonObject?.get("uri")?.jsonPrimitive?.content }
+                        .getOrNull() ?: continue
+                val statusListIndex =
+                    kotlin.runCatching { jwtPayload.jsonObject["status"]?.jsonObject?.get("status_list")?.jsonObject?.get("idx")?.jsonPrimitive?.int }
+                        .getOrNull() ?: continue
+                val isRevoked = revocationCheck.check(statusListUri, statusListIndex)
+                if (isRevoked) {
+                    continue
+                }
+                trustedStatements.add(jwtPayload)
             }
-            val isTrusted = trustAnchorProvider.isTrusted(attestationCerts)
-            if(!isTrusted) {
-                continue
+            if (trustedStatements.isEmpty()) {
+                return null
             }
-            val verifiedJwt = validateJwtWithPubKey(att, attestationCerts[0].publicKey)
-            if(!verifiedJwt) {
-                continue
-            }
-            val jwtPayloadString = parseEncodedJwtPayload(att) ?: continue
-            val jwtPayload = runCatching { json.parseToJsonElement(jwtPayloadString) }.getOrNull() ?: continue
-            val subject = kotlin.runCatching {   jwtPayload.jsonObject["sub"]?.jsonPrimitive?.content }.getOrNull()?: continue
-            val prSubject = certs?.getOrNull(0)?.subject ?: continue
-            if(subject != prSubject) {
-                continue
-            }
-            val statusListUri = kotlin.runCatching { jwtPayload.jsonObject["status"]?.jsonObject?.get("status_list")?.jsonObject?.get("uri")?.jsonPrimitive?.content }.getOrNull() ?: continue
-            val statusListIndex = kotlin.runCatching { jwtPayload.jsonObject["status"]?.jsonObject?.get("status_list")?.jsonObject?.get("idx")?.jsonPrimitive?.int }.getOrNull() ?: continue
-            val isRevoked = revocationCheck.check(statusListUri, statusListIndex)
-            if(isRevoked) {
-                continue
-            }
-            trustedStatements.add(jwtPayload)
-        }
-        if(trustedStatements.isEmpty()) {
-            return null
         }
 
         val identityJwt = SdJwt.create(
@@ -222,7 +238,7 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         return AgentInformation(
             type = AgentType.VERIFIER,
             domain = baseUrl,
-            displayName = presentationRequest.clientMetadata?.clientName ?: san?.getString() ?: "<UNKNOWN>",
+            displayName = fallbackName,
             logoUri = presentationRequest.clientMetadata?.logoUri,
             isTrusted = isTrusted,
             isVerified = isValid,
@@ -238,7 +254,7 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         } else if (presentationRequest.dcqlQuery == null && presentationRequest.presentationDefinition == null) {
             return ValidationInfo(isValid = false, errorInfo = "invalid_request")
         }
-        val verifierAttestations = presentationRequest.verifierAttestations ?: return ValidationInfo(isValid =  false, errorInfo = "no_attestations")
+        val verifierAttestations = presentationRequest.verifierAttestations ?: presentationRequest.verifierInfo ?: return ValidationInfo(isValid =  false, errorInfo = "no_attestations")
         val overaskingFields = mutableListOf<ClaimsQuery>()
         for(attestation in verifierAttestations) {
             val att = attestation["data"].asString() ?: continue

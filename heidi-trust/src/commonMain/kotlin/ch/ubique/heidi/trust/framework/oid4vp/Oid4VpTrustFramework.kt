@@ -35,8 +35,10 @@ import ch.ubique.heidi.trust.model.AgentType
 import io.ktor.http.Url
 import uniffi.heidi_credentials_rust.SignatureCreator
 import uniffi.heidi_crypto_rust.SanType
+import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_crypto_rust.getKidFromJwt
 import uniffi.heidi_crypto_rust.getX509FromJwt
+import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_crypto_rust.validateJwtWithPubKey
 import uniffi.heidi_util_rust.Value
 
@@ -186,20 +188,40 @@ class Oid4VpTrustFramework(
             validateJwtWithPubKey(jwt, it)
         } ?: false
         val isTrusted = isSigned and isChainValid
-        val san = if (presentationRequest.clientId.startsWith("x509_san_uri")){
+
+        var san = if (presentationRequest.clientId.startsWith("x509_san_uri")){
             SanType.Uri(presentationRequest.clientId.replace("x509_san_uri:", ""))
-        } else  {
+        } else if (presentationRequest.clientId.startsWith("x509_san_dns"))  {
             SanType.Dns(presentationRequest.clientId.replace("x509_san_dns:", ""))
+        } else {
+            null
         }
-        val isValid = certs?.getOrNull(0)?.san?.contains(
-            san
-        )?:false
+        val isValid = if (san == null) {
+            // check if we have x509_hash
+            if(presentationRequest.clientId.startsWith("x509_hash")) {
+                val clientIdHash = presentationRequest.clientId
+                    .replace("x509_hash:", "")
+                    // remove potential padding characters
+                    .trim { it == '='}
+                certs?.getOrNull(0)?.let {
+                    san = it.san.firstOrNull()
+                    base64UrlEncode(sha256Rs(it.originalCert)) == clientIdHash
+                } ?: false
+            } else {
+                false
+            }
+
+        } else {
+            certs?.getOrNull(0)?.san?.contains(
+                san
+            ) ?: false
+        }
 
         return X509TrustInfo(
             isTrusted = isTrusted,
             isValid = isValid,
             baseUrl = certs?.getOrNull(0)?.subject,
-            san = san.getString()
+            san = san?.getString() ?: "<UNKNOWN>"
         )
     }
 
