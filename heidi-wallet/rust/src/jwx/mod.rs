@@ -309,7 +309,8 @@ mod tests {
     use serde_json::json;
 
     use crate::{
-        crypto::b64url_decode_bytes, presentation::presentation_exchange::AuthorizationRequest,
+        crypto::{b64url_decode_bytes, encryption::ContentDecryptor},
+        presentation::presentation_exchange::AuthorizationRequest,
     };
 
     use super::EncryptionParameters;
@@ -549,5 +550,10 @@ mod tests {
 
         let data = encryptor.encrypt(obj, None, None, None).unwrap();
         println!("{}", data);
+    }
+    #[test]
+    fn test_encryption_params_gen() {
+        let params = EncryptionParameters::new_decryptor("RSA-OAEP", "A256GCM").unwrap();
+        println!("{:?}", params.jwk);
     }
 }

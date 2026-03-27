@@ -118,6 +118,9 @@ pub fn get_correct_credential_request(
     // likely have a nonce endpoint.
     let is_openid4vci_draft15_issuer = credential_issuer_metadata.nonce_endpoint.is_some();
     if is_openid4vci_draft15_issuer {
+        if let Some(c) = credential_response_encryption.as_ref() {
+            log_debug!("KEY", &serde_json::to_string(c).unwrap());
+        }
         // we also can use proofs ..
         return CredentialRequest {
             credential_configuration_id: Some(credential_configuration_id),
@@ -156,6 +159,9 @@ pub fn get_correct_credential_request(
             };
             proof
         };
+        if let Some(c) = credential_response_encryption.as_ref() {
+            log_debug!("KEY", &serde_json::to_string(c).unwrap());
+        }
         return CredentialRequest {
             credential_configuration_id: None,
             credential_format: Some(selected_configuration_format.clone()),

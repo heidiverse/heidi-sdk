@@ -2071,7 +2071,7 @@ mod issuance {
                     }) => {
                         // Only activate request/response encryption if required...
                         // Too many issues out there, and we still have TLS
-                        if *encryption_required && let Some(jwk) = jwks.keys[0].transform() {
+                        if let Some(jwk) = jwks.keys[0].transform() {
                             let encryption_parameters =
                                 EncryptionParameters::new_encryptor(jwk, &enc_values_supported[0]);
                             encryption_parameters.map(|a| {
@@ -2186,6 +2186,17 @@ mod issuance {
                                     "Using encryption: {:?}",
                                     credential_issuer_metadata.credential_response_encryption
                                 )
+                            );
+                            log_warn!(
+                                "ISSUANCE",
+                                &format!(
+                                    "Using encryption: {:?}",
+                                    credential_issuer_metadata.credential_request_encryption
+                                )
+                            );
+                            log_warn!(
+                                "ISSUANCE",
+                                &format!("Using encryption: {:?}", content_encryptor.is_some())
                             );
 
                             let mut credential_issuer_metadata = credential_issuer_metadata.clone();
