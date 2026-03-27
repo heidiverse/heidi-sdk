@@ -91,4 +91,9 @@ pub fn decode_cbor(cbor: Vec<u8>) -> Result<Value, CborParseError> {
         .map_err(|_| CborParseError::NoCbor)
 }
 
+#[uniffi::export]
+pub fn value_to_string(value: Value) -> Option<String> {
+    serde_json::to_string(&value).ok()
+}
+
 uniffi::setup_scaffolding!();

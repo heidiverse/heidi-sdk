@@ -254,7 +254,8 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         } else if (presentationRequest.dcqlQuery == null && presentationRequest.presentationDefinition == null) {
             return ValidationInfo(isValid = false, errorInfo = "invalid_request")
         }
-        val verifierAttestations = presentationRequest.verifierAttestations ?: presentationRequest.verifierInfo ?: return ValidationInfo(isValid =  false, errorInfo = "no_attestations")
+        //TODO: Check issuer metadata for valid attestations
+        val verifierAttestations = presentationRequest.verifierAttestations ?: presentationRequest.verifierInfo ?: return ValidationInfo(isValid =  true)
         val overaskingFields = mutableListOf<ClaimsQuery>()
         for(attestation in verifierAttestations) {
             val att = attestation["data"].asString() ?: continue
@@ -274,7 +275,10 @@ class EuTrustFramework(private val documentProvider: DocumentProvider, private v
         presentationRequest: PresentationRequest,
         includeUsedCredentials: Boolean
     ): List<CredentialModel> {
-        val verifierAttestations = presentationRequest.verifierAttestations ?: return emptyList()
+        //TODO: check for issuer metadata of credentials regarding policies
+        val verifierAttestations = presentationRequest.verifierAttestations ?: presentationRequest.verifierInfo ?: return documentProvider
+            .getAllCredentials()
+            .filter { includeUsedCredentials || it.isUsed ==  false}
         val credentials = mutableListOf<CredentialModel>()
         for(attestation in verifierAttestations) {
             val att = attestation["data"].asString() ?: continue

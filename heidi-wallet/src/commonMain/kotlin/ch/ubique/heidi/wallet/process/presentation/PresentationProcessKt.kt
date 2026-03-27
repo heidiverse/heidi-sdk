@@ -73,6 +73,7 @@ import uniffi.heidi_dcql_rust.CredentialQuery
 import uniffi.heidi_dcql_rust.CredentialSetOption
 import uniffi.heidi_dcql_rust.selectCredentialsWithInfo
 import uniffi.heidi_util_rust.encodeCbor
+import uniffi.heidi_util_rust.valueToString
 import uniffi.heidi_wallet_rust.*
 import kotlin.collections.set
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -106,7 +107,7 @@ data class AuthorizationRequest(
                         } catch (ex: Exception) {
                             null
                         }
-                    } ?: it.transform<DcqlQuery>()
+                    } ?: runCatching { valueToString(it)?.let { json.decodeFromString<DcqlQuery>(it) } }.getOrNull()
                 }
             val transactionDataWrapper = TransactionDataWrapper.fromValue(value)
 

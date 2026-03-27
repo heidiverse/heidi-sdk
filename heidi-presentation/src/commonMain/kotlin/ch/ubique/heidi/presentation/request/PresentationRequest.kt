@@ -31,6 +31,7 @@ import kotlinx.serialization.json.JsonNames
 import uniffi.heidi_dcql_rust.DcqlQuery
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_credentials_rust.generateNonce
+import uniffi.heidi_util_rust.valueToString
 
 /**
  * Data class to hold both the OID4VP draft version and the parsed PresentationRequest
@@ -158,7 +159,7 @@ data class PresentationRequest @OptIn(ExperimentalSerializationApi::class) const
 						} catch (ex: Exception) {
 							null
 						}
-					} ?: it.transform<DcqlQuery>()
+					} ?: runCatching { valueToString(it)?.let { json.decodeFromString<DcqlQuery>(it) } }.getOrNull()
 				}
 
 			val responseType = value["response_type"].takeIf { it != Value.Null }?.asString() ?: "vp_token"
