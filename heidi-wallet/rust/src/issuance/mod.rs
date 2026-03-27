@@ -2067,7 +2067,7 @@ mod issuance {
                         jwks,
                         enc_values_supported,
                         zip_values_supported: _,
-                        encryption_required,
+                        encryption_required: _,
                     }) => {
                         // Only activate request/response encryption if required...
                         // Too many issues out there, and we still have TLS
