@@ -22,13 +22,13 @@ under the License.
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use heidi_jwt::jwt::creator::JwtCreator;
 use regex::Regex;
 use reqwest::Url;
 use sdjwt::{ExternalSigner, Holder, SpecVersion};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[cfg(feature = "reqwest")]
 use crate::agents::{AgentInfo, AgentType};
@@ -39,7 +39,7 @@ use crate::presentation::presentation_exchange::{
     AuthorizationRequest, ClientIdScheme, ClientMetadataResource, PresentationDefinition,
 };
 use crate::vc::PresentableCredential;
-use crate::{log_debug, log_warn, ApiError};
+use crate::{ApiError, log_debug, log_warn};
 
 /// Wrap AuthorizationRequest and AgentInfo into one struct
 pub(crate) struct ARWrapper(pub heidi_util_rust::value::Value, pub AgentInfo, pub String);
@@ -66,6 +66,8 @@ impl ARWrapper {
             "http",
             "openid4vp",
             "haip",
+            "haip-vp",
+            "haip-vci",
             "mdoc-openid4vp",
             "eudi-openid4vp",
             "swiyu",
@@ -382,7 +384,7 @@ pub(super) fn create_submission(
     let vp_token = match jwt_presentation.build() {
         Ok(token) => token,
         Err(sdjwt::Error::SigningFailed(msg)) if msg == "InvalidSecret" => {
-            return Err(ApiError::Signing(crate::error::SigningError::InvalidSecret))
+            return Err(ApiError::Signing(crate::error::SigningError::InvalidSecret));
         }
         Err(e) => return Err(anyhow!(e).into()),
     };
@@ -478,7 +480,7 @@ eQitkfKWSHR/Sco6Jm/PJkO2ozsMJz5R5k7/+bXVJWll7Lo4xfKij8XI
         payload["cnf"]["jwk"]["alg"] = serde_json::Value::String("ES256".into());
         payload
     };
-    let mut header = josekit::jws::JwsHeader::new();
+    let mut header = heidi_jwt::JwsHeader::new();
     header.set_algorithm(josekit::jws::ES256.name());
     header.set_token_type("vc+sd-jwt");
 
