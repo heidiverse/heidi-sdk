@@ -123,7 +123,7 @@ fun createDisclosureForObject(claims: Value.Object, objectDisclosures: List<Clai
                 is Value.Object -> createDisclosureForObject(element, nestedDislcosure, currentDepth + 1, sdJwtHasher)
                 is Value.Array -> {
                     // if we need a disclosure for the array parts, dont remove
-                    replace = true
+//                    replace = true
                     createDisclosureForArray(element, nestedDislcosure, currentDepth + 1, sdJwtHasher)
                 }
                 else -> {
