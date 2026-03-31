@@ -359,11 +359,11 @@ impl DcqlQuery {
                                     ),
                                 }
                             }
-                            /// if no credential matches, this set cannot be satisfied, and we have to skip it
+                            // if no credential matches, this set cannot be satisfied, and we have to skip it
                             if matching_creds.is_empty() {
                                 continue 'outer_loop;
                             }
-                            /// add this set as a possible candidate
+                            // add this set as a possible candidate
                             possible_candidates.insert(
                                 id.clone(),
                                 CredentialOptions {
@@ -829,7 +829,7 @@ impl ClaimsQuery {
             });
         };
 
-        /// check if data matches any of the values given in the claims query's value property
+        // check if data matches any of the values given in the claims query's value property
         if let Some(vals) = self.values.as_ref() {
             for d in &data {
                 if !vals.iter().any(|v| v == d) {
