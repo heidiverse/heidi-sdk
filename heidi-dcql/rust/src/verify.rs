@@ -17,13 +17,16 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
  */
+//! # Possum
+//! Possum is a business logic evalutation engine. It uses similiar functions as
+//! JsonLogic but uses a more human centric programming like language.
 
 use std::sync::Arc;
 use uniffi::Object;
 
 #[derive(Object)]
 pub struct PossumExpression {
-    expression: jlc::Expression
+    expression: jlc::Expression,
 }
 
 #[uniffi::export]
@@ -32,24 +35,23 @@ impl PossumExpression {
     pub fn from_str(str: &str) -> Arc<Self> {
         let Ok(expression) = jlc::arithmetic::expression(str) else {
             return Arc::new(Self {
-                expression: jlc::Expression::Atomic(jlc::Value::Null)
-            })
+                expression: jlc::Expression::Atomic(jlc::Value::Null),
+            });
         };
-        Arc::new(Self {
-            expression
-        })
+        Arc::new(Self { expression })
     }
     pub fn evaluate(self: &Arc<Self>, data: &str) -> Arc<Self> {
         let Ok(data) = serde_json::from_str(data) else {
             return Arc::new(PossumExpression {
-                expression: jlc::Expression::Atomic(jlc::Value::Null)
+                expression: jlc::Expression::Atomic(jlc::Value::Null),
             });
         };
-        Arc::new(
-            Self {
-                expression: self.expression.eval(&data).unwrap_or(jlc::Expression::Atomic(jlc::Value::Null))
-            }
-        )
+        Arc::new(Self {
+            expression: self
+                .expression
+                .eval(&data)
+                .unwrap_or(jlc::Expression::Atomic(jlc::Value::Null)),
+        })
     }
     pub fn is_truthy(self: &Arc<Self>) -> bool {
         self.expression.as_bool().unwrap_or(false)
@@ -58,10 +60,10 @@ impl PossumExpression {
         matches!(self.expression, jlc::Expression::Atomic(jlc::Value::Null))
     }
     pub fn as_json(self: &Arc<Self>) -> Option<String> {
-      if let jlc::Expression::Atomic(v) = &self.expression {
-          Some(v.to_serde_json().to_string())
-      }  else {
-          None
-      }
+        if let jlc::Expression::Atomic(v) = &self.expression {
+            Some(v.to_serde_json().to_string())
+        } else {
+            None
+        }
     }
 }

@@ -38,15 +38,21 @@ use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
+/// Supported SD-JWT formats. We have, for backwards compatibility included the vc+sd-jwt type used in some earlier drafts
 const SDJWT_FORMATS: [&str; 2] = ["dc+sd-jwt", "vc+sd-jwt"];
+/// The mdoc format type
 const MDOC_FORMATS: [&str; 1] = ["mso_mdoc"];
+/// W3C VCDM format type. Note: It overlaps with SD-JWT format type, so we need further heuristics (like @context or so)
 const W3C_FORMATS: [&str; 1] = ["vc+sd-jwt"];
+/// OpenBadges are just plain JSON-LD with linked data proofs
 const OPEN_BADGE_FORMATS: [&str; 1] = ["ldp_vc"];
 
 #[cfg(feature = "bbs")]
+/// We use a bbs-termwise type format type
 const BBS_FORMATS: [&str; 1] = ["bbs-termwise"];
 
 #[derive(uniffi::Object)]
+/// Allow ClaimsPath pointer manipulation/selection via this helper class
 pub struct KmpPointer {
     pointer: Vec<PointerPart>,
 }
@@ -62,11 +68,14 @@ impl KmpPointer {
     }
 }
 
+/// Information score is used to estimate the "data leakage". This is used for ordering
+/// result sets.
 pub trait InformationScore {
     fn score(&self) -> usize;
 }
-
+/// Dangerous properties are have a high information score, and are thus _deprioritized_ during selection
 const DANGEROUS_PROPERTIES: [&str; 4] = ["birth", "date", "address", "street"];
+/// Hiding properties try to mimick zero knowledge proof behavior and are thus _prioritized_
 const HIDING_PROPERTIES: [&str; 1] = ["age_over"];
 
 impl InformationScore for &str {
@@ -133,10 +142,12 @@ impl InformationScore for Pointer {
     }
 }
 
+/// Simple trait for converting e.g. strings to actual credential types using parsers.
 pub trait CredentialStore {
     fn get(&self) -> Vec<Credential>;
 }
 
+/// Provides a simple implementation using known parsers
 impl<'a, T: AsRef<[&'a str]>> CredentialStore for T {
     fn get(&self) -> Vec<Credential> {
         self.as_ref()
@@ -147,32 +158,49 @@ impl<'a, T: AsRef<[&'a str]>> CredentialStore for T {
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
+/// If query matching fails for some reason we return a list of mismatches
+/// to be able to improve informations to users.
+///
+/// Note: Generally most of the credentials won't match as one is expected to only have one credential of a specific type.
+///       Thus, only show the mismatches if there actually is no matching credential
 pub enum DcqlQueryMismatch {
-    CredentialQueryNotFound {
-        id: String,
-    },
-
+    /// The referenced credential query is not found. Only used when credential sets are used
+    CredentialQueryNotFound { id: String },
+    /// If a credential does not satisfy the credential query, we return
+    /// a struct explaining why it did not match
     UnsatisfiedCredentialQuery {
+        /// Credential query that had no match
         query_id: String,
+        /// The credential that failed to match this query
         credential: Credential,
+        /// The reason, why this credential did not match the query
         reason: DcqlCredentialQueryMismatch,
     },
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
+/// Data type explaining, why a credential did not match the requested credential query
 pub enum DcqlCredentialQueryMismatch {
+    /// VCT of the credential does not match the one from the query
     SdJwtMeta(SdJwtMetaMismatch),
+    /// Doctype does not match the one from the query
     MdocMeta(MdocMetaMismatch),
     #[cfg(feature = "bbs")]
+    /// Credential type does not match the one from the query
     BbsMeta(BbsMetaMismatch),
+    /// Invalid W3C meta data
     W3CMeta(W3CMetaMismatch),
+    /// Credential types does not match the one from the query
     LdpMeta(LdpMetaMismatch),
 
+    /// This credential does not have a matching format
     ExpectedFormat(String),
 
+    /// If credential sets are used, all credential queries need to have an id, otherwise it is invalid
     SomeCredentialQueriesDoNotHaveAnId,
-
+    /// List of claim queries that did not match the requested claims from the credential query
     UnsatisfiedClaimQueries(Vec<DcqlClaimQueryMismatch>),
+    /// The credential does not match the trusted authorities matcher (of which we have registered ones)
     UnstatisfiedTrustedAuthority(Vec<TrustedAuthority>),
 }
 
@@ -207,11 +235,14 @@ pub enum LdpMetaMismatch {
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
+/// Enum to explain why a claims query did not match
 pub enum DcqlClaimQueryMismatch {
+    /// The credential does not contain the specified claim
     ClaimQueryPath {
         id: Option<String>,
         path: Vec<PointerPart>,
     },
+    /// The value of the claim does not match the one requested in the credential query
     ClaimQueryValues {
         id: Option<String>,
         path: Vec<PointerPart>,
@@ -239,17 +270,22 @@ impl DcqlMatchResponse {
 }
 
 impl DcqlQuery {
+    /// Check all credentials for a match with this DCQL query. Returns all matching credentials
+    /// (or sets), and all credentials that were not matching and why.
     pub fn select_credentials_with_info(
         &self,
         credential_store: impl CredentialStore,
     ) -> DcqlMatchResponse {
+        // does the actual parsing of the credentials
         let credentials = credential_store.get();
+        // lock the current trusted authorities
         let current_matchers: Vec<Arc<dyn TrustedAuthorityMatcher>> = REGISTERED_MATCHERS
             .lock()
             .map(|a| a.clone())
             .unwrap_or(vec![]);
 
         match (&self.credential_sets, &self.credentials) {
+            // If we have credential sets, check all possible combinations
             (Some(sets), Some(queries)) => {
                 let credential_query_map = queries
                     .iter()
@@ -259,14 +295,16 @@ impl DcqlQuery {
                 let mut mismatches = Vec::<DcqlQueryMismatch>::new();
                 let mut matching_sets = Vec::<CredentialSetOption>::new();
 
+                // go over all sets...
                 for set in sets {
                     let mut variations = Vec::<BTreeMap<String, CredentialOptions>>::new();
-
+                    // ... check all options in the set
                     'outer_loop: for option in &set.options {
                         let mut possible_candidates: BTreeMap<String, CredentialOptions> =
                             BTreeMap::new();
-
+                        // each option references a credential query
                         for id in option {
+                            // if the credential query is not found, add it as a mismatch and continue
                             let Some(query) = credential_query_map.get(id) else {
                                 mismatches.push(DcqlQueryMismatch::CredentialQueryNotFound {
                                     id: id.clone(),
@@ -275,12 +313,14 @@ impl DcqlQuery {
                             };
 
                             let mut matching_creds = Vec::<Disclosure>::new();
-
+                            // check all credentials for matches (we want all, as the user might need to choose between matching credentials)
                             for cred in &credentials {
+                                // if we have trusted authority matchers make sure we have at least one match
                                 if let Some(trusted_authority) = query.trusted_authorities.as_ref()
                                 {
                                     let mut has_match: bool = false;
                                     'authority_loop: for authority in trusted_authority {
+                                        // check if we have a registered matcher for the specified type
                                         let matchers_for_type = current_matchers
                                             .iter()
                                             .filter(|a| {
@@ -296,11 +336,15 @@ impl DcqlQuery {
                                             }
                                         }
                                     }
+                                    // if trusted authority is present in the query we reject it, if we don't have a matcher matching it
+                                    // The specification only says _SHOULD_ (https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#section-6.1-3.10)
+                                    // as it is at the verifier's discretion to reject the credential if it does not match.
                                     if !has_match {
                                         mismatches.push(DcqlQueryMismatch::UnsatisfiedCredentialQuery { query_id: id.clone(), credential: cred.clone(), reason: DcqlCredentialQueryMismatch::UnstatisfiedTrustedAuthority(trusted_authority.clone())});
                                         continue;
                                     }
                                 }
+                                // check if the credential is satisfied
                                 match cred.is_satisfied(query) {
                                     Ok(claims) => matching_creds.push(Disclosure {
                                         credential: cred.clone(),
@@ -315,11 +359,11 @@ impl DcqlQuery {
                                     ),
                                 }
                             }
-
+                            // if no credential matches, this set cannot be satisfied, and we have to skip it
                             if matching_creds.is_empty() {
                                 continue 'outer_loop;
                             }
-
+                            // add this set as a possible candidate
                             possible_candidates.insert(
                                 id.clone(),
                                 CredentialOptions {
@@ -356,7 +400,7 @@ impl DcqlQuery {
 
                 DcqlMatchResponse::new(matching_sets, mismatches)
             }
-
+            // We don't have any credential sets, so treat all credential query as one big credential set
             (None, Some(queries)) => {
                 let mut mismatches = Vec::<DcqlQueryMismatch>::new();
                 let mut option = Vec::<SetOption>::new();
@@ -407,7 +451,7 @@ impl DcqlQuery {
                             }
                         }
                     }
-
+                    //TODO: is this correct? shouldn't we add an empty element if we have no matches to indicate the lack of credential?
                     if !matches.is_empty() {
                         option.push(SetOption {
                             id: query.id.clone(),
@@ -434,6 +478,7 @@ impl DcqlQuery {
         }
     }
 
+    /// If we don't care about the debugging features, we can just directly get all set options
     pub fn select_credentials(
         &self,
         credential_store: impl CredentialStore,
@@ -444,6 +489,7 @@ impl DcqlQuery {
 }
 
 #[uniffi::export]
+/// Returns requested attributes from a query for a specific credential
 pub fn get_requested_attributes(
     credential_query: &CredentialQuery,
     credential: Credential,
@@ -452,12 +498,14 @@ pub fn get_requested_attributes(
         return Value::Null;
     };
     // all queries match
+    // an empty claims query means a RP is requesting all claims
     if claims_queries.is_empty() {
         let mut key_value_match = HashMap::new();
         let Some(claims) = credential_query.claims.as_ref() else {
             return Value::Null;
         };
         for claim in claims {
+            // generate a unified body payload type...
             let body = match &credential {
                 Credential::SdJwtCredential(sdjwt) => sdjwt.claims.clone(),
                 Credential::MdocCredential(mdoc) => mdoc.namespace_map.clone(),
@@ -467,6 +515,7 @@ pub fn get_requested_attributes(
                 Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
             };
 
+            // ... and try resolve the pointers (as there is also slicing)
             let all_ptrs = claim.path.resolve_ptr(body.clone()).unwrap_or(vec![]);
             for p in all_ptrs {
                 let key = p
@@ -478,6 +527,7 @@ pub fn get_requested_attributes(
                     })
                     .collect::<Vec<_>>()
                     .join("/");
+                // insert every attribute into the object
                 key_value_match.insert(key, p.select(body.clone()).unwrap()[0].clone());
             }
         }
@@ -523,6 +573,7 @@ pub fn get_requested_attributes(
 }
 
 impl Credential {
+    /// Check if the credential matches the meta information from the query
     pub fn matches_meta_mdoc(mdoc: &MdocRust, meta: Option<&Meta>) -> Result<(), MdocMetaMismatch> {
         // Assume that if meta is set, we also have vct_values set
         if let Some(Meta::IsoMdoc { doctype_value }) = meta {
@@ -535,7 +586,7 @@ impl Credential {
         }
         Ok(())
     }
-
+    /// Check if the credential matches the meta information from the query
     pub fn matches_meta_sdjwt(
         sd_jwt: &SdJwtRust,
         meta: Option<&Meta>,
@@ -553,6 +604,7 @@ impl Credential {
     }
 
     #[cfg(feature = "bbs")]
+    /// Check if the credential matches the meta information from the query
     pub fn matches_meta_bbs(bbs: &BbsRust, meta: Option<&Meta>) -> Result<(), BbsMetaMismatch> {
         // Assume that if meta is set, we also have vct_values set
         match meta {
@@ -569,11 +621,11 @@ impl Credential {
             _ => Err(BbsMetaMismatch::InvalidMeta),
         }
     }
-
+    /// We don't match meta for W3C for now
     pub fn matches_meta_w3c(_w3c: &W3CSdJwt, _meta: Option<&Meta>) -> Result<(), W3CMetaMismatch> {
         Ok(())
     }
-
+    /// Check if the credential matches the meta information from the query
     pub fn matches_meta_open_badges(
         vc: &W3CVerifiableCredential,
         meta: Option<&Meta>,
@@ -593,7 +645,7 @@ impl Credential {
             _ => Err(LdpMetaMismatch::InvalidMeta),
         }
     }
-
+    /// Returns the VCT for a sd jwt
     pub fn get_vct(sd_jwt: &SdJwtRust) -> &str {
         sd_jwt
             .claims
@@ -603,6 +655,7 @@ impl Credential {
             .unwrap_or("")
     }
 
+    /// Checks if this credential does satisfy the given credential query
     pub fn is_satisfied(
         &self,
         credential_query: &CredentialQuery,
@@ -640,7 +693,7 @@ impl Credential {
             }
             _ => (),
         }
-
+        // check for the meta attribute
         match self {
             Credential::SdJwtCredential(sd_jwt) => {
                 if let Err(e) = Self::matches_meta_sdjwt(sd_jwt, credential_query.meta.as_ref()) {
@@ -745,7 +798,10 @@ impl Credential {
 }
 
 impl ClaimsQuery {
+    /// Checks if the claims query matches the given credential
     pub fn matches(&self, credential: &Credential) -> Result<(), DcqlClaimQueryMismatch> {
+        // retrieve the data pointed to by the pointer
+        // the claims pointer MUST point to one value exactly
         let data = match credential {
             Credential::SdJwtCredential(sd_jwt) => sd_jwt.get(Arc::new(self.path.clone())),
             Credential::MdocCredential(mdoc) => mdoc.get(Arc::new(self.path.clone())),
@@ -773,6 +829,7 @@ impl ClaimsQuery {
             });
         };
 
+        // check if data matches any of the values given in the claims query's value property
         if let Some(vals) = self.values.as_ref() {
             for d in &data {
                 if !vals.iter().any(|v| v == d) {
@@ -791,6 +848,7 @@ impl ClaimsQuery {
 }
 
 #[uniffi::export]
+/// Select all credentials matching this DcqlQuery
 pub fn select_credentials(query: DcqlQuery, credentials: Vec<String>) -> Vec<CredentialSetOption> {
     query
         .select_credentials(credentials.iter().map(String::as_str).collect::<Vec<_>>())
@@ -799,6 +857,8 @@ pub fn select_credentials(query: DcqlQuery, credentials: Vec<String>) -> Vec<Cre
 }
 
 #[uniffi::export]
+/// Select all credentials matching this DcqlQuery and also return all mismatches.
+/// This allows to provide more detailed information to the user on why there was no match.
 pub fn select_credentials_with_info(
     query: DcqlQuery,
     credentials: Vec<String>,

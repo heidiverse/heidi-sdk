@@ -32,12 +32,16 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 #[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
+/// A DCQL Query (https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-digital-credentials-query-l)
 pub struct DcqlQuery {
+    /// List of credential queries
     pub credentials: Option<Vec<CredentialQuery>>,
+    /// List of credential sets
     pub credential_sets: Option<Vec<CredentialSetQuery>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
+/// Credential Query (https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-credential-query)
 pub struct CredentialQuery {
     pub id: String,
     pub format: String,
@@ -187,6 +191,7 @@ impl ClaimsQuery {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
+/// Credential Set Query (https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-credential-set-query)
 pub struct CredentialSetQuery {
     pub options: Vec<Vec<String>>,
     #[serde(default = "default_required")]
