@@ -74,6 +74,25 @@ pub fn decode_sdjwt(payload: &str) -> Result<SdJwtRust, SdJwtDecodeError> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "experimental")]
+    use crate::sdjwt_util::zkp::{Input, ZkProof, equality_proof::EqualityProof};
+    #[cfg(feature = "experimental")]
+    use crate::{
+        claims_pointer::Selector,
+        models::{PointerPart, SignatureCreator, SigningError},
+        pointer,
+        sdjwt::SdJwtRust,
+        sdjwt_util::SdJwtBuilder,
+    };
+    #[cfg(feature = "experimental")]
+    use base64::Engine;
+    #[cfg(feature = "experimental")]
+    use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
+    #[cfg(feature = "experimental")]
+    use p256::ecdsa::{Signature, SigningKey, signature::Signer};
+    #[cfg(feature = "experimental")]
+    use std::sync::Arc;
+
     use crate::sdjwt_util::SdJwtDecodeError;
 
     use super::decode_sdjwt;
@@ -82,14 +101,103 @@ mod tests {
     pub fn test_happy_case_disclosures() {
         let jwt_str = "eyJ4NWMiOlsiTUlJQmR6Q0NBUjZnQXdJQkFnSUlVRnhlZWxSbld6WXdDZ1lJS29aSXpqMEVBd0l3THpFTE1Ba0dBMVVFQmhNQ1EwZ3hEekFOQmdOVkJBb01CbFZpYVhGMVpURVBNQTBHQTFVRUF3d0dVbTl2ZEVOQk1CNFhEVEkxTURNd05qQTNNall4T1ZvWERUSTJNRE13TmpBM01qWXhPVm93VlRFUU1BNEdBMVVFQXd3SFpDMTBjblZ6ZERFUU1BNEdBMVVFQ2d3SFpDMTBjblZ6ZERFUU1BNEdBMVVFQnd3SFpDMTBjblZ6ZERFUU1BNEdBMVVFQ0F3SFpDMTBjblZ6ZERFTE1Ba0dBMVVFQmhNQ1EwZ3dXVEFUQmdjcWhrak9QUUlCQmdncWhrak9QUU1CQndOQ0FBUzI2WWUzZ2NnTzI5aVlzSExHRmlkT0tPWFl5c29Ddy9MMmZZRmR5UjlhK1R0MFNKUDlpRXhzU2VmMlp2b0c0MkpRanJsT1Rnb0hPckdmYlpkU1M0Sk1NQW9HQ0NxR1NNNDlCQU1DQTBjQU1FUUNJQ3IwTmdRbk1GZUFqS1l0cDltODRGNkJwTWRqTTA1ZUlLNGNXUk1mU2FhbEFpQU5VelZpaU5rczVMbzN6ZjFMVmR0ZitFc1RoQW9VaHNmNzAvdVZ1R2w4RUE9PSJdLCJraWQiOiJNRDh3TTZReE1DOHhDekFKQmdOVkJBWVRBa05JTVE4d0RRWURWUVFLREFaVlltbHhkV1V4RHpBTkJnTlZCQU1NQmxKdmIzUkRRUUlJVUZ4ZWVsUm5Xelk9IiwidHlwIjoiZGMrc2Qtand0IiwiYWxnIjoiRVMyNTYifQ.eyJpc3N1YW5jZV9kYXRlIjoiMjAyNS0wNC0yMlQxNTo0MDoyMloiLCJ2Y3QiOiJodHRwczovL2RlbW8ucGlkLWlzc3Vlci5idW5kZXNkcnVja2VyZWkuZGUvY3JlZGVudGlhbHMvcGlkLzEuMCIsImV4cGlyeV9kYXRlIjoiMjAyNS0wNS0wNlQxNTo0MDoyMloiLCJpc3MiOiJodHRwczovL2hlaWRpLWlzc3Vlci13cy1kZXYudWJpcXVlLmNoL2QtdHJ1c3QvYy9FTWt4SXc4TEVDNkR0cVpCT1Z5ZUZ2IiwiX3NkIjpbIi1nTXdCMGJtX01nRUx3TmpGNEc5aFljRzNtQXlaVElpRFlBdnZ5WE1lakEiLCIwLVg5cmNFYV9PandpT3dUM3RCeUZTem00dEFmcWNMdlFyVVN4VklhbEhzIiwiNGgzZlZ6YVJxenF5bjR4bGRWQVpBbEtSd053LWRLSHpmRTQzQWRXZExtbyIsIjVUYTE1MkthVksyTlJmemx6dGtFOTFUNjYxVDlwdGhqNzZkYVpZZkdqLUEiLCI3VHgyZGxvTC1Sc191ZFhDLVg4eWlMS3FJaW5SaW5iSEVNU0Vwb1YxX0RZIiwiQTZDYTFLQUtxZjZ4UFhyTzNrMGhnY0d2blBRMFVlUFlLbW9VQUF6ZnN3WSIsIkVEdl9DY3JrQ0JmcmJDSlVkeU9sdUhXQzJtZTZNbkZFVk5LWUwzbFp4TEEiLCJGalV1UEtoU1BqMUF5Z0dFYVhSQkZGUkREbGw3TXFlTVB2TUxzSzJSNWNnIiwiTVVPRG93YVNZMkNvNlhSZ0VZUDBFbG1mNzJwYUhwLUR4S3JaR29DSGU1VSIsIk8xd2VTWjlxTy0zemFNVjNGcmg4enhNUlJDdDBsZTVXZEVVeDlSYm5Ra2MiLCJVODY0ZlpxR2JQOVNOUEo5UjM1ZUliSDk5R01BWDJod1FLSl9nS2tRcFZ3IiwiWTRVbXpKMHF2NUpaTFJJclpEblFGVkRiRjU5ak5MRmZkV0pSNUVlYm93NCIsIllnOGdrME1POGU2bThzVGtYQldaVlNSTmxranZydWZwUmtZZzBNc0xBZmsiLCJaQUdDOUdKT3RBRkJIeVlmcEpYYThoSHhJRUxTZ1Jwa0FUQTVpRDVKWTdnIiwiX1YzU2syS3k4WTJ2d0lxNFgzOGV3MnRqNUZra0VfOGVQMXp2aGtVT003MCIsIl9yMUtoWU53QjMyekNBRVJaOTJHd18ycTVSMzA1elAzWWVXX3g2bTlBb3ciLCJhR1VoWUljQXd0Z0hpRzhmV0tmSlBNU1A5VVBMM0ROTVNsOG0yN3lrelc4IiwiYVY0ZWktN1hrbEpkeE5yQmJOLTczMWVLTG5SSEtselc0ZVp6VFpOUFhPayIsImRiX3Z0Uk5QQ2ZBdEFYdzlEb3RBWFRKQTh5UWV4WVRqcEhxN0NPSHQwNFEiLCJlUGRLVEgwMkdldEJ4aEEtTFA2MzQ2S1Zjb29nVWRqdDFYb1VkMGJZRlo0Iiwib3VxSGZKVlpZODZheWZ2OFlhZFdwaDJtYmRzNHJxeU9FUFVzaHNWZmRocyJdLCJpc3N1aW5nX2NvdW50cnkiOiJDSCIsImlzc3VpbmdfYXV0aG9yaXR5IjoiQ0giLCJfc2RfYWxnIjoic2hhLTI1NiIsImNuZiI6eyJqd2siOnsia3R5IjoiRUMiLCJjcnYiOiJQLTI1NiIsIngiOiIyN1kzTFpJZ3BRRVgzZUJwMTlCU1hOYUZHc0tld2VIeGxLcHBLclEwelhjIiwieSI6Ikt6c1hDc21LTUMxdFpsN3pxNjB1Z3Z1OTBEU3lIU3Y4ZnlsUkVPejIzdmsifX0sImV4cCI6MTc0NjU0NjAyMiwic2NoZW1hX2lkZW50aWZpZXIiOnsiY3JlZGVudGlhbElkZW50aWZpZXIiOiJlYy1waWQtdHZreWkiLCJ2ZXJzaW9uIjoiMy4wLjAifSwiaWF0IjoxNzQ1MzM2NDIyLCJyZW5kZXIiOnsidHlwZSI6Ik92ZXJsYXlzQ2FwdHVyZUJ1bmRsZVYxIiwib2NhIjoiaHR0cHM6Ly9oZWlkaS1pc3N1ZXItd3MtZGV2LnViaXF1ZS5jaC9vY2EvSUEwLWwxWEUteUVrcHNfcEJxbUtaNFNNWDlOWV95R1ZrSDJVaVR6b3cxNmkuanNvbiJ9fQ.Z_pFo29d9NyG6SudyvV0MKCHhpm9tXspWQpKnerHSsP-_dNoV8tQZSz3fKj0osg3uFTjsI67JxUBkxPQIlJoHA~WyItUW0xQ3hEOEc1ZG01UlN0MmNtaFVRIiwiYWdlX2VxdWFsX29yX292ZXIiLHsiX3NkIjpbIkY3QnZ1QmpLYk82VWNYZm5RMzhoZnphY3lHX2RITzVMRUFCeUhCakVsQ2siLCJMVXpuN1R1cGlMNU9PRzRpTVB5RzZ4bnp1MVJzLU5sYUF6RFc2Z2hvMEFvIiwidW5BMHBta2NFM3RUWTdHMlltZFZjck42bFFRbWVoc3liUUdNckF5WWR6QSIsInlEMXhmSDhINUR6eUdxVy02YXRQYTEyYmlHSEstRkdyUU1LdzFRNDNsN2MiXX1d~WyJ0MGZlWF94aVNZZVZEYmxXdlJSN01nIiwiMTYiLHRydWVd~WyJvUlJzSjVxRXhWMUozdG5jd3pjdkNRIiwiZmFtaWx5X25hbWUiLCJGYW1pbGl5IE5hbWUiXQ~eyJ0eXAiOiJrYitqd3QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJYNTA5X3Nhbl9kbnM6aGVpZGktdmVyaWZpZXItd3MtZGV2LnViaXF1ZS5jaCIsImlhdCI6MTc0NTQxNTM3Mywibm9uY2UiOiJtT2VsZkZvd3d0a3NKdU9SU1M3TDdnIiwic2RfaGFzaCI6InBkbmt2WFN3U29DMWtoY2FwaTNWVkdaZG5jeVA5M2dCRWpPWkFobU5VRmcifQ.909R8ATX5RAz22boGlT3qb5dt62TRhKDlzASrqrb7BB0X_Xg_0x0lK4Xrs3-1PUALC6Rpyc7Wnnem6YIz8D1Ww";
         let parsed_jwt = decode_sdjwt(jwt_str).unwrap();
-        assert_eq!(parsed_jwt.disclosures_map.capacity(), 3);
+        assert_eq!(parsed_jwt.disclosures_map.len(), 3);
     }
 
     #[test]
     pub fn test_empty_disclosures() {
         let jwt_str = "eyJ4NWMiOlsiTUlJQmFEQ0NBUTZnQXdJQkFnSUlTbTVwN3lhaDdoTXdDZ1lJS29aSXpqMEVBd0l3THpFTE1Ba0dBMVVFQmhNQ1EwZ3hEekFOQmdOVkJBb01CbFZpYVhGMVpURVBNQTBHQTFVRUF3d0dVbTl2ZEVOQk1CNFhEVEkxTURRd01UQTVOVGd3TkZvWERUSTJNRFF3TVRBNU5UZ3dORm93UlRFTU1Bb0dBMVVFQXd3RGVuWjJNUXd3Q2dZRFZRUUtEQU42ZG5ZeEREQUtCZ05WQkFjTUEzcDJkakVNTUFvR0ExVUVDQXdEZW5aMk1Rc3dDUVlEVlFRR0V3SkRTREJaTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEEwSUFCRzNENjhhNzVPelU4OU1Uc1hlelpkWEZkbTBlY1FUek1pd2gyMFdKR2ZpbGpXMks3Zmt5Rmdzb0E2TTBOMkdscEFCU0d5eVBsOG04bnA0THlNRnpocWd3Q2dZSUtvWkl6ajBFQXdJRFNBQXdSUUlnZkFUdWh3NjlUYW1mWWJoR2hwQ0FSdGV2Z1lrV3hmNTRiSXRQUEVmemdFc0NJUUNjTVhyQm9KYUdwRkdMZFcwRFJmb1NZOUFkbHovNVJCRlBDeUVtOHBsUWx3PT0iXSwia2lkIjoiTUQ4d002UXhNQzh4Q3pBSkJnTlZCQVlUQWtOSU1ROHdEUVlEVlFRS0RBWlZZbWx4ZFdVeER6QU5CZ05WQkFNTUJsSnZiM1JEUVFJSVNtNXA3eWFoN2hNPSIsInR5cCI6ImRjK3NkLWp3dCIsImFsZyI6IkVTMjU2In0.eyJpc3N1YW5jZV9kYXRlIjoiMjAyNS0wNC0yNVQwOToyMDoyN1oiLCJ2Y3QiOiJ0ZXN0LWp3dCIsImV4cGlyeV9kYXRlIjoiMjAyNS0wNS0wOVQwOToyMDoyN1oiLCJpc3MiOiJodHRwczovL2hlaWRpLWlzc3Vlci13cy1kZXYudWJpcXVlLmNoL3p2di9jL3gyRWg0NEcwZ3U5VEVXWGZnYWpUMlUiLCJfc2QiOlsiNGdpZG9IY2NpUllmZFRTSDFYd2c5ZzVIbGZneTdVenFOUC1sV0ZPNm12dyIsIjZQX0hPTnl4SEM3Z2NUMVF1UmF4dzVLbHFRSmh4cFJJQlhscXhjYndFYTgiXSwiaXNzdWluZ19jb3VudHJ5IjoiQ0giLCJpc3N1aW5nX2F1dGhvcml0eSI6IkNIIiwiX3NkX2FsZyI6InNoYS0yNTYiLCJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4Ijoic25UU1doenFHZEJrYlZaUjROckt5ZXVkcEtQeUIxSWptR3VMeURNSkVWUSIsInkiOiJhUEFmcm8xNFRRRGc1QzVJQmJFSFNUaGJ5LTl3LXpvWjlNMTNUMmhOcHc0In19LCJleHAiOjE3NDY3ODI0MjcsInNjaGVtYV9pZGVudGlmaWVyIjp7ImNyZWRlbnRpYWxJZGVudGlmaWVyIjoiYXNkYXNkLXJvbTBvIiwidmVyc2lvbiI6IjIuMS4wIn0sImlhdCI6MTc0NTU3MjgyNywicmVuZGVyIjp7InR5cGUiOiJPdmVybGF5c0NhcHR1cmVCdW5kbGVWMSIsIm9jYSI6Imh0dHBzOi8vaGVpZGktaXNzdWVyLXdzLWRldi51YmlxdWUuY2gvb2NhL0lBcEc2TEJHelZQVVhSMUFINEdqd0xOMENTR2s2THRob21iUHlfc29EaG9sLmpzb24ifSwic3RhdHVzIjp7InN0YXR1c19saXN0Ijp7InVyaSI6Imh0dHBzOi8vaGVpZGktaXNzdWVyLXdzLWRldi51YmlxdWUuY2gvdjEvc3RhdHVzbGlzdC90b2tlbiIsImlkeCI6NTYwODUxMH19fQ.Xp8kghKINyX9RXKSVY5qdato4lDFbj6HLQytI9mXQOy6CxGNc0aKHhuq9D05_PqHmt0cFoND2i4Lv48Msjhupw~eyJ0eXAiOiJrYitqd3QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJYNTA5X3Nhbl9kbnM6aGVpZGktdmVyaWZpZXItd3MtZGV2LnViaXF1ZS5jaCIsImlhdCI6MTc0NTU3NTY3Mywibm9uY2UiOiJRLVNLd0FQVUUtWl84WUZRY2dlN0N3Iiwic2RfaGFzaCI6Imc4WmI3VWxIRXNZQVg1QUw3U19aMkI4X1dCUnFpajFEUFFOcW1JdWl5RlUifQ.vqSMwsrj0lkzHc0Iphe78dvei_CvAbmAsnZndM8uSmpnl3geBz_z4Rigblop-zkpDb0M3MApMFt4LoucpBbBUQ";
-        let parsed_jwt = decode_sdjwt(jwt_str).expect("Failed to decode SD-JWT");
-        assert_eq!(parsed_jwt.disclosures_map.capacity(), 0);
+        let parsed_jwt = decode_sdjwt(jwt_str).unwrap();
+        assert_eq!(parsed_jwt.disclosures_map.len(), 0);
+    }
+    #[test]
+    #[cfg(feature = "experimental")]
+    pub fn test_pedersen_disclosures() {
+        let jwt_str = "eyJhbGciOiJFUzI1NiJ9.eyJfc2QiOlsiZUdDS25YRkNBakRER0t2M2xmU2RfQmZPZXZ2TVVjODBlT3ljazRXTV9EayIsIml0LU9vV1NxcHFVcVA3eFByc3RqUlZ1c21TYWlvbllaV2lDRHl3V2RJV0EiXSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJwdWJsaWNfcGFyYW1zIjp7ImciOiJOcGlJMGdQa0JVbVhaS0liT2NMN0hSZmE4Q28yYjVpcVNVWkpXTGo2a25nIiwiaCI6IktFaXdHUHFDc3BENFcyNnRCQ3V0RFQ3M2tROWZ2N0kwcEJVcERPbHg0bDAifSwiY3J2IjoiZWQyNTUxOSJ9fSwiY29tX2xpbmsiOnsidGVzdCI6MCwiZG9iIjoxfSwiaXNzIjoic2FtcGxlX2lzc3VlciIsImlhdCI6MTc2ODM4Mjg0NSwibmJmIjoxNzY4MzgyNTQ1LCJleHAiOjE3NjgzODMyMDV9.hct1RNSY3wSpNMMal2Tb-fJONQ8fJIEkWUopvmwCAcSJNJHvgt369OUT4faepORcD0-4dFXEJHV89jq_L6e_uw~WyJzeV85SWZDeW5BdnRhUUo2VDl2bU9NWVM1X0R6Z1BkRUFkUDc1MmRRTlFZIiwidGVzdCIsImFiYyJd~WyJKYlRJYW9qZWt0TmdkdlBpXzhfZkZhLU5LYndMVkwtZWFsYVk3MXRNZVFvIiwiZG9iIiwxOTU4XQ~";
+        let parsed_jwt = decode_sdjwt(jwt_str).unwrap();
+        println!("{:#?}", parsed_jwt.claims);
+        println!("{:#?}", parsed_jwt.disclosures_map);
+        assert_eq!(parsed_jwt.disclosures_map.len(), 2);
+    }
+
+    #[test]
+    #[cfg(feature = "experimental")]
+    pub fn test_equality_proof() {
+        let jwt_str1 = "eyJhbGciOiJFUzI1NiJ9.eyJfc2QiOlsiX0tkcnVIUkZlTlVIZTNnajJNUXZ1WTdhV08wQ3pDUENVaUJoTG15M3B6cyIsIi11Um9TNzNER3AzRjB0RFVBNFNsNkp4azhnNXBCRXpxWDJqci02MWVzbDAiXSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJwdWJsaWNfcGFyYW1zIjp7ImciOiJBaTJpcWlFX3paMVRHYWVfRzBDOUhKZTE0aThoTWx3M3hwcFVuZjhPcUI0IiwiaCI6Im5PblFYeEZQV0UyX3k0NnJoVm81UTUtNXNGYWJFNEgtc21oLTBQeTBqVVkifSwiY3J2IjoiZWQyNTUxOSJ9fSwiY29tX2xpbmsiOnsidGVzdCI6MCwiZG9iIjoxfSwiaXNzIjoic2FtcGxlX2lzc3VlciIsImlhdCI6MTc2ODM4NTA4NiwibmJmIjoxNzY4Mzg0Nzg2LCJleHAiOjE3NjgzODU0NDZ9.6E4YLwsTJrSuZ3MM9VKjuwHPGhzSMd9cVFHDoHQKrysbuEL01VNRUXpiRYzV7STwbkFTVtt7WsR6sTE81BBqOw~WyItNllMWjhoeUtCbU91VkxmT0NsdnhKM2w0bUNNNVJhUjdTRmVMenpLUVFNIiwidGVzdCIsImFiYyJd~WyJmeF9wSkdtSHlHS0dWVS1SdmFyX19JT1FadF9LejRycm11ejhCenZWYkE0IiwiZG9iIiwxOTU4XQ~";
+        let jwt_str2 = "eyJhbGciOiJFUzI1NiJ9.eyJfc2QiOlsiTXUwajFIamJ2UnpTWEFLUWxlQ3I4NVkxOTZqdTEwTUNaSzdCRHgyRHZVNCIsImtQN21OZTBLRnJlc25KMjYxaDIxM1lvZ1NqX196dHVQZDQ3c3ByU2V4V1UiXSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJwdWJsaWNfcGFyYW1zIjp7ImciOiJxa2IxX1daRnNLVFY4QW1RRkVaRDNvOUl1UnJ2NkNoMTZucFgxb1pDTDBBIiwiaCI6IjlQVGQ3dFdVR3JROElMUkhKY0NKUDVPMjBjUkpXOXpmaG00VmZHV2hzSEkifSwiY3J2IjoiZWQyNTUxOSJ9fSwiY29tX2xpbmsiOnsidGVzdCI6MCwiZG9iIjoxfSwiaXNzIjoic2FtcGxlX2lzc3VlciIsImlhdCI6MTc2ODM4NjgwMSwibmJmIjoxNzY4Mzg2NTAxLCJleHAiOjE3NjgzODcxNjF9.tp2wQQYsoRxK5lVtvtTQ6tvC9GAjcazQgbARA16CdP00EYXGdYRsnPShbBbB_1UYLJmvT_513nV46ZLewAvxvQ~WyJpRlFUak83RlVwYWNBeHVkWTFaaDNuUlNIVlBQNGRISTY5bk4zc2UzOEEwIiwidGVzdCIsImFiY2UiXQ~WyJ5MEctTnFNU3c1RDY5VUIzSmxCU0llcGhnU0EwOHdjN2hqckszOGpuYndRIiwiZG9iIiwxOTU4XQ~";
+        let sdjwt1 = decode_sdjwt(jwt_str1).unwrap();
+        println!("{:?}", sdjwt1.disclosures_map);
+        let sdjwt2 = decode_sdjwt(jwt_str2).unwrap();
+        let equality_proof =
+            EqualityProof::from_sdjwts("dob", &sdjwt1, &sdjwt2, vec![0xde, 0xad]).unwrap();
+        let serialized = equality_proof.0.as_bytes();
+        let deserialized_proof = EqualityProof::from_bytes(&serialized);
+
+        let g1 = sdjwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h1 = sdjwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g2 = sdjwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h2 = sdjwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g1 = BASE64_URL_SAFE_NO_PAD.decode(g1).unwrap();
+        let h1 = BASE64_URL_SAFE_NO_PAD.decode(h1).unwrap();
+        let g2 = BASE64_URL_SAFE_NO_PAD.decode(g2).unwrap();
+        let h2 = BASE64_URL_SAFE_NO_PAD.decode(h2).unwrap();
+        let mut challenge_bytes = vec![];
+        challenge_bytes.extend_from_slice("dob".as_bytes());
+        challenge_bytes.extend_from_slice(&g1);
+        challenge_bytes.extend_from_slice(&h1);
+        challenge_bytes.extend_from_slice(&g2);
+        challenge_bytes.extend_from_slice(&h2);
+        challenge_bytes.extend_from_slice(&vec![0xde, 0xad]);
+        assert!(deserialized_proof.verify(challenge_bytes, "dob", &sdjwt1, &sdjwt2));
+        assert!(deserialized_proof.verify(equality_proof.1.clone(), "dob", &sdjwt1, &sdjwt2));
     }
 
     #[test]
@@ -120,5 +228,283 @@ mod tests {
         let jwt_str_duplicate_nested_level = "eyJ4NWMiOlsiTUlJQmR6Q0NBUjZnQXdJQkFnSUlVRnhlZWxSbld6WXdDZ1lJS29aSXpqMEVBd0l3THpFTE1Ba0dBMVVFQmhNQ1EwZ3hEekFOQmdOVkJBb01CbFZpYVhGMVpURVBNQTBHQTFVRUF3d0dVbTl2ZEVOQk1CNFhEVEkxTURNd05qQTNNall4T1ZvWERUSTJNRE13TmpBM01qWXhPVm93VlRFUU1BNEdBMVVFQXd3SFpDMTBjblZ6ZERFUU1BNEdBMVVFQ2d3SFpDMTBjblZ6ZERFUU1BNEdBMVVFQnd3SFpDMTBjblZ6ZERFUU1BNEdBMVVFQ0F3SFpDMTBjblZ6ZERFTE1Ba0dBMVVFQmhNQ1EwZ3dXVEFUQmdjcWhrak9QUUlCQmdncWhrak9QUU1CQndOQ0FBUzI2WWUzZ2NnTzI5aVlzSExHRmlkT0tPWFl5c29Ddy9MMmZZRmR5UjlhK1R0MFNKUDlpRXhzU2VmMlp2b0c0MkpRanJsT1Rnb0hPckdmYlpkU1M0Sk1NQW9HQ0NxR1NNNDlCQU1DQTBjQU1FUUNJQ3IwTmdRbk1GZUFqS1l0cDltODRGNkJwTWRqTTA1ZUlLNGNXUk1mU2FhbEFpQU5VelZpaU5rczVMbzN6ZjFMVmR0ZitFc1RoQW9VaHNmNzAvdVZ1R2w4RUE9PSJdLCJraWQiOiJNRDh3TTZReE1DOHhDekFKQmdOVkJBWVRBa05JTVE4d0RRWURWUVFLREFaVlltbHhkV1V4RHpBTkJnTlZCQU1NQmxKdmIzUkRRUUlJVUZ4ZWVsUm5Xelk9IiwidHlwIjoiZGMrc2Qtand0IiwiYWxnIjoiRVMyNTYifQ.ewogICAgImlzc3VhbmNlX2RhdGUiOiAiMjAyNS0wNC0yMlQxNTo0MDoyMloiLAogICAgInZjdCI6ICJodHRwczovL2RlbW8ucGlkLWlzc3Vlci5idW5kZXNkcnVja2VyZWkuZGUvY3JlZGVudGlhbHMvcGlkLzEuMCIsCiAgICAiZXhwaXJ5X2RhdGUiOiAiMjAyNS0wNS0wNlQxNTo0MDoyMloiLAogICAgImlzcyI6ICJodHRwczovL2hlaWRpLWlzc3Vlci13cy1kZXYudWJpcXVlLmNoL2QtdHJ1c3QvYy9FTWt4SXc4TEVDNkR0cVpCT1Z5ZUZ2IiwKICAgICJfc2QiOiBbCiAgICAgICAgIi1nTXdCMGJtX01nRUx3TmpGNEc5aFljRzNtQXlaVElpRFlBdnZ5WE1lakEiLAogICAgICAgICI0aDNmVnphUnF6cXluNHhsZFZBWkFsS1J3TnctZEtIemZFNDNBZFdkTG1vIiwKICAgICAgICAiNVRhMTUyS2FWSzJOUmZ6bHp0a0U5MVQ2NjFUOXB0aGo3NmRhWllmR2otQSIsCiAgICAgICAgIjdUeDJkbG9MLVJzX3VkWEMtWDh5aUxLcUlpblJpbmJIRU1TRXBvVjFfRFkiLAogICAgICAgICJBNkNhMUtBS3FmNnhQWHJPM2swaGdjR3ZuUFEwVWVQWUttb1VBQXpmc3dZIiwKICAgICAgICAiRUR2X0NjcmtDQmZyYkNKVWR5T2x1SFdDMm1lNk1uRkVWTktZTDNsWnhMQSIsCiAgICAgICAgIkZqVXVQS2hTUGoxQXlnR0VhWFJCRkZSRERsbDdNcWVNUHZNTHNLMlI1Y2ciLAogICAgICAgICJNVU9Eb3dhU1kyQ282WFJnRVlQMEVsbWY3MnBhSHAtRHhLclpHb0NIZTVVIiwKICAgICAgICAiTzF3ZVNaOXFPLTN6YU1WM0ZyaDh6eE1SUkN0MGxlNVdkRVV4OVJiblFrYyIsCiAgICAgICAgIlU4NjRmWnFHYlA5U05QSjlSMzVlSWJIOTlHTUFYMmh3UUtKX2dLa1FwVnciLAogICAgICAgICJZNFVtekowcXY1SlpMUklyWkRuUUZWRGJGNTlqTkxGZmRXSlI1RWVib3c0IiwKICAgICAgICAiWWc4Z2swTU84ZTZtOHNUa1hCV1pWU1JObGtqdnJ1ZnBSa1lnME1zTEFmayIsCiAgICAgICAgIlpBR0M5R0pPdEFGQkh5WWZwSlhhOGhIeElFTFNnUnBrQVRBNWlENUpZN2ciLAogICAgICAgICJfVjNTazJLeThZMnZ3SXE0WDM4ZXcydGo1RmtrRV84ZVAxenZoa1VPTTcwIiwKICAgICAgICAiX3IxS2hZTndCMzJ6Q0FFUlo5Mkd3XzJxNVIzMDV6UDNZZVdfeDZtOUFvdyIsCiAgICAgICAgImFHVWhZSWNBd3RnSGlHOGZXS2ZKUE1TUDlVUEwzRE5NU2w4bTI3eWt6VzgiLAogICAgICAgICJhVjRlaS03WGtsSmR4TnJCYk4tNzMxZUtMblJIS2x6VzRlWnpUWk5QWE9rIiwKICAgICAgICAiZGJfdnRSTlBDZkF0QVh3OURvdEFYVEpBOHlRZXhZVGpwSHE3Q09IdDA0USIsCiAgICAgICAgImVQZEtUSDAyR2V0QnhoQS1MUDYzNDZLVmNvb2dVZGp0MVhvVWQwYllGWjQiLAogICAgICAgICJvdXFIZkpWWlk4NmF5ZnY4WWFkV3BoMm1iZHM0cnF5T0VQVXNoc1ZmZGhzIiwKIl9hZ1QySU1IeFB4dXRSbXNvOHRWaXNvR19na19Da0dFWDVhZEp1QTBSUmciCiAgICBdLAogICAgImlzc3VpbmdfY291bnRyeSI6ICJDSCIsCiAgICAiaXNzdWluZ19hdXRob3JpdHkiOiAiQ0giLAogICAgIl9zZF9hbGciOiAic2hhLTI1NiIsCiAgICAiY25mIjogewogICAgICAgICJqd2siOiB7CiAgICAgICAgICAgICJrdHkiOiAiRUMiLAogICAgICAgICAgICAiY3J2IjogIlAtMjU2IiwKICAgICAgICAgICAgIngiOiAiMjdZM0xaSWdwUUVYM2VCcDE5QlNYTmFGR3NLZXdlSHhsS3BwS3JRMHpYYyIsCiAgICAgICAgICAgICJ5IjogIkt6c1hDc21LTUMxdFpsN3pxNjB1Z3Z1OTBEU3lIU3Y4ZnlsUkVPejIzdmsiCiAgICAgICAgfQogICAgfSwKICAgICJleHAiOiAxNzQ2NTQ2MDIyLAogICAgInNjaGVtYV9pZGVudGlmaWVyIjogewogICAgICAgICJjcmVkZW50aWFsSWRlbnRpZmllciI6ICJlYy1waWQtdHZreWkiLAogICAgICAgICJ2ZXJzaW9uIjogIjMuMC4wIgogICAgfSwKICAgICJpYXQiOiAxNzQ1MzM2NDIyLAogICAgInJlbmRlciI6IHsKICAgICAgICAidHlwZSI6ICJPdmVybGF5c0NhcHR1cmVCdW5kbGVWMSIsCiAgICAgICAgIm9jYSI6ICJodHRwczovL2hlaWRpLWlzc3Vlci13cy1kZXYudWJpcXVlLmNoL29jYS9JQTAtbDFYRS15RWtwc19wQnFtS1o0U01YOU5ZX3lHVmtIMlVpVHpvdzE2aS5qc29uIgogICAgfQp9.Z_pFo29d9NyG6SudyvV0MKCHhpm9tXspWQpKnerHSsP-_dNoV8tQZSz3fKj0osg3uFTjsI67JxUBkxPQIlJoHA~WwogICAgIi1RbTFDeEQ4RzVkbTVSU3QyY21oVVEiLAogICAgImFnZV9lcXVhbF9vcl9vdmVyIiwKICAgIHsKICAgICAgICAiX3NkIjogWwogICAgICAgICAgICAiRjdCdnVCaktiTzZVY1hmblEzOGhmemFjeUdfZEhPNUxFQUJ5SEJqRWxDayIsCiAgICAgICAgICAgICJMVXpuN1R1cGlMNU9PRzRpTVB5RzZ4bnp1MVJzLU5sYUF6RFc2Z2hvMEFvIiwKICAgICAgICAgICAgInVuQTBwbWtjRTN0VFk3RzJZbWRWY3JONmxRUW1laHN5YlFHTXJBeVlkekEiLAogICAgICAgICAgICAieUQxeGZIOEg1RHp5R3FXLTZhdFBhMTJiaUdISy1GR3JRTUt3MVE0M2w3YyIsCiAgICAgICAgICAgICJFRHZfQ2Nya0NCZnJiQ0pVZHlPbHVIV0MybWU2TW5GRVZOS1lMM2xaeExBIgogICAgICAgIF0KICAgIH0KXQ~WyJ0MGZlWF94aVNZZVZEYmxXdlJSN01nIiwiMTYiLHRydWVd~WyJvUlJzSjVxRXhWMUozdG5jd3pjdkNRIiwiZmFtaWx5X25hbWUiLCJGYW1pbGl5IE5hbWUiXQ~eyJ0eXAiOiJrYitqd3QiLCJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJYNTA5X3Nhbl9kbnM6aGVpZGktdmVyaWZpZXItd3MtZGV2LnViaXF1ZS5jaCIsImlhdCI6MTc0NTQxNTM3Mywibm9uY2UiOiJtT2VsZkZvd3d0a3NKdU9SU1M3TDdnIiwic2RfaGFzaCI6InBkbmt2WFN3U29DMWtoY2FwaTNWVkdaZG5jeVA5M2dCRWpPWkFobU5VRmcifQ.909R8ATX5RAz22boGlT3qb5dt62TRhKDlzASrqrb7BB0X_Xg_0x0lK4Xrs3-1PUALC6Rpyc7Wnnem6YIz8D1Ww";
         let e = decode_sdjwt(jwt_str_duplicate_nested_level).unwrap_err();
         assert!(matches!(e, SdJwtDecodeError::DuplicateHash));
+    }
+
+    #[test]
+    #[cfg(feature = "experimental")]
+    fn test_kmp_issued_zkp() {
+        let sd_jwt1 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoielI2anZwa0tDR2toREk2YURsZVJSSFRwT3gxT0c4eF9yV1Z2R01CQTlXRSIsInkiOiJYd1RUUlU5SmdzVEk4SDlmWWk1UmRKUVhxeU9aYTE0U2JCVWc4NGVzYWNvIn19LCJfc2QiOlsiem5EVi1WVl80YXRqSTNwSlNoTndwVENuT0MwbGN6bnViTGFJam5DNFdEZyIsImxwaGIyMzJDbDVJZ3puajBfcEYwS2QxRmZJZTRhX2VXYXI1eTNjOUd0VUUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJnIjoiMEktZUV0cVRPRHNzUXUyT2xZT1V3M3hrTllERDZlU0RNaW1MQ3B3bUZuQSIsImgiOiJPbVE4Sm9ZVU5WMFlpOU5hMXR2Q1BscE5RVDhSalpZZ2llWmNvUkUycVVRIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.YQ-_KQe2m6bymG1k1Vh2xHHECz507Zj2ZpZ6rw3Dv-KKW-rbQXqFK1Uq8yMQjjuOeTZfsaAYw3mz2Ojqi50Lmg~WyJDdmtNdkJNdFlaTDVwUUJnUjdTUTBXUDlTb0ZnUnc0TDBXemctNXRzZndvIiwiZG9iIiwxOTU4XQ~";
+        let sd_jwt2 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoiNDBxYURZQVFnTTJ6cENjLXVRMHc2cVFKRnd1ZG9VSS1YVVFmZE9STTVpYyIsInkiOiJSX3I2ZXpfXzN1VzVlUUplRWIyOEhiT0E0alQ3TVBqYUpjUThGN2NkQmVnIn19LCJfc2QiOlsiQ0ZLQjRIQUVVX1BxSDF1d0FrY2ZLbl9FZW5wYko4RnpKRXJNTDZXMFBRUSIsImhDV0V0ako2cWlTMFl0ZFhHa3NXVHFqWllReDM4amVldlpuVTdYRno4bVUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiaUI5ckVWYjgtdklDS2dBOWU2aU14T3M1NGQ1aXN1MGNHdFhZQzVJZXdYWSIsImciOiJZaDViVGs5WHFfeWxGNVBpbmM1cm9zd2ZyaDJ2a3dDaWhpYm1aS2NfOURBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.HaRrZuVl3wrbTzzzrxF7AA9OczjCWwRyM0X7dXUoDdiGKtg0JDBHQScbwthedXNXkB-7nuK-y6qMaawIoUrXMQ~WyJjdjFGQ2Zua1Azbm5RWjgtRWpVU3R5blE0RXFqNzg1R0Q1b0JHTXZzb0E0IiwiZG9iIiwxOTU4XQ~";
+        // sdjwt3 has another dob
+        let sd_jwt3 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoieUZoOWFMY25QcTZtamJWemhoVWxxbW1VaTh4alBRd29UTlBINHdBSmNFTSIsInkiOiJFR2JqY0lueW5hRkQ2emcydXlsUFlkbW1RdC1Gb2Nsd1pFRDFMUFhiekNZIn19LCJfc2QiOlsiVk9QaDdDQU5fSVdWeV9tOURUQjZsaWNIUS13RFBScmRwM0l6Ykp1dG9VMCIsIl9LRFRsT0VDN3lFUlZfZlVJbGhockZWV0ZjWnJ3QThSWGZPN1NPQ05uem8iXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJnIjoic0RVZTk2V1hfVFdTVnpndTVLQW9GUDNuZHprNzFrbGhfV2NwblltdGRGUSIsImgiOiJ5UHBaV3JpRGJqemtOcjV1VXlLTk5XVTJTRFVRakxUb3hTaUxxWV8zMlZ3In19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.hrwcpzg5mNAe1EnxlYcKlZMKxIZLueJKurk6JFQjDYoS0xkovidbCo-8INN-2tI_C24Tgw4kg0nt7jo6Dv37MA~WyJtd3FTZlNYQ3plZVUxWWV6SXRObVptaU50YS1GRm5CNHBfVUVfMExObXdRIiwiZG9iIiwxOTU5XQ~";
+        let sd_jwt1 = decode_sdjwt(&sd_jwt1).unwrap();
+        println!("{:?}", sd_jwt1.disclosures_map);
+        let sd_jwt2 = decode_sdjwt(&sd_jwt2).unwrap();
+        let sd_jwt3 = decode_sdjwt(&sd_jwt3).unwrap();
+
+        assert_eq!(
+            sd_jwt1.claims.as_object().unwrap().get("dob"),
+            sd_jwt2.claims.as_object().unwrap().get("dob")
+        );
+        assert_ne!(
+            sd_jwt1.claims.as_object().unwrap().get("dob"),
+            sd_jwt3.claims.as_object().unwrap().get("dob")
+        );
+
+        let equality_proof =
+            EqualityProof::from_sdjwts("dob", &sd_jwt1, &sd_jwt2, vec![0xde, 0xad]).unwrap();
+        let serialized_proof = equality_proof.0.as_bytes();
+
+        let wrong_proof = EqualityProof::from_sdjwts("dob", &sd_jwt1, &sd_jwt3, vec![0xde, 0xad]);
+        assert!(wrong_proof.is_none());
+
+        // remove disclosures
+        let sd_jwt1 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoielI2anZwa0tDR2toREk2YURsZVJSSFRwT3gxT0c4eF9yV1Z2R01CQTlXRSIsInkiOiJYd1RUUlU5SmdzVEk4SDlmWWk1UmRKUVhxeU9aYTE0U2JCVWc4NGVzYWNvIn19LCJfc2QiOlsiem5EVi1WVl80YXRqSTNwSlNoTndwVENuT0MwbGN6bnViTGFJam5DNFdEZyIsImxwaGIyMzJDbDVJZ3puajBfcEYwS2QxRmZJZTRhX2VXYXI1eTNjOUd0VUUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJnIjoiMEktZUV0cVRPRHNzUXUyT2xZT1V3M3hrTllERDZlU0RNaW1MQ3B3bUZuQSIsImgiOiJPbVE4Sm9ZVU5WMFlpOU5hMXR2Q1BscE5RVDhSalpZZ2llWmNvUkUycVVRIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.YQ-_KQe2m6bymG1k1Vh2xHHECz507Zj2ZpZ6rw3Dv-KKW-rbQXqFK1Uq8yMQjjuOeTZfsaAYw3mz2Ojqi50Lmg~";
+        let sd_jwt2 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoiNDBxYURZQVFnTTJ6cENjLXVRMHc2cVFKRnd1ZG9VSS1YVVFmZE9STTVpYyIsInkiOiJSX3I2ZXpfXzN1VzVlUUplRWIyOEhiT0E0alQ3TVBqYUpjUThGN2NkQmVnIn19LCJfc2QiOlsiQ0ZLQjRIQUVVX1BxSDF1d0FrY2ZLbl9FZW5wYko4RnpKRXJNTDZXMFBRUSIsImhDV0V0ako2cWlTMFl0ZFhHa3NXVHFqWllReDM4amVldlpuVTdYRno4bVUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiaUI5ckVWYjgtdklDS2dBOWU2aU14T3M1NGQ1aXN1MGNHdFhZQzVJZXdYWSIsImciOiJZaDViVGs5WHFfeWxGNVBpbmM1cm9zd2ZyaDJ2a3dDaWhpYm1aS2NfOURBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.HaRrZuVl3wrbTzzzrxF7AA9OczjCWwRyM0X7dXUoDdiGKtg0JDBHQScbwthedXNXkB-7nuK-y6qMaawIoUrXMQ~";
+
+        let sd_jwt1 = decode_sdjwt(&sd_jwt1).unwrap();
+        let sd_jwt2 = decode_sdjwt(&sd_jwt2).unwrap();
+
+        let deserialized_proof = EqualityProof::from_bytes(&serialized_proof);
+        let g1 = sd_jwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h1 = sd_jwt1
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g2 = sd_jwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("g")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let h2 = sd_jwt2
+            .claims
+            .get("_sd_alg_param")
+            .unwrap()
+            .get("commitment_scheme")
+            .unwrap()
+            .get("public_params")
+            .unwrap()
+            .get("h")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+        let g1 = BASE64_URL_SAFE_NO_PAD.decode(g1).unwrap();
+        let h1 = BASE64_URL_SAFE_NO_PAD.decode(h1).unwrap();
+        let g2 = BASE64_URL_SAFE_NO_PAD.decode(g2).unwrap();
+        let h2 = BASE64_URL_SAFE_NO_PAD.decode(h2).unwrap();
+        let mut challenge_bytes = vec![];
+        challenge_bytes.extend_from_slice("dob".as_bytes());
+        challenge_bytes.extend_from_slice(&g1);
+        challenge_bytes.extend_from_slice(&h1);
+        challenge_bytes.extend_from_slice(&g2);
+        challenge_bytes.extend_from_slice(&h2);
+        challenge_bytes.extend_from_slice(&vec![0xde, 0xad]);
+        assert!(deserialized_proof.verify(challenge_bytes.clone(), "dob", &sd_jwt1, &sd_jwt2));
+        assert!(!deserialized_proof.verify(challenge_bytes, "dob", &sd_jwt1, &sd_jwt3))
+    }
+
+    #[cfg(feature = "experimental")]
+    struct TestSigner(p256::SecretKey);
+    #[cfg(feature = "experimental")]
+    impl TestSigner {
+        pub fn new(jwk_key: &str) -> Self {
+            let key = p256::SecretKey::from_jwk_str(jwk_key).unwrap();
+            Self(key)
+        }
+    }
+    #[cfg(feature = "experimental")]
+    impl SignatureCreator for TestSigner {
+        fn alg(&self) -> String {
+            "ES256".to_string()
+        }
+
+        fn sign(&self, bytes: Vec<u8>) -> Result<Vec<u8>, SigningError> {
+            let key: SigningKey = (&self.0).into();
+            let signature: Signature = key.sign(&bytes);
+            Ok(signature.to_vec())
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "experimental")]
+    fn tests_for_rfc_draft() {
+        let identity_holder_key = TestSigner::new(
+            r#"{"kty":"EC","crv":"P-256","x":"Oq1azTI-nfXRjxeoxqwktbSayE7Sd-2S0kp2MdCXdJM","y":"Xz4eqZG6bq017tCtqsx97KiJzgLzbSQvOzQJBFasXKE","d":"dbUsHxvpAb_D26ok8T2D5EugxWfUu0faPU9ueYhc56k"}"#,
+        );
+
+        let identity_jwt = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwidXBkYXRlZF9hdCI6MTU3MDAwMDAwMCwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6Ik9xMWF6VEktbmZYUmp4ZW94cXdrdGJTYXlFN1NkLTJTMGtwMk1kQ1hkSk0iLCJ5IjoiWHo0ZXFaRzZicTAxN3RDdHFzeDk3S2lKemdMemJTUXZPelFKQkZhc1hLRSJ9fSwiX3NkIjpbImpsLXh6a0ZlQUhjeHloTkFwR1dHQkxlZHhmamhabWtpcTRmank1VEpQRkUiLCJHRFV1OWtmUWxISVV5bXhOaEdQZEhLeXBQWUUwY3ZURmFuekcxZHduUkJJIiwiWkVRT0NZMEhYNC0yZzhvU2tSN1lfV204NnFVVU9sZDNBOFFTT1k4U0FUbyIsImVOd0F4WnQ3UHhVMVQxbmhPYlhTbkRMU2s3MXk3Y2pfakNHcDlYSDZTUTQiLCI0Z0tkSGZCclFXUWdZRzdDT1hWMUl6SThBeDlrOE5XQ0xnUzBYSFFFRWt3IiwiZG9VZFRRM1pJZ25YODlacUlzLWk4MWNiRnZtOGJrSERjUU9heTZ6dFJnYyIsImtPNTZjY3V1aHFlclpYdGpNeE1QNWNwZDFac2V1RVZKOUY0N25lOHBUSGMiLCJkc1hNTVVsRFZwMTBjdkdLeXAtbDc1R1VJRkVjUGhwZ0hXN1VmVElNem04Il0sIl9zZF9hbGdfcGFyYW0iOnsiY29tbWl0bWVudF9zY2hlbWUiOnsicHVibGljX3BhcmFtcyI6eyJnIjoiNUFsOUJCRTdOU2pacXhRSktrQjF4bnZCM2t4R1FHdm1fbHBpNW1uQUlWVSIsImgiOiJqa3hldk50SlY0X2FRS1pxSUZSYUl1allpSk92VFZSOW5hb1NPdWVmalFJIn0sImNydiI6ImVkMjU1MTkifX0sIl9zZF9hbGciOiJlY19wZWRlcnNlbiIsImNvbV9saW5rIjp7ImdpdmVuX25hbWUiOjAsImZhbWlseV9uYW1lIjoxLCJlbWFpbCI6MiwicGhvbmVfbnVtYmVyIjozLCJwaG9uZV9udW1iZXJfdmVyaWZpZWQiOjQsImFkZHJlc3MiOjUsImJpcnRoZGF0ZSI6NiwibmF0aW9uYWxpdGllcyI6N319.GkA6zkXjYPhjtppnBGEKAvrHLUVUbR4JnkPI4qe4h1oKCxh6RfgRZAFLjYU3BmMM2do3Ooz_SXQi18wIr7Ulcw~WyJPV2lTX05sTEFCRVVLRFhZX2ZDWm1HRU5DSkliOVQ0b3M4eDVxTUpRc2drIiwiZ2l2ZW5fbmFtZSIsIkpvaG4iXQ~WyJyVXo3emJFZGVYR1Q3VGZqRzRnRk9DWU1uOVAyZ3p2eHBGSUVuQjRhaXdZIiwiZmFtaWx5X25hbWUiLCJEb2UiXQ~WyJzUjlNX0JCYzFyVzB0Mi1ZUDdJcE5BQXRiXzlEMHN3aHlMUC1LZlcwQXdvIiwiZW1haWwiLCJqb2huZG9lQGV4YW1wbGUuY29tIl0~WyJYdVB0UjEzSVhXSERLNURKMkV3cVQ5ZGNqWmRBTV9JYm9zWmxZekJTS3dBIiwicGhvbmVfbnVtYmVyIiwiKzEtMjAyLTU1NS0wMTAxIl0~WyIxTFk0ZTJWS21kUHF0M25oYk1kemhzY3RoRDZrWXQ1djhvZjRQeXlnMmdRIiwicGhvbmVfbnVtYmVyX3ZlcmlmaWVkIix0cnVlXQ~WyJHQ0pOSExTdzRrU2JoaUR3ZEVPQjVlS01uU3kxeFRVb0lTT3NtZzdHdWdFIiwiYWRkcmVzcyIseyJzdHJlZXRfYWRkcmVzcyI6IjEyMyBNYWluIFN0IiwibG9jYWxpdHkiOiJBbnl0b3duIiwicmVnaW9uIjoiQW55c3RhdGUiLCJjb3VudHJ5IjoiVVMifV0~WyJxNVpCM29Fa0lib2NBT0tneTlDOWJUaW4wN0ZULVlBanNJdHh1TmRGZ1E4IiwiYmlydGhkYXRlIiwxOTQwMDEwMV0~WyJXZDZVS29GeVZFSngxRmZGZGNjWnJCdDYwLXYtbVBORlRFV3VrM3U3U0EwIiwibmF0aW9uYWxpdGllcyIsWyJVUyIsIkRFIl1d~";
+        let diploma_jwt = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwiX3NkIjpbImhwLUtzX3o4RjB4UV80TUFybEpMbjIzZ1VVdktZaXZwT3c1Y3dWb3pIQ1kiLCJKQ0pUdXozTHNleUd5WHBsYUhMRVprZVVNMEwzNV93T3NLR2xFaWJxb2x3IiwiTmkyVENVTVVwMTQ1cWFsYW0tVmVPQWdOYmdtdDQtTF9fc3ZBRU45SGN4QSIsIm5KLVBIUldmbmU5Sk9PeDBZNnNiQjNkUnlfR0pmVnprV3FXcWd6ZlVfQ0EiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiWmd2SVJPNHZpUlJVMGhCWFh2WEM2c2lfaWhsQmhoTVAxTW9VZFJIb3VIayIsImciOiIzUGVPSmwxZ1RHQTd4SC1jV0ZwaENURERtdDcwUDZORld0Y295aVVoQWxBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZ2l2ZW5fbmFtZSI6MCwiZmFtaWx5X25hbWUiOjEsInN1YmplY3QiOjIsImZpbmFsX2dyYWRlIjozfX0.gDs0zxTqgJKMuBujv1UvSC8R_tshugj3-HpwVO62H2wrvnos1kDwMtUknCSnNPLEQdVloMpl3sSZ0hZVbcJBZQ~WyJYTWpmTXdjUWw0czZMNkdZYVFFM1lHMlZMZTg0VXFVdGlQTUEtanNpUlEwIiwiZ2l2ZW5fbmFtZSIsIkpvaG4iXQ~WyJEMl9Oc1NtNzYxQzc0RDhyQWNHaExhb1dVb3JaUFpkbTBRVmJNbEp2QndzIiwiZmFtaWx5X25hbWUiLCJEb2UiXQ~WyJ2MXl1akU5bDloYmxsRllnY3hPaUlWS19jcUZfUGYyR0dHTUhpVkxaZGc0Iiwic3ViamVjdCIsIkNvbXB1dGVyIFNjaWVuY2UiXQ~WyIwWW9tWldPRmU1V0o0OGF1Z2FZMjR3MlR1UGhha2Z5NGt5V2x6aENSNXdBIiwiZmluYWxfZ3JhZGUiLDQuOF0~";
+
+        let identity = decode_sdjwt(&identity_jwt).unwrap();
+        let diploma = decode_sdjwt(&diploma_jwt).unwrap();
+
+        let given_name_equality =
+            EqualityProof::from_sdjwts("given_name", &identity, &diploma, vec![1, 2, 3]).unwrap();
+
+        println!(
+            "proof correct: {}",
+            given_name_equality.0.verify(
+                given_name_equality.1.clone(),
+                "given_name",
+                &identity,
+                &diploma
+            )
+        );
+        let family_name_equality =
+            EqualityProof::from_sdjwts("family_name", &identity, &diploma, vec![1, 2, 3]).unwrap();
+
+        fn get_commitment(attr_name: &str, sdjwt: &SdJwtRust) -> String {
+            let sd_index = pointer!("com_link", attr_name)
+                .select(sdjwt.claims.clone())
+                .unwrap()
+                .first()
+                .unwrap()
+                .as_i64()
+                .unwrap()
+                .to_owned() as usize;
+            pointer!("_sd", sd_index)
+                .select(sdjwt.claims.clone())
+                .unwrap()
+                .first()
+                .unwrap()
+                .clone()
+                .as_str()
+                .unwrap()
+                .to_string()
+        }
+
+        let identity_presentation = SdJwtBuilder::from_sdjwt(&identity);
+
+        identity_presentation
+            .add_zkp(ZkProof {
+                inputs: vec![
+                    Input::Private {
+                        path: pointer!("com_link", "given_name"),
+                        value: get_commitment("given_name", &identity),
+                    },
+                    Input::Private {
+                        path: pointer!("com_link", "given_name"),
+                        value: get_commitment("given_name", &diploma),
+                    },
+                ],
+                system: vec![1, -1],
+                context: BASE64_URL_SAFE_NO_PAD.encode(&given_name_equality.1),
+                proof: BASE64_URL_SAFE_NO_PAD.encode(given_name_equality.0.as_bytes()),
+                proof_type: crate::sdjwt_util::zkp::ProofType::Equality,
+            })
+            .unwrap();
+        identity_presentation
+            .add_zkp(ZkProof {
+                inputs: vec![
+                    Input::Private {
+                        path: pointer!("com_link", "family_name"),
+                        value: get_commitment("family_name", &identity),
+                    },
+                    Input::Private {
+                        path: pointer!("com_link", "family_name"),
+                        value: get_commitment("family_name", &diploma),
+                    },
+                ],
+                system: vec![1, -1],
+                context: BASE64_URL_SAFE_NO_PAD.encode(&family_name_equality.1),
+                proof: BASE64_URL_SAFE_NO_PAD.encode(family_name_equality.0.as_bytes()),
+                proof_type: crate::sdjwt_util::zkp::ProofType::Equality,
+            })
+            .unwrap();
+
+        let presentation = identity_presentation
+            .build(Some(Arc::new(identity_holder_key)))
+            .unwrap();
+        let diploma_builder = SdJwtBuilder::from_sdjwt(&diploma);
+        diploma_builder.add_disclosure(pointer!("subject")).unwrap();
+        diploma_builder
+            .add_disclosure(pointer!("final_grade"))
+            .unwrap();
+        let diploma_presentation = diploma_builder.build(None).unwrap();
+
+        println!("{}", presentation);
+        println!("{}", diploma_presentation);
+    }
+
+    #[test]
+    #[cfg(feature = "experimental")]
+    fn verify_tests_for_rfc_draft() {
+        let identity_presentation = r#"eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwidXBkYXRlZF9hdCI6MTU3MDAwMDAwMCwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6Ik9xMWF6VEktbmZYUmp4ZW94cXdrdGJTYXlFN1NkLTJTMGtwMk1kQ1hkSk0iLCJ5IjoiWHo0ZXFaRzZicTAxN3RDdHFzeDk3S2lKemdMemJTUXZPelFKQkZhc1hLRSJ9fSwiX3NkIjpbImpsLXh6a0ZlQUhjeHloTkFwR1dHQkxlZHhmamhabWtpcTRmank1VEpQRkUiLCJHRFV1OWtmUWxISVV5bXhOaEdQZEhLeXBQWUUwY3ZURmFuekcxZHduUkJJIiwiWkVRT0NZMEhYNC0yZzhvU2tSN1lfV204NnFVVU9sZDNBOFFTT1k4U0FUbyIsImVOd0F4WnQ3UHhVMVQxbmhPYlhTbkRMU2s3MXk3Y2pfakNHcDlYSDZTUTQiLCI0Z0tkSGZCclFXUWdZRzdDT1hWMUl6SThBeDlrOE5XQ0xnUzBYSFFFRWt3IiwiZG9VZFRRM1pJZ25YODlacUlzLWk4MWNiRnZtOGJrSERjUU9heTZ6dFJnYyIsImtPNTZjY3V1aHFlclpYdGpNeE1QNWNwZDFac2V1RVZKOUY0N25lOHBUSGMiLCJkc1hNTVVsRFZwMTBjdkdLeXAtbDc1R1VJRkVjUGhwZ0hXN1VmVElNem04Il0sIl9zZF9hbGdfcGFyYW0iOnsiY29tbWl0bWVudF9zY2hlbWUiOnsicHVibGljX3BhcmFtcyI6eyJnIjoiNUFsOUJCRTdOU2pacXhRSktrQjF4bnZCM2t4R1FHdm1fbHBpNW1uQUlWVSIsImgiOiJqa3hldk50SlY0X2FRS1pxSUZSYUl1allpSk92VFZSOW5hb1NPdWVmalFJIn0sImNydiI6ImVkMjU1MTkifX0sIl9zZF9hbGciOiJlY19wZWRlcnNlbiIsImNvbV9saW5rIjp7ImdpdmVuX25hbWUiOjAsImZhbWlseV9uYW1lIjoxLCJlbWFpbCI6MiwicGhvbmVfbnVtYmVyIjozLCJwaG9uZV9udW1iZXJfdmVyaWZpZWQiOjQsImFkZHJlc3MiOjUsImJpcnRoZGF0ZSI6NiwibmF0aW9uYWxpdGllcyI6N319.GkA6zkXjYPhjtppnBGEKAvrHLUVUbR4JnkPI4qe4h1oKCxh6RfgRZAFLjYU3BmMM2do3Ooz_SXQi18wIr7Ulcw~~eyJ0eXAiOiJrYitqd3QiLCJhbGciOiJFUzI1NiJ9.eyJub25jZSI6IjFWMTNRRXJQYjhqRlNpSU5kR2RnWUV1OWU2bHhVU09nIiwiaWF0IjoxNzY4NDc2NjU3LCJzZF9oYXNoIjoiQXBZd2FGNlM4VHk1VWFLa2h1cXFvYzdMTnlQUllJaTl3RlVNZ2hGRDlnOCIsInprX3Byb29mcyI6W3siaW5wdXRzIjpbeyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJnaXZlbl9uYW1lIl0sInZhbHVlIjoiamwteHprRmVBSGN4eWhOQXBHV0dCTGVkeGZqaFpta2lxNGZqeTVUSlBGRSJ9fSx7IlByaXZhdGUiOnsicGF0aCI6WyJjb21fbGluayIsImdpdmVuX25hbWUiXSwidmFsdWUiOiJocC1Lc196OEYweFFfNE1BcmxKTG4yM2dVVXZLWWl2cE93NWN3Vm96SENZIn19XSwic3lzdGVtIjpbMSwtMV0sImNvbnRleHQiOiJaMmwyWlc1ZmJtRnRaZVFKZlFRUk96VW8yYXNVQ1NwQWRjWjd3ZDVNUmtCcjV2NWFZdVpwd0NGVmpreGV2TnRKVjRfYVFLWnFJRlJhSXVqWWlKT3ZUVlI5bmFvU091ZWZqUUxjOTQ0bVhXQk1ZRHZFZjV4WVdtRUpNTU9hM3ZRX28wVmExeWpLSlNFQ1VHWUx5RVR1TDRrVVZOSVFWMTcxd3VySXY0b1pRWVlURDlUS0ZIVVI2TGg1QVFJRCIsInByb29mIjoid0RMQlYyX2NaeTBqSVFrSlhfVVdFeE5oSlJwN2JWd2s1VXdhNS1KWGFBM1E3U3lHRk4yMk9iTzJfa01MbjNHMk04V2dCeEk3QkhkdzlsN0pld2xRQjhBeXdWZHYzR2N0SXlFSkNWXzFGaE1UWVNVYWUyMWNKT1ZNR3VmaVYyZ05VM2xadWdrenBTMmd1N0VXV2c2VjdxZk5QT3JHc21iWjZudmdPdFc5bmd6eVpZTmFTS3RmeDJWazJELUg2YllDQjIyY1I5YXNqSjhaZ0RCdy1TWWhKUTZOSmFGNjRhamgwRDdmZHZtN1Jfb1BfcGZJeDFqRTYxQWtnYlBBdzlkVCIsInByb29mX3R5cGUiOiJlcXVhbGl0eV9wcm9vZiJ9LHsiaW5wdXRzIjpbeyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJmYW1pbHlfbmFtZSJdLCJ2YWx1ZSI6IkdEVXU5a2ZRbEhJVXlteE5oR1BkSEt5cFBZRTBjdlRGYW56RzFkd25SQkkifX0seyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJmYW1pbHlfbmFtZSJdLCJ2YWx1ZSI6IkpDSlR1ejNMc2V5R3lYcGxhSExFWmtlVU0wTDM1X3dPc0tHbEVpYnFvbHcifX1dLCJzeXN0ZW0iOlsxLC0xXSwiY29udGV4dCI6IlptRnRhV3g1WDI1aGJXWGtDWDBFRVRzMUtObXJGQWtxUUhYR2U4SGVURVpBYS1iLVdtTG1hY0FoVlk1TVhyemJTVmVQMmtDbWFpQlVXaUxvMklpVHIwMVVmWjJxRWpybm40MEMzUGVPSmwxZ1RHQTd4SC1jV0ZwaENURERtdDcwUDZORld0Y295aVVoQWxCbUM4aEU3aS1KRkZUU0VGZGU5Y0xxeUwtS0dVR0dFd19VeWhSMUVlaTRlUUVDQXciLCJwcm9vZiI6IlpDWGZ3VGhRTTBtTnk1Zk0tX05uV09yZGIxdkFPcWJ5eG44NDNrcjIxd0ZleE8tNEtzYUtEYUVQNDJOSGZSSnNrTU9mU1h1aFp5ZTk0R0FBX1FVSkFHUWwzOEU0VUROSmpjdVh6UHZ6WjFqcTNXOWJ3RHFtOHNaX09ONUs5dGNCaFVXSlhVdjFDcUt6UC1BNEMyVEI1S1FFaVJWZHQxRFlJa1NZQWRhdWdnS015VVhwbE5sSWRxcVRjN203OE0yd1dVaWdBbWZ1eTVlYnVVUTFQNkRRUkdKMTZoVll4emdXRXA2SnhzTHpTSHRiZl8yZzlpLTJ6MFlmaXV2SWhkZ0kiLCJwcm9vZl90eXBlIjoiZXF1YWxpdHlfcHJvb2YifV19.uIYkpRJttXimLtWssxpnZYTMPpg73QUUpDJNw72CJoeRyikJYJaa6Dw5pQ0xNE5yPUIbnGZ80DFWG36yg7TCEg"#;
+        let diploma_presentation = r#"eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwiX3NkIjpbImhwLUtzX3o4RjB4UV80TUFybEpMbjIzZ1VVdktZaXZwT3c1Y3dWb3pIQ1kiLCJKQ0pUdXozTHNleUd5WHBsYUhMRVprZVVNMEwzNV93T3NLR2xFaWJxb2x3IiwiTmkyVENVTVVwMTQ1cWFsYW0tVmVPQWdOYmdtdDQtTF9fc3ZBRU45SGN4QSIsIm5KLVBIUldmbmU5Sk9PeDBZNnNiQjNkUnlfR0pmVnprV3FXcWd6ZlVfQ0EiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiWmd2SVJPNHZpUlJVMGhCWFh2WEM2c2lfaWhsQmhoTVAxTW9VZFJIb3VIayIsImciOiIzUGVPSmwxZ1RHQTd4SC1jV0ZwaENURERtdDcwUDZORld0Y295aVVoQWxBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZ2l2ZW5fbmFtZSI6MCwiZmFtaWx5X25hbWUiOjEsInN1YmplY3QiOjIsImZpbmFsX2dyYWRlIjozfX0.gDs0zxTqgJKMuBujv1UvSC8R_tshugj3-HpwVO62H2wrvnos1kDwMtUknCSnNPLEQdVloMpl3sSZ0hZVbcJBZQ~WyIwWW9tWldPRmU1V0o0OGF1Z2FZMjR3MlR1UGhha2Z5NGt5V2x6aENSNXdBIiwiZmluYWxfZ3JhZGUiLDQuOF0~WyJ2MXl1akU5bDloYmxsRllnY3hPaUlWS19jcUZfUGYyR0dHTUhpVkxaZGc0Iiwic3ViamVjdCIsIkNvbXB1dGVyIFNjaWVuY2UiXQ~"#;
+        let identity = decode_sdjwt(identity_presentation).unwrap();
+        let diploma = decode_sdjwt(diploma_presentation).unwrap();
+        let keybinding = identity.keybinding_jwt.as_ref().unwrap();
+        let &[_, body, _] = keybinding.split('.').collect::<Vec<&str>>().as_slice() else {
+            panic!("");
+        };
+        let body: heidi_util_rust::value::Value =
+            serde_json::from_slice(&BASE64_URL_SAFE_NO_PAD.decode(body).unwrap()).unwrap();
+        let proofs = body
+            .get("zk_proofs")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .map(|a| a.transform::<ZkProof>().unwrap())
+            .collect::<Vec<ZkProof>>();
+        for p in proofs {
+            println!("verifying proof for inputs: {:?}", p.inputs);
+            let equality_proof =
+                EqualityProof::from_bytes(&BASE64_URL_SAFE_NO_PAD.decode(&p.proof).unwrap());
+            let input = p.inputs[0].clone();
+            let name = match input {
+                Input::Private { path, value } => {
+                    let PointerPart::String(s) = path.last().unwrap() else {
+                        unreachable!()
+                    };
+                    s.to_string()
+                }
+                _ => unreachable!(),
+            };
+            let result = equality_proof.verify(
+                BASE64_URL_SAFE_NO_PAD.decode(&p.context).unwrap(),
+                &name,
+                &identity,
+                &diploma,
+            );
+            println!("Equality of {name} is statisfied? {result}");
+            assert!(result);
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&identity.claims).unwrap()
+        );
+        println!("{}", serde_json::to_string_pretty(&diploma.claims).unwrap());
     }
 }

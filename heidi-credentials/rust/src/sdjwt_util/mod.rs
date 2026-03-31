@@ -19,9 +19,12 @@ under the License.
  */
 
 mod builder;
+pub mod hash_algs;
 mod models;
 mod parse;
 mod util;
+#[cfg(feature = "experimental")]
+pub mod zkp;
 
 pub use builder::*;
 pub use models::*;
