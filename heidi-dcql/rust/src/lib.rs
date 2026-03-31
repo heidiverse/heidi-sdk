@@ -38,11 +38,11 @@ use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-/// Supported SD-JWT formats. We have, for backwards compatibility the vc+sd-jwt type included used in some earlier drafts
+/// Supported SD-JWT formats. We have, for backwards compatibility included the vc+sd-jwt type used in some earlier drafts
 const SDJWT_FORMATS: [&str; 2] = ["dc+sd-jwt", "vc+sd-jwt"];
 /// The mdoc format type
 const MDOC_FORMATS: [&str; 1] = ["mso_mdoc"];
-/// W3C VCDM format type. Note: it overlaps with SD-JWT format type, so we need further heuristics (like @context or so)
+/// W3C VCDM format type. Note: It overlaps with SD-JWT format type, so we need further heuristics (like @context or so)
 const W3C_FORMATS: [&str; 1] = ["vc+sd-jwt"];
 /// OpenBadges are just plain JSON-LD with linked data proofs
 const OPEN_BADGE_FORMATS: [&str; 1] = ["ldp_vc"];
@@ -52,7 +52,7 @@ const OPEN_BADGE_FORMATS: [&str; 1] = ["ldp_vc"];
 const BBS_FORMATS: [&str; 1] = ["bbs-termwise"];
 
 #[derive(uniffi::Object)]
-///Allow ClaimsPath pointer manipulation/selection via this helper class
+/// Allow ClaimsPath pointer manipulation/selection via this helper class
 pub struct KmpPointer {
     pointer: Vec<PointerPart>,
 }
@@ -75,7 +75,7 @@ pub trait InformationScore {
 }
 /// Dangerous properties are have a high information score, and are thus _deprioritized_ during selection
 const DANGEROUS_PROPERTIES: [&str; 4] = ["birth", "date", "address", "street"];
-/// Hiding properties try to mimick zero knowledge proof bevahiour and are thus _prioritized_
+/// Hiding properties try to mimick zero knowledge proof behavior and are thus _prioritized_
 const HIDING_PROPERTIES: [&str; 1] = ["age_over"];
 
 impl InformationScore for &str {
@@ -166,10 +166,10 @@ impl<'a, T: AsRef<[&'a str]>> CredentialStore for T {
 pub enum DcqlQueryMismatch {
     /// The referenced credential query is not found. Only used when credential sets are used
     CredentialQueryNotFound { id: String },
-    /// If a credential does not statisfy the credential query, we return
+    /// If a credential does not satisfy the credential query, we return
     /// a struct explaining why it did not match
     UnsatisfiedCredentialQuery {
-        /// Credential Query that had no match
+        /// Credential query that had no match
         query_id: String,
         /// The credential that failed to match this query
         credential: Credential,
