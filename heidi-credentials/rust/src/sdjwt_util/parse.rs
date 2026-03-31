@@ -323,6 +323,7 @@ fn reconstruct(
         return Err(SdJwtDecodeError::DuplicateHash);
     }
     if !disclosure_map.is_empty() {
+        println!("{:?}", disclosure_map);
         return Err(SdJwtDecodeError::NotAllDisclosuresReferenced);
     }
     Ok((claims, disclosure_tree))
@@ -423,20 +424,20 @@ pub fn decode_sdjwt(payload: &str) -> Result<ParsedSdJwt, SdJwtDecodeError> {
 
     let mut disclosure_map = disclosures
         .into_iter()
-        .map(|(enc, val)| {
+        .map(|(_, val)| {
             let hash = digest.0.lock().unwrap().disclosure_hash(&val);
             (hash, val)
         })
         .collect::<HashMap<_, _>>();
 
     let num_disclosures = disclosure_map.len();
-    // let num_total_disclosures = get_total_num_disclosures(&claims);
+    let original_disclosures = disclosure_map.clone();
 
     let (reconstructed, disclosure_tree) = reconstruct(claims, &mut disclosure_map)?;
 
     Ok(ParsedSdJwt {
         claims: reconstructed,
-        disclosure_map,
+        disclosure_map: original_disclosures,
         disclosure_tree,
         original_jwt: jwt.to_string(),
         original_sdjwt: payload.to_string(),

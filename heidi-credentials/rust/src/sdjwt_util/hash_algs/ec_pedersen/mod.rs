@@ -1,12 +1,12 @@
 use base64::Engine;
-use curve25519_dalek::{ristretto::CompressedRistretto, RistrettoPoint, Scalar};
+use curve25519_dalek::{RistrettoPoint, Scalar, ristretto::CompressedRistretto};
+use heidi_util_rust::log_debug;
 use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
 use sha2::Sha512;
 pub mod canonicalize;
 
 use crate::sdjwt_util::hash_algs::{
-    ec_pedersen::canonicalize::{canonicalize_object, stringify_value},
-    SdJwtHashAlgorithm,
+    SdJwtHashAlgorithm, ec_pedersen::canonicalize::stringify_value,
 };
 
 pub struct EcPedersenX25519 {
@@ -61,15 +61,22 @@ impl SdJwtHashAlgorithm for EcPedersenX25519 {
     }
 
     fn update_params(&mut self, params: &serde_json::Value) {
-        println!("{:?}", params);
+        log_debug!("EC_PEDERSEN", &format!("{:?}", params));
         let Some(commitment_scheme) = params.get("commitment_scheme") else {
             return;
         };
         let Some(public_params) = commitment_scheme.get("public_params") else {
             return;
         };
-        println!("set g to: {:?}", public_params.get("g"));
-        println!("set h to: {:?}", public_params.get("h"));
+        log_debug!(
+            "EC_PEDERSEN",
+            &format!("set g to: {:?}", public_params.get("g"))
+        );
+        log_debug!(
+            "EC_PEDERSEN",
+            &format!("set h to: {:?}", public_params.get("h"))
+        );
+
         let Some(g) = public_params
             .get("g")
             .and_then(|a| a.as_str())
