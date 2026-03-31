@@ -66,137 +66,6 @@ class SdJwtTests {
         }
     }
     @Test
-    fun testCommitments() {
-        val identityJson = "{\n" +
-                "  \"sub\": \"user_42\",\n" +
-                "  \"given_name\": \"John\",\n" +
-                "  \"family_name\": \"Doe\",\n" +
-                "  \"email\": \"johndoe@example.com\",\n" +
-                "  \"phone_number\": \"+1-202-555-0101\",\n" +
-                "  \"phone_number_verified\": true,\n" +
-                "  \"address\": {\n" +
-                "    \"street_address\": \"123 Main St\",\n" +
-                "    \"locality\": \"Anytown\",\n" +
-                "    \"region\": \"Anystate\",\n" +
-                "    \"country\": \"US\"\n" +
-                "  },\n" +
-                "  \"birthdate\": 19400101,\n" +
-                "  \"updated_at\": 1570000000,\n" +
-                "  \"nationalities\": [\n" +
-                "    \"US\",\n" +
-                "    \"DE\"\n" +
-                "  ]\n" +
-                "}\n"
-        println(identityJson)
-        val claims : Value = Json.decodeFromString(identityJson)
-        val o = claims.asObject()!!
-        val disclosures = mutableListOf<ClaimsPointer>()
-        val alwaysVisible = listOf("sub", "iss", "exp", "cnf", "updated_at")
-        for(k in o) {
-            if(k.key in alwaysVisible) {
-                continue
-            }
-            disclosures.add(listOf(k.key).toClaimsPointer()!!)
-        }
-        val kb = SoftwareKeyPair()
-        val jwk = kb.privateJwkString()
-        val kbValue : Value = Json.decodeFromString(kb.jwkString())
-        val identityKeypair = SoftwareKeyPair()
-        val identity_sdjwt = SdJwt.create(claims, disclosures, "123", TestSigner(identityKeypair), kbValue, "ec_pedersen")!!
-
-
-        val diplomaJson =  "{\n" +
-                "  \"sub\": \"user_42\",\n" +
-                "  \"given_name\": \"John\",\n" +
-                "  \"family_name\": \"Doe\",\n" +
-                "  \"subject\" : \"Computer Science\"," +
-                "  \"final_grade\" : 4.8   " +
-                "}\n"
-        println(diplomaJson)
-        val diplomaClaims : Value = Json.decodeFromString(diplomaJson)
-        val diplomaObject = diplomaClaims.asObject()!!
-        val diplomaDisclosures = mutableListOf<ClaimsPointer>()
-
-        for(k in diplomaObject) {
-            if(k.key in alwaysVisible) {
-                continue
-            }
-            diplomaDisclosures.add(listOf(k.key).toClaimsPointer()!!)
-        }
-        val diplomaPrivateKey = kb.privateJwkString()
-        val diplomaIssuerKeyPair = SoftwareKeyPair()
-        val diplomaSdJwt = SdJwt.create(diplomaClaims, diplomaDisclosures, "123", TestSigner(diplomaIssuerKeyPair) , pubKeyJwk =  null, "ec_pedersen")!!
-
-
-        println("Identity: $jwk")
-        println("Sdjwt: ${identity_sdjwt.innerJwt.originalSdjwt}")
-        println("Issuer Key: ${identityKeypair.jwkString()}")
-        println()
-        println("Diploma: $diplomaPrivateKey")
-        println("Sdjwt: ${diplomaSdJwt.innerJwt.originalSdjwt}")
-        println("Issuer Key: ${diplomaIssuerKeyPair.jwkString()}")
-
-    }
-    @Test
-    // Issuance following https://www.ietf.org/archive/id/draft-ietf-oauth-selective-disclosure-jwt-14.html#name-example-sd-jwt
-    fun testIssuance() {
-        val jsonString = "{\n" +
-                "  \"sub\": \"user_42\",\n" +
-                "  \"given_name\": \"John\",\n" +
-                "  \"family_name\": \"Doe\",\n" +
-                "  \"email\": \"johndoe@example.com\",\n" +
-                "  \"phone_number\": \"+1-202-555-0101\",\n" +
-                "  \"phone_number_verified\": true,\n" +
-                "  \"address\": {\n" +
-                "    \"street_address\": \"123 Main St\",\n" +
-                "    \"locality\": \"Anytown\",\n" +
-                "    \"region\": \"Anystate\",\n" +
-                "    \"country\": \"US\"\n" +
-                "  },\n" +
-                "  \"birthdate\": \"1940-01-01\",\n" +
-                "  \"updated_at\": 1570000000,\n" +
-                "  \"nationalities\": [\n" +
-                "    \"US\",\n" +
-                "    \"DE\"\n" +
-                "  ]\n" +
-                "}\n"
-        val claims : Value = Json.decodeFromString(jsonString)
-        val o = claims.asObject()!!
-        val disclosures = mutableListOf<ClaimsPointer>()
-        val alwaysVisible = listOf("sub", "iss", "exp", "cnf", "updated_at")
-        for(k in o) {
-            if(k.key == "nationalities") {
-                disclosures.add(listOf("nationalities", null).toClaimsPointer()!!)
-            }
-            if(k.key in alwaysVisible) {
-                continue
-            }
-            disclosures.add(listOf(k.key).toClaimsPointer()!!)
-        }
-        val kb = SoftwareKeyPair()
-        val kbValue : Value = Json.decodeFromString(kb.jwkString())
-        val sdjwt = SdJwt.create(claims, disclosures, "123", TestSigner(SoftwareKeyPair()), kbValue, "ec_pedersen")!!
-        val sd = sdjwt.get("_sd".asSelector())[0]
-        val nationalities = sdjwt.get("nationalities".asSelector())[0]
-        assertIs<Value.Array>(sd)
-        assertIs<Value.Array>(nationalities)
-        assertEquals(8, sd.v1.size)
-        assertEquals("US", nationalities.v1[0].asString())
-        assertEquals("DE", nationalities.v1[1].asString())
-        val claimsString = base64UrlDecode(sdjwt.innerJwt.originalJwt.split(".")[1]).commonToUtf8String()
-        val jwt : Value = Json.decodeFromString(claimsString)
-
-        for(e in jwt["nationalities"].asArray()!!) {
-            assertTrue(e.isObject())
-            assertTrue(e.asObject()!!.containsKey("..."))
-        }
-        val newParsed : Value = Json.decodeFromString(jsonString)
-        for(o in newParsed.asObject()!!) {
-            val e = sdjwt.get(o.key.asSelector())[0]
-            assertEquals(e, o.value)
-        }
-    }
-    @Test
     // https://www.ietf.org/archive/id/draft-ietf-oauth-selective-disclosure-jwt-14.html#name-considerations-on-nested-da
     fun testNestedObjects() {
         val kb = SoftwareKeyPair()
@@ -316,4 +185,141 @@ class SdJwtTests {
         assertEquals(claims["place_of_birth"]["locality"], disclosedClaims["place_of_birth"]["locality"])
     }
 
+    /**
+     * MARK EXPERIMENTAL
+     * This section contains experimental commitment based sd-jwts. In order to run the tests, the rust library needs to be build with the `experimental`
+     * feature turned on.
+     */
+
+//    @Test
+//    fun testCommitments() {
+//        val identityJson = "{\n" +
+//                "  \"sub\": \"user_42\",\n" +
+//                "  \"given_name\": \"John\",\n" +
+//                "  \"family_name\": \"Doe\",\n" +
+//                "  \"email\": \"johndoe@example.com\",\n" +
+//                "  \"phone_number\": \"+1-202-555-0101\",\n" +
+//                "  \"phone_number_verified\": true,\n" +
+//                "  \"address\": {\n" +
+//                "    \"street_address\": \"123 Main St\",\n" +
+//                "    \"locality\": \"Anytown\",\n" +
+//                "    \"region\": \"Anystate\",\n" +
+//                "    \"country\": \"US\"\n" +
+//                "  },\n" +
+//                "  \"birthdate\": 19400101,\n" +
+//                "  \"updated_at\": 1570000000,\n" +
+//                "  \"nationalities\": [\n" +
+//                "    \"US\",\n" +
+//                "    \"DE\"\n" +
+//                "  ]\n" +
+//                "}\n"
+//        println(identityJson)
+//        val claims : Value = Json.decodeFromString(identityJson)
+//        val o = claims.asObject()!!
+//        val disclosures = mutableListOf<ClaimsPointer>()
+//        val alwaysVisible = listOf("sub", "iss", "exp", "cnf", "updated_at")
+//        for(k in o) {
+//            if(k.key in alwaysVisible) {
+//                continue
+//            }
+//            disclosures.add(listOf(k.key).toClaimsPointer()!!)
+//        }
+//        val kb = SoftwareKeyPair()
+//        val jwk = kb.privateJwkString()
+//        val kbValue : Value = Json.decodeFromString(kb.jwkString())
+//        val identityKeypair = SoftwareKeyPair()
+//        val identity_sdjwt = SdJwt.create(claims, disclosures, "123", TestSigner(identityKeypair), kbValue, "ec_pedersen")!!
+//
+//
+//        val diplomaJson =  "{\n" +
+//                "  \"sub\": \"user_42\",\n" +
+//                "  \"given_name\": \"John\",\n" +
+//                "  \"family_name\": \"Doe\",\n" +
+//                "  \"subject\" : \"Computer Science\"," +
+//                "  \"final_grade\" : 4.8   " +
+//                "}\n"
+//        println(diplomaJson)
+//        val diplomaClaims : Value = Json.decodeFromString(diplomaJson)
+//        val diplomaObject = diplomaClaims.asObject()!!
+//        val diplomaDisclosures = mutableListOf<ClaimsPointer>()
+//
+//        for(k in diplomaObject) {
+//            if(k.key in alwaysVisible) {
+//                continue
+//            }
+//            diplomaDisclosures.add(listOf(k.key).toClaimsPointer()!!)
+//        }
+//        val diplomaPrivateKey = kb.privateJwkString()
+//        val diplomaIssuerKeyPair = SoftwareKeyPair()
+//        val diplomaSdJwt = SdJwt.create(diplomaClaims, diplomaDisclosures, "123", TestSigner(diplomaIssuerKeyPair) , pubKeyJwk =  null, "ec_pedersen")!!
+//
+//
+//        println("Identity: $jwk")
+//        println("Sdjwt: ${identity_sdjwt.innerJwt.originalSdjwt}")
+//        println("Issuer Key: ${identityKeypair.jwkString()}")
+//        println()
+//        println("Diploma: $diplomaPrivateKey")
+//        println("Sdjwt: ${diplomaSdJwt.innerJwt.originalSdjwt}")
+//        println("Issuer Key: ${diplomaIssuerKeyPair.jwkString()}")
+//
+//    }
+//    @Test
+//    // Issuance following https://www.ietf.org/archive/id/draft-ietf-oauth-selective-disclosure-jwt-14.html#name-example-sd-jwt
+//    fun testIssuance() {
+//        val jsonString = "{\n" +
+//                "  \"sub\": \"user_42\",\n" +
+//                "  \"given_name\": \"John\",\n" +
+//                "  \"family_name\": \"Doe\",\n" +
+//                "  \"email\": \"johndoe@example.com\",\n" +
+//                "  \"phone_number\": \"+1-202-555-0101\",\n" +
+//                "  \"phone_number_verified\": true,\n" +
+//                "  \"address\": {\n" +
+//                "    \"street_address\": \"123 Main St\",\n" +
+//                "    \"locality\": \"Anytown\",\n" +
+//                "    \"region\": \"Anystate\",\n" +
+//                "    \"country\": \"US\"\n" +
+//                "  },\n" +
+//                "  \"birthdate\": \"1940-01-01\",\n" +
+//                "  \"updated_at\": 1570000000,\n" +
+//                "  \"nationalities\": [\n" +
+//                "    \"US\",\n" +
+//                "    \"DE\"\n" +
+//                "  ]\n" +
+//                "}\n"
+//        val claims : Value = Json.decodeFromString(jsonString)
+//        val o = claims.asObject()!!
+//        val disclosures = mutableListOf<ClaimsPointer>()
+//        val alwaysVisible = listOf("sub", "iss", "exp", "cnf", "updated_at")
+//        for(k in o) {
+//            if(k.key == "nationalities") {
+//                disclosures.add(listOf("nationalities", null).toClaimsPointer()!!)
+//            }
+//            if(k.key in alwaysVisible) {
+//                continue
+//            }
+//            disclosures.add(listOf(k.key).toClaimsPointer()!!)
+//        }
+//        val kb = SoftwareKeyPair()
+//        val kbValue : Value = Json.decodeFromString(kb.jwkString())
+//        val sdjwt = SdJwt.create(claims, disclosures, "123", TestSigner(SoftwareKeyPair()), kbValue, "ec_pedersen")!!
+//        val sd = sdjwt.get("_sd".asSelector())[0]
+//        val nationalities = sdjwt.get("nationalities".asSelector())[0]
+//        assertIs<Value.Array>(sd)
+//        assertIs<Value.Array>(nationalities)
+//        assertEquals(8, sd.v1.size)
+//        assertEquals("US", nationalities.v1[0].asString())
+//        assertEquals("DE", nationalities.v1[1].asString())
+//        val claimsString = base64UrlDecode(sdjwt.innerJwt.originalJwt.split(".")[1]).commonToUtf8String()
+//        val jwt : Value = Json.decodeFromString(claimsString)
+//
+//        for(e in jwt["nationalities"].asArray()!!) {
+//            assertTrue(e.isObject())
+//            assertTrue(e.asObject()!!.containsKey("..."))
+//        }
+//        val newParsed : Value = Json.decodeFromString(jsonString)
+//        for(o in newParsed.asObject()!!) {
+//            val e = sdjwt.get(o.key.asSelector())[0]
+//            assertEquals(e, o.value)
+//        }
+//    }
 }
