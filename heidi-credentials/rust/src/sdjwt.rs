@@ -74,23 +74,24 @@ pub fn decode_sdjwt(payload: &str) -> Result<SdJwtRust, SdJwtDecodeError> {
 
 #[cfg(test)]
 mod tests {
-
-    use std::sync::Arc;
-
-    use base64::Engine;
-    use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
-    use p256::ecdsa::{Signature, SigningKey, signature::Signer};
-
+    #[cfg(feature = "experimental")]
+    use crate::sdjwt_util::zkp::{Input, ZkProof, equality_proof::EqualityProof};
+    #[cfg(feature = "experimental")]
     use crate::{
         claims_pointer::Selector,
         models::{PointerPart, SignatureCreator, SigningError},
         pointer,
         sdjwt::SdJwtRust,
-        sdjwt_util::{
-            SdJwtBuilder,
-            zkp::{Input, ZkProof, equality_proof::EqualityProof},
-        },
+        sdjwt_util::SdJwtBuilder,
     };
+    #[cfg(feature = "experimental")]
+    use base64::Engine;
+    #[cfg(feature = "experimental")]
+    use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
+    #[cfg(feature = "experimental")]
+    use p256::ecdsa::{Signature, SigningKey, signature::Signer};
+    #[cfg(feature = "experimental")]
+    use std::sync::Arc;
 
     use crate::sdjwt_util::SdJwtDecodeError;
 
@@ -110,6 +111,7 @@ mod tests {
         assert_eq!(parsed_jwt.disclosures_map.len(), 0);
     }
     #[test]
+    #[cfg(feature = "experimental")]
     pub fn test_pedersen_disclosures() {
         let jwt_str = "eyJhbGciOiJFUzI1NiJ9.eyJfc2QiOlsiZUdDS25YRkNBakRER0t2M2xmU2RfQmZPZXZ2TVVjODBlT3ljazRXTV9EayIsIml0LU9vV1NxcHFVcVA3eFByc3RqUlZ1c21TYWlvbllaV2lDRHl3V2RJV0EiXSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJwdWJsaWNfcGFyYW1zIjp7ImciOiJOcGlJMGdQa0JVbVhaS0liT2NMN0hSZmE4Q28yYjVpcVNVWkpXTGo2a25nIiwiaCI6IktFaXdHUHFDc3BENFcyNnRCQ3V0RFQ3M2tROWZ2N0kwcEJVcERPbHg0bDAifSwiY3J2IjoiZWQyNTUxOSJ9fSwiY29tX2xpbmsiOnsidGVzdCI6MCwiZG9iIjoxfSwiaXNzIjoic2FtcGxlX2lzc3VlciIsImlhdCI6MTc2ODM4Mjg0NSwibmJmIjoxNzY4MzgyNTQ1LCJleHAiOjE3NjgzODMyMDV9.hct1RNSY3wSpNMMal2Tb-fJONQ8fJIEkWUopvmwCAcSJNJHvgt369OUT4faepORcD0-4dFXEJHV89jq_L6e_uw~WyJzeV85SWZDeW5BdnRhUUo2VDl2bU9NWVM1X0R6Z1BkRUFkUDc1MmRRTlFZIiwidGVzdCIsImFiYyJd~WyJKYlRJYW9qZWt0TmdkdlBpXzhfZkZhLU5LYndMVkwtZWFsYVk3MXRNZVFvIiwiZG9iIiwxOTU4XQ~";
         let parsed_jwt = decode_sdjwt(jwt_str).unwrap();
@@ -119,6 +121,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "experimental")]
     pub fn test_equality_proof() {
         let jwt_str1 = "eyJhbGciOiJFUzI1NiJ9.eyJfc2QiOlsiX0tkcnVIUkZlTlVIZTNnajJNUXZ1WTdhV08wQ3pDUENVaUJoTG15M3B6cyIsIi11Um9TNzNER3AzRjB0RFVBNFNsNkp4azhnNXBCRXpxWDJqci02MWVzbDAiXSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJwdWJsaWNfcGFyYW1zIjp7ImciOiJBaTJpcWlFX3paMVRHYWVfRzBDOUhKZTE0aThoTWx3M3hwcFVuZjhPcUI0IiwiaCI6Im5PblFYeEZQV0UyX3k0NnJoVm81UTUtNXNGYWJFNEgtc21oLTBQeTBqVVkifSwiY3J2IjoiZWQyNTUxOSJ9fSwiY29tX2xpbmsiOnsidGVzdCI6MCwiZG9iIjoxfSwiaXNzIjoic2FtcGxlX2lzc3VlciIsImlhdCI6MTc2ODM4NTA4NiwibmJmIjoxNzY4Mzg0Nzg2LCJleHAiOjE3NjgzODU0NDZ9.6E4YLwsTJrSuZ3MM9VKjuwHPGhzSMd9cVFHDoHQKrysbuEL01VNRUXpiRYzV7STwbkFTVtt7WsR6sTE81BBqOw~WyItNllMWjhoeUtCbU91VkxmT0NsdnhKM2w0bUNNNVJhUjdTRmVMenpLUVFNIiwidGVzdCIsImFiYyJd~WyJmeF9wSkdtSHlHS0dWVS1SdmFyX19JT1FadF9LejRycm11ejhCenZWYkE0IiwiZG9iIiwxOTU4XQ~";
         let jwt_str2 = "eyJhbGciOiJFUzI1NiJ9.eyJfc2QiOlsiTXUwajFIamJ2UnpTWEFLUWxlQ3I4NVkxOTZqdTEwTUNaSzdCRHgyRHZVNCIsImtQN21OZTBLRnJlc25KMjYxaDIxM1lvZ1NqX196dHVQZDQ3c3ByU2V4V1UiXSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJwdWJsaWNfcGFyYW1zIjp7ImciOiJxa2IxX1daRnNLVFY4QW1RRkVaRDNvOUl1UnJ2NkNoMTZucFgxb1pDTDBBIiwiaCI6IjlQVGQ3dFdVR3JROElMUkhKY0NKUDVPMjBjUkpXOXpmaG00VmZHV2hzSEkifSwiY3J2IjoiZWQyNTUxOSJ9fSwiY29tX2xpbmsiOnsidGVzdCI6MCwiZG9iIjoxfSwiaXNzIjoic2FtcGxlX2lzc3VlciIsImlhdCI6MTc2ODM4NjgwMSwibmJmIjoxNzY4Mzg2NTAxLCJleHAiOjE3NjgzODcxNjF9.tp2wQQYsoRxK5lVtvtTQ6tvC9GAjcazQgbARA16CdP00EYXGdYRsnPShbBbB_1UYLJmvT_513nV46ZLewAvxvQ~WyJpRlFUak83RlVwYWNBeHVkWTFaaDNuUlNIVlBQNGRISTY5bk4zc2UzOEEwIiwidGVzdCIsImFiY2UiXQ~WyJ5MEctTnFNU3c1RDY5VUIzSmxCU0llcGhnU0EwOHdjN2hqckszOGpuYndRIiwiZG9iIiwxOTU4XQ~";
@@ -228,6 +231,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "experimental")]
     fn test_kmp_issued_zkp() {
         let sd_jwt1 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoielI2anZwa0tDR2toREk2YURsZVJSSFRwT3gxT0c4eF9yV1Z2R01CQTlXRSIsInkiOiJYd1RUUlU5SmdzVEk4SDlmWWk1UmRKUVhxeU9aYTE0U2JCVWc4NGVzYWNvIn19LCJfc2QiOlsiem5EVi1WVl80YXRqSTNwSlNoTndwVENuT0MwbGN6bnViTGFJam5DNFdEZyIsImxwaGIyMzJDbDVJZ3puajBfcEYwS2QxRmZJZTRhX2VXYXI1eTNjOUd0VUUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJnIjoiMEktZUV0cVRPRHNzUXUyT2xZT1V3M3hrTllERDZlU0RNaW1MQ3B3bUZuQSIsImgiOiJPbVE4Sm9ZVU5WMFlpOU5hMXR2Q1BscE5RVDhSalpZZ2llWmNvUkUycVVRIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.YQ-_KQe2m6bymG1k1Vh2xHHECz507Zj2ZpZ6rw3Dv-KKW-rbQXqFK1Uq8yMQjjuOeTZfsaAYw3mz2Ojqi50Lmg~WyJDdmtNdkJNdFlaTDVwUUJnUjdTUTBXUDlTb0ZnUnc0TDBXemctNXRzZndvIiwiZG9iIiwxOTU4XQ~";
         let sd_jwt2 = "eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJjbmYiOnsiandrIjp7Imt0eSI6IkVDIiwiY3J2IjoiUC0yNTYiLCJ4IjoiNDBxYURZQVFnTTJ6cENjLXVRMHc2cVFKRnd1ZG9VSS1YVVFmZE9STTVpYyIsInkiOiJSX3I2ZXpfXzN1VzVlUUplRWIyOEhiT0E0alQ3TVBqYUpjUThGN2NkQmVnIn19LCJfc2QiOlsiQ0ZLQjRIQUVVX1BxSDF1d0FrY2ZLbl9FZW5wYko4RnpKRXJNTDZXMFBRUSIsImhDV0V0ako2cWlTMFl0ZFhHa3NXVHFqWllReDM4amVldlpuVTdYRno4bVUiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiaUI5ckVWYjgtdklDS2dBOWU2aU14T3M1NGQ1aXN1MGNHdFhZQzVJZXdYWSIsImciOiJZaDViVGs5WHFfeWxGNVBpbmM1cm9zd2ZyaDJ2a3dDaWhpYm1aS2NfOURBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZG9iIjowLCJ0ZXN0IjoxfX0.HaRrZuVl3wrbTzzzrxF7AA9OczjCWwRyM0X7dXUoDdiGKtg0JDBHQScbwthedXNXkB-7nuK-y6qMaawIoUrXMQ~WyJjdjFGQ2Zua1Azbm5RWjgtRWpVU3R5blE0RXFqNzg1R0Q1b0JHTXZzb0E0IiwiZG9iIiwxOTU4XQ~";
@@ -329,13 +333,16 @@ mod tests {
         assert!(!deserialized_proof.verify(challenge_bytes, "dob", &sd_jwt1, &sd_jwt3))
     }
 
+    #[cfg(feature = "experimental")]
     struct TestSigner(p256::SecretKey);
+    #[cfg(feature = "experimental")]
     impl TestSigner {
         pub fn new(jwk_key: &str) -> Self {
             let key = p256::SecretKey::from_jwk_str(jwk_key).unwrap();
             Self(key)
         }
     }
+    #[cfg(feature = "experimental")]
     impl SignatureCreator for TestSigner {
         fn alg(&self) -> String {
             "ES256".to_string()
@@ -349,6 +356,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "experimental")]
     fn tests_for_rfc_draft() {
         let identity_holder_key = TestSigner::new(
             r#"{"kty":"EC","crv":"P-256","x":"Oq1azTI-nfXRjxeoxqwktbSayE7Sd-2S0kp2MdCXdJM","y":"Xz4eqZG6bq017tCtqsx97KiJzgLzbSQvOzQJBFasXKE","d":"dbUsHxvpAb_D26ok8T2D5EugxWfUu0faPU9ueYhc56k"}"#,
@@ -449,6 +457,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "experimental")]
     fn verify_tests_for_rfc_draft() {
         let identity_presentation = r#"eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwidXBkYXRlZF9hdCI6MTU3MDAwMDAwMCwiY25mIjp7Imp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6Ik9xMWF6VEktbmZYUmp4ZW94cXdrdGJTYXlFN1NkLTJTMGtwMk1kQ1hkSk0iLCJ5IjoiWHo0ZXFaRzZicTAxN3RDdHFzeDk3S2lKemdMemJTUXZPelFKQkZhc1hLRSJ9fSwiX3NkIjpbImpsLXh6a0ZlQUhjeHloTkFwR1dHQkxlZHhmamhabWtpcTRmank1VEpQRkUiLCJHRFV1OWtmUWxISVV5bXhOaEdQZEhLeXBQWUUwY3ZURmFuekcxZHduUkJJIiwiWkVRT0NZMEhYNC0yZzhvU2tSN1lfV204NnFVVU9sZDNBOFFTT1k4U0FUbyIsImVOd0F4WnQ3UHhVMVQxbmhPYlhTbkRMU2s3MXk3Y2pfakNHcDlYSDZTUTQiLCI0Z0tkSGZCclFXUWdZRzdDT1hWMUl6SThBeDlrOE5XQ0xnUzBYSFFFRWt3IiwiZG9VZFRRM1pJZ25YODlacUlzLWk4MWNiRnZtOGJrSERjUU9heTZ6dFJnYyIsImtPNTZjY3V1aHFlclpYdGpNeE1QNWNwZDFac2V1RVZKOUY0N25lOHBUSGMiLCJkc1hNTVVsRFZwMTBjdkdLeXAtbDc1R1VJRkVjUGhwZ0hXN1VmVElNem04Il0sIl9zZF9hbGdfcGFyYW0iOnsiY29tbWl0bWVudF9zY2hlbWUiOnsicHVibGljX3BhcmFtcyI6eyJnIjoiNUFsOUJCRTdOU2pacXhRSktrQjF4bnZCM2t4R1FHdm1fbHBpNW1uQUlWVSIsImgiOiJqa3hldk50SlY0X2FRS1pxSUZSYUl1allpSk92VFZSOW5hb1NPdWVmalFJIn0sImNydiI6ImVkMjU1MTkifX0sIl9zZF9hbGciOiJlY19wZWRlcnNlbiIsImNvbV9saW5rIjp7ImdpdmVuX25hbWUiOjAsImZhbWlseV9uYW1lIjoxLCJlbWFpbCI6MiwicGhvbmVfbnVtYmVyIjozLCJwaG9uZV9udW1iZXJfdmVyaWZpZWQiOjQsImFkZHJlc3MiOjUsImJpcnRoZGF0ZSI6NiwibmF0aW9uYWxpdGllcyI6N319.GkA6zkXjYPhjtppnBGEKAvrHLUVUbR4JnkPI4qe4h1oKCxh6RfgRZAFLjYU3BmMM2do3Ooz_SXQi18wIr7Ulcw~~eyJ0eXAiOiJrYitqd3QiLCJhbGciOiJFUzI1NiJ9.eyJub25jZSI6IjFWMTNRRXJQYjhqRlNpSU5kR2RnWUV1OWU2bHhVU09nIiwiaWF0IjoxNzY4NDc2NjU3LCJzZF9oYXNoIjoiQXBZd2FGNlM4VHk1VWFLa2h1cXFvYzdMTnlQUllJaTl3RlVNZ2hGRDlnOCIsInprX3Byb29mcyI6W3siaW5wdXRzIjpbeyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJnaXZlbl9uYW1lIl0sInZhbHVlIjoiamwteHprRmVBSGN4eWhOQXBHV0dCTGVkeGZqaFpta2lxNGZqeTVUSlBGRSJ9fSx7IlByaXZhdGUiOnsicGF0aCI6WyJjb21fbGluayIsImdpdmVuX25hbWUiXSwidmFsdWUiOiJocC1Lc196OEYweFFfNE1BcmxKTG4yM2dVVXZLWWl2cE93NWN3Vm96SENZIn19XSwic3lzdGVtIjpbMSwtMV0sImNvbnRleHQiOiJaMmwyWlc1ZmJtRnRaZVFKZlFRUk96VW8yYXNVQ1NwQWRjWjd3ZDVNUmtCcjV2NWFZdVpwd0NGVmpreGV2TnRKVjRfYVFLWnFJRlJhSXVqWWlKT3ZUVlI5bmFvU091ZWZqUUxjOTQ0bVhXQk1ZRHZFZjV4WVdtRUpNTU9hM3ZRX28wVmExeWpLSlNFQ1VHWUx5RVR1TDRrVVZOSVFWMTcxd3VySXY0b1pRWVlURDlUS0ZIVVI2TGg1QVFJRCIsInByb29mIjoid0RMQlYyX2NaeTBqSVFrSlhfVVdFeE5oSlJwN2JWd2s1VXdhNS1KWGFBM1E3U3lHRk4yMk9iTzJfa01MbjNHMk04V2dCeEk3QkhkdzlsN0pld2xRQjhBeXdWZHYzR2N0SXlFSkNWXzFGaE1UWVNVYWUyMWNKT1ZNR3VmaVYyZ05VM2xadWdrenBTMmd1N0VXV2c2VjdxZk5QT3JHc21iWjZudmdPdFc5bmd6eVpZTmFTS3RmeDJWazJELUg2YllDQjIyY1I5YXNqSjhaZ0RCdy1TWWhKUTZOSmFGNjRhamgwRDdmZHZtN1Jfb1BfcGZJeDFqRTYxQWtnYlBBdzlkVCIsInByb29mX3R5cGUiOiJlcXVhbGl0eV9wcm9vZiJ9LHsiaW5wdXRzIjpbeyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJmYW1pbHlfbmFtZSJdLCJ2YWx1ZSI6IkdEVXU5a2ZRbEhJVXlteE5oR1BkSEt5cFBZRTBjdlRGYW56RzFkd25SQkkifX0seyJQcml2YXRlIjp7InBhdGgiOlsiY29tX2xpbmsiLCJmYW1pbHlfbmFtZSJdLCJ2YWx1ZSI6IkpDSlR1ejNMc2V5R3lYcGxhSExFWmtlVU0wTDM1X3dPc0tHbEVpYnFvbHcifX1dLCJzeXN0ZW0iOlsxLC0xXSwiY29udGV4dCI6IlptRnRhV3g1WDI1aGJXWGtDWDBFRVRzMUtObXJGQWtxUUhYR2U4SGVURVpBYS1iLVdtTG1hY0FoVlk1TVhyemJTVmVQMmtDbWFpQlVXaUxvMklpVHIwMVVmWjJxRWpybm40MEMzUGVPSmwxZ1RHQTd4SC1jV0ZwaENURERtdDcwUDZORld0Y295aVVoQWxCbUM4aEU3aS1KRkZUU0VGZGU5Y0xxeUwtS0dVR0dFd19VeWhSMUVlaTRlUUVDQXciLCJwcm9vZiI6IlpDWGZ3VGhRTTBtTnk1Zk0tX05uV09yZGIxdkFPcWJ5eG44NDNrcjIxd0ZleE8tNEtzYUtEYUVQNDJOSGZSSnNrTU9mU1h1aFp5ZTk0R0FBX1FVSkFHUWwzOEU0VUROSmpjdVh6UHZ6WjFqcTNXOWJ3RHFtOHNaX09ONUs5dGNCaFVXSlhVdjFDcUt6UC1BNEMyVEI1S1FFaVJWZHQxRFlJa1NZQWRhdWdnS015VVhwbE5sSWRxcVRjN203OE0yd1dVaWdBbWZ1eTVlYnVVUTFQNkRRUkdKMTZoVll4emdXRXA2SnhzTHpTSHRiZl8yZzlpLTJ6MFlmaXV2SWhkZ0kiLCJwcm9vZl90eXBlIjoiZXF1YWxpdHlfcHJvb2YifV19.uIYkpRJttXimLtWssxpnZYTMPpg73QUUpDJNw72CJoeRyikJYJaa6Dw5pQ0xNE5yPUIbnGZ80DFWG36yg7TCEg"#;
         let diploma_presentation = r#"eyJhbGciOiJFUzI1NiIsImtpZCI6IjEyMyJ9.eyJzdWIiOiJ1c2VyXzQyIiwiX3NkIjpbImhwLUtzX3o4RjB4UV80TUFybEpMbjIzZ1VVdktZaXZwT3c1Y3dWb3pIQ1kiLCJKQ0pUdXozTHNleUd5WHBsYUhMRVprZVVNMEwzNV93T3NLR2xFaWJxb2x3IiwiTmkyVENVTVVwMTQ1cWFsYW0tVmVPQWdOYmdtdDQtTF9fc3ZBRU45SGN4QSIsIm5KLVBIUldmbmU5Sk9PeDBZNnNiQjNkUnlfR0pmVnprV3FXcWd6ZlVfQ0EiXSwiX3NkX2FsZ19wYXJhbSI6eyJjb21taXRtZW50X3NjaGVtZSI6eyJjcnYiOiJlZDI1NTE5IiwicHVibGljX3BhcmFtcyI6eyJoIjoiWmd2SVJPNHZpUlJVMGhCWFh2WEM2c2lfaWhsQmhoTVAxTW9VZFJIb3VIayIsImciOiIzUGVPSmwxZ1RHQTd4SC1jV0ZwaENURERtdDcwUDZORld0Y295aVVoQWxBIn19fSwiX3NkX2FsZyI6ImVjX3BlZGVyc2VuIiwiY29tX2xpbmsiOnsiZ2l2ZW5fbmFtZSI6MCwiZmFtaWx5X25hbWUiOjEsInN1YmplY3QiOjIsImZpbmFsX2dyYWRlIjozfX0.gDs0zxTqgJKMuBujv1UvSC8R_tshugj3-HpwVO62H2wrvnos1kDwMtUknCSnNPLEQdVloMpl3sSZ0hZVbcJBZQ~WyIwWW9tWldPRmU1V0o0OGF1Z2FZMjR3MlR1UGhha2Z5NGt5V2x6aENSNXdBIiwiZmluYWxfZ3JhZGUiLDQuOF0~WyJ2MXl1akU5bDloYmxsRllnY3hPaUlWS19jcUZfUGYyR0dHTUhpVkxaZGc0Iiwic3ViamVjdCIsIkNvbXB1dGVyIFNjaWVuY2UiXQ~"#;

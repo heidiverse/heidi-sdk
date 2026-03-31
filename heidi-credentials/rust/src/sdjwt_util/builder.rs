@@ -25,18 +25,20 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_util_rust::{log::log, value::Value};
 use sha2::{Digest, Sha256};
 
+#[cfg(feature = "experimental")]
+use super::zkp::ZkProof;
 use crate::{
     claims_pointer::Selector,
     generate_nonce,
     models::{Pointer, PointerPart, SignatureCreator, SpecVersion},
     sdjwt::SdJwtRust,
     sdjwt_util::{
-        base64_hash, hash_algs::SdJwtHasher, zkp::ZkProof, Disclosure, DisclosureIndex,
-        DisclosureNode, DisclosureTree, Header,
+        Disclosure, DisclosureIndex, DisclosureNode, DisclosureTree, Header, base64_hash,
+        hash_algs::SdJwtHasher,
     },
     w3c::W3CSdJwt,
 };
@@ -70,6 +72,7 @@ pub struct BuilderImpl {
     nonce: Option<String>,
     aud: Option<String>,
     transaction_data: Option<(Vec<String>, SpecVersion)>,
+    #[cfg(feature = "experimental")]
     zk_proofs: Vec<ZkProof>,
 
     is_w3c: bool,
@@ -92,7 +95,7 @@ impl BuilderImpl {
                 PointerPart::String(s) => DisclosureIndex::String(s),
                 PointerPart::Index(i) => DisclosureIndex::Index(i),
                 PointerPart::Null(_) => {
-                    return Err(BuilderError::InvalidPath("Null pointer part".to_string()))
+                    return Err(BuilderError::InvalidPath("Null pointer part".to_string()));
                 }
             };
             let Some(node) = current.get(&index) else {
@@ -120,7 +123,7 @@ impl BuilderImpl {
                 _ => {
                     return Err(BuilderError::InvalidPath(format!(
                         "Expected leaf node at end of path: {ptr_str}, found: {node:?}"
-                    )))
+                    )));
                 }
             }
         }
@@ -151,6 +154,7 @@ impl BuilderImpl {
         self.disclosures.dedup();
         Ok(self)
     }
+    #[cfg(feature = "experimental")]
     pub fn add_zkp(&mut self, zkp: &ZkProof) -> Result<&mut Self, BuilderError> {
         self.zk_proofs.push(zkp.clone());
         Ok(self)
@@ -253,7 +257,7 @@ impl BuilderImpl {
                         if let Some(aud) = &self.aud {
                             claims["aud"] = serde_json::json!(aud);
                         }
-
+                        #[cfg(feature = "experimental")]
                         if !self.zk_proofs.is_empty() {
                             claims["zk_proofs"] = serde_json::json!(self.zk_proofs);
                         }
@@ -310,6 +314,7 @@ pub struct SdJwtBuilder {
 
 //TODO: UBAM figure out how to expose this to kmp
 impl SdJwtBuilder {
+    #[cfg(feature = "experimental")]
     pub fn add_zkp(&self, zkp: ZkProof) -> Result<(), BuilderError> {
         let Ok(mut this) = self.inner.lock() else {
             return Err(BuilderError::Lock);
@@ -334,6 +339,7 @@ impl SdJwtBuilder {
                 nonce: None,
                 aud: None,
                 transaction_data: None,
+                #[cfg(feature = "experimental")]
                 zk_proofs: vec![],
                 is_w3c: false,
             })),
@@ -351,6 +357,7 @@ impl SdJwtBuilder {
                 disclosures: vec![],
                 nonce: None,
                 aud: None,
+                #[cfg(feature = "experimental")]
                 zk_proofs: vec![],
                 transaction_data: None,
                 is_w3c: true,

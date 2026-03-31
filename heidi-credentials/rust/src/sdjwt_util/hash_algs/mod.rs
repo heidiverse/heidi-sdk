@@ -6,7 +6,7 @@ use std::{
 use sha2::{Digest, Sha256, Sha384, Sha512};
 
 use crate::sdjwt_util::Disclosure;
-
+#[cfg(feature = "experimental")]
 pub mod ec_pedersen;
 pub mod sha;
 
@@ -72,6 +72,7 @@ impl TryFrom<&str> for SdJwtHasher {
             "sha-256" | "SHA-256" => Ok(SdJwtHasher(Arc::new(Mutex::new(Sha256::new())))),
             "sha-384" | "SHA-384" => Ok(SdJwtHasher(Arc::new(Mutex::new(Sha384::new())))),
             "sha-512" | "SHA-512" => Ok(SdJwtHasher(Arc::new(Mutex::new(Sha512::new())))),
+            #[cfg(feature = "experimental")]
             "ec_pedersen" | "EC_PEDERSEN" => Ok(SdJwtHasher(Arc::new(Mutex::new(
                 ec_pedersen::EcPedersenX25519::default(),
             )))),
@@ -81,9 +82,10 @@ impl TryFrom<&str> for SdJwtHasher {
 }
 
 #[cfg(test)]
+#[cfg(feature = "experimental")]
 mod tests {
     use base64::Engine;
-    use curve25519_dalek::{ristretto::CompressedRistretto, Scalar};
+    use curve25519_dalek::{Scalar, ristretto::CompressedRistretto};
     use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
 
     #[test]
