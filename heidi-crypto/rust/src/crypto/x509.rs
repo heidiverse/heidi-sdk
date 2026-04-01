@@ -21,6 +21,8 @@ under the License.
 use crate::crypto::{SignatureCreator, base64_url_decode, base64_url_encode};
 use base64::Engine;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+#[cfg(feature = "crl")]
+use heidi_util_rust::log_debug;
 use oid_registry::{OidEntry, OidRegistry};
 use p256::NistP256;
 use p256::pkcs8::der::Encode;
@@ -29,6 +31,12 @@ use simple_x509::X509Builder;
 use std::sync::Arc;
 use x509_parser::der_parser::oid;
 use x509_parser::oid_registry::OID_KEY_TYPE_EC_PUBLIC_KEY;
+#[cfg(feature = "crl")]
+use x509_parser::prelude::{DistributionPointName, GeneralName, ParsedExtension};
+use x509_parser::prelude::{
+    TbsCertificateStructureValidator, Validator, VecLogger, X509ExtensionsValidator,
+};
+use x509_parser::time::ASN1Time;
 
 #[derive(uniffi::Record, Clone, Debug)]
 pub struct X509Certificate {
@@ -197,27 +205,148 @@ fn try_extract_p256_key(cert: &x509_parser::certificate::X509Certificate) -> X50
     }
 }
 
-#[uniffi::export]
-fn verify_chain(certs: Vec<X509Certificate>) -> bool {
+fn verify_chain_at(
+    certs: Vec<X509Certificate>,
+    time: ASN1Time,
+    #[cfg(feature = "crl")] check_crl: bool,
+) -> bool {
     // first certificate is the leaf certificate
     let mut certs = certs;
     let mut prev_cert = certs.pop();
-    while let Some(child_cert) = prev_cert {
+
+    while let Some(subject_cert) = prev_cert {
         prev_cert = certs.pop();
-        if let Some(parent_cert) = prev_cert.as_ref() {
-            let (_, child_cert) =
-                x509_parser::parse_x509_certificate(child_cert.original_cert.as_ref()).unwrap();
-            let (_, parent_cert) =
-                x509_parser::parse_x509_certificate(parent_cert.original_cert.as_ref()).unwrap();
-            let is_valid = parent_cert
-                .verify_signature(Some(child_cert.public_key()))
+        if let Some(issuer_cert) = prev_cert.as_ref() {
+            let (_, subject_cert) =
+                x509_parser::parse_x509_certificate(subject_cert.original_cert.as_ref()).unwrap();
+            let mut logger = VecLogger::default();
+            let structure_validity =
+                TbsCertificateStructureValidator.validate(&subject_cert, &mut logger);
+            let x509_extensions_validity =
+                X509ExtensionsValidator.validate(&subject_cert.extensions(), &mut logger);
+            if !(structure_validity && x509_extensions_validity) {
+                return false;
+            }
+            let (_, issuer_cert) =
+                x509_parser::parse_x509_certificate(issuer_cert.original_cert.as_ref()).unwrap();
+            let structure_validity =
+                TbsCertificateStructureValidator.validate(&subject_cert, &mut logger);
+            let x509_extensions_validity =
+                X509ExtensionsValidator.validate(&subject_cert.extensions(), &mut logger);
+            if !(structure_validity && x509_extensions_validity) {
+                return false;
+            }
+            let is_valid = issuer_cert
+                .verify_signature(Some(subject_cert.public_key()))
                 .is_ok();
             if !is_valid {
                 return false;
             }
+            if issuer_cert.issuer() != subject_cert.subject() {
+                return false;
+            }
+            let subject_validity = subject_cert.validity();
+            if !subject_validity.is_valid_at(time) {
+                return false;
+            }
+            let issuer_validity = issuer_cert.validity();
+            if !issuer_validity.is_valid_at(time) {
+                return false;
+            }
+            #[cfg(feature = "crl")]
+            match check_revocation(&issuer_cert) {
+                // certificate is revoked (on the CRL)
+                Ok(true) => return false,
+                // something went wrong
+                Err(_) => return false,
+                // network error or not on the list
+                _ => {}
+            }
+            #[cfg(feature = "crl")]
+            match check_revocation(&subject_cert) {
+                // certificate is revoked (on the CRL)
+                Ok(true) => return false,
+                // something went wrong
+                Err(_) => return false,
+                // network error or not on the list
+                _ => {}
+            }
         }
     }
     true
+}
+
+#[uniffi::export]
+fn verify_chain(certs: Vec<X509Certificate>) -> bool {
+    verify_chain_at(
+        certs,
+        ASN1Time::now(),
+        #[cfg(feature = "crl")]
+        true,
+    )
+}
+
+#[cfg(feature = "crl")]
+/// Simplified function for checking and fetching a CRL over URL
+///
+/// Note: *Network errors are ignored!*
+fn check_revocation(cert: &x509_parser::prelude::X509Certificate) -> Result<bool, ()> {
+    // We have a parse error, return err
+    let Ok(maybe_dist_points) = cert.get_extension_unique(&oid!(2.5.29.31)) else {
+        return Err(());
+    };
+    // It was parsed successfully but no CRL found
+    let Some(crl_distribution_points) = maybe_dist_points else {
+        return Ok(false);
+    };
+    // Something is terribly wrong, as we should have matched to the OID before
+    let ParsedExtension::CRLDistributionPoints(dist_points) =
+        crl_distribution_points.parsed_extension()
+    else {
+        return Err(());
+    };
+    // We only look at the first point
+    let Some(point) = dist_points.points.first() else {
+        return Err(());
+    };
+    // The URL CRL must be in the distribution_point field
+    let Some(pt) = point.distribution_point.as_ref() else {
+        return Err(());
+    };
+    // If it is not a full name we don't know what to do
+    let DistributionPointName::FullName(full_name) = pt else {
+        return Err(());
+    };
+    // again look at the first name only
+    let Some(full_name) = full_name.first() else {
+        return Err(());
+    };
+    // we don't know how to handle CLRs that do not point towards an URL
+    let GeneralName::URI(uri) = full_name else {
+        return Err(());
+    };
+    // fetch the revocation list
+    let Ok(mut response) = ureq::get(*uri).call() else {
+        // failed network requests are ignored
+        return Ok(false);
+    };
+    let b = response.body_mut();
+    let Ok(list) = b.read_to_vec() else {
+        // if the stream is somewhat broken, ignore!
+        return Ok(false);
+    };
+    // we fetched something, but it fails to parse, error out
+    let Ok((_, crl)) = x509_parser::parse_x509_crl(&list) else {
+        return Err(());
+    };
+    let result = crl
+        .iter_revoked_certificates()
+        .find(|a| *a.serial() == cert.serial);
+    log_debug!(
+        "X509",
+        &format!("successfully loaded CRL, revoked: {}", result.is_some())
+    );
+    Ok(result.is_some())
 }
 
 #[cfg(test)]
