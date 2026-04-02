@@ -213,6 +213,11 @@ fn verify_chain_at(
     time: ASN1Time,
     #[cfg(feature = "crl")] check_crl: bool,
 ) -> bool {
+    // a valid chain requires at least two certificates (leaf + issuer)
+    if certs.len() < 2 {
+        log_error!("X509", "chain must contain at least two certificates");
+        return false;
+    }
     // first certificate is the leaf certificate
     let mut certs = certs;
     // the last (or rather first) certificate is not an intermediate and is not counted towards the path len
