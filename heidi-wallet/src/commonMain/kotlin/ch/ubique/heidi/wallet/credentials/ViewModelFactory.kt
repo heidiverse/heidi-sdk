@@ -94,7 +94,6 @@ class ViewModelFactory private constructor(
 		val koinModule = module {
 			factoryOf(::ViewModelFactory)
 		}
-		val inMemoryCache = mutableMapOf<String, IdentityUiModel?>()
 	}
 
 	@OptIn(ExperimentalEncodingApi::class)
@@ -198,15 +197,6 @@ class ViewModelFactory private constructor(
 	//TODO: What about EAAs? How do we represent them? We should still use something like IdentityUiModel to combine them, but something less "personal identity" based
 	fun getIdentityUiModel(identity: IdentityModel, revocationCheck: RevocationCheck? = null): IdentityUiModel? {
 		val activities = activityRepository.getActivities(identity.credentials.map { it.id })
-		inMemoryCache[identity.name]?.let {
-			if (it.credentials.size == identity.credentials.size && it.activities.size == activities.size) {
-				return it
-			}
-			return when (it) {
-				is IdentityUiModel.IdentityUiCredentialModel -> it.copy(credentials =  identity.credentials, activities = activities)
-				is IdentityUiModel.IdentityUiDeferredModel -> it.copy(credentials = identity.credentials, activities = activities)
-			}
-		}
 
 		val credential = identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.SdJwt }
 			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.Mdoc }
@@ -415,9 +405,7 @@ class ViewModelFactory private constructor(
                 }
                 CredentialType.Unknown -> null
 			}
-			val newModel = uiModel?.copy(isRevoked = isRevoked)
-			inMemoryCache[identity.name] = newModel
-			return newModel
+			return uiModel?.copy(isRevoked = isRevoked)
 		} catch (e: SerializationException) {
 			Logger.error("Could not map identity", e)
 			return null
