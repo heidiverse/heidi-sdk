@@ -23,12 +23,14 @@ use base64::Engine;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 #[cfg(feature = "crl")]
 use heidi_util_rust::log_debug;
+use heidi_util_rust::log_error;
 use oid_registry::{OidEntry, OidRegistry};
 use p256::NistP256;
 use p256::pkcs8::der::Encode;
 use p256::pkcs8::{DecodePublicKey, EncodePublicKey};
 use simple_x509::X509Builder;
 use std::sync::Arc;
+use whitespace_sifter::WhitespaceSifter;
 use x509_parser::der_parser::oid;
 use x509_parser::oid_registry::OID_KEY_TYPE_EC_PUBLIC_KEY;
 #[cfg(feature = "crl")]
@@ -37,6 +39,7 @@ use x509_parser::prelude::{
     TbsCertificateStructureValidator, Validator, VecLogger, X509ExtensionsValidator,
 };
 use x509_parser::time::ASN1Time;
+use x509_parser::x509::X509Name;
 
 #[derive(uniffi::Record, Clone, Debug)]
 pub struct X509Certificate {
@@ -212,65 +215,89 @@ fn verify_chain_at(
 ) -> bool {
     // first certificate is the leaf certificate
     let mut certs = certs;
+    // the last (or rather first) certificate is not an intermediate and is not counted towards the path len
+    let total_path_len = certs.len() - 1;
     let mut prev_cert = certs.pop();
-
-    while let Some(subject_cert) = prev_cert {
+    let mut current_position = 1;
+    while let Some(issuer_cert) = prev_cert {
         prev_cert = certs.pop();
-        if let Some(issuer_cert) = prev_cert.as_ref() {
-            let (_, subject_cert) =
-                x509_parser::parse_x509_certificate(subject_cert.original_cert.as_ref()).unwrap();
-            let mut logger = VecLogger::default();
-            let structure_validity =
-                TbsCertificateStructureValidator.validate(&subject_cert, &mut logger);
-            let x509_extensions_validity =
-                X509ExtensionsValidator.validate(&subject_cert.extensions(), &mut logger);
-            if !(structure_validity && x509_extensions_validity) {
-                return false;
-            }
+        if let Some(subject_cert) = prev_cert.as_ref() {
             let (_, issuer_cert) =
                 x509_parser::parse_x509_certificate(issuer_cert.original_cert.as_ref()).unwrap();
+            let mut logger = VecLogger::default();
             let structure_validity =
-                TbsCertificateStructureValidator.validate(&subject_cert, &mut logger);
+                TbsCertificateStructureValidator.validate(&issuer_cert, &mut logger);
             let x509_extensions_validity =
-                X509ExtensionsValidator.validate(&subject_cert.extensions(), &mut logger);
+                X509ExtensionsValidator.validate(&issuer_cert.extensions(), &mut logger);
             if !(structure_validity && x509_extensions_validity) {
+                log_error!("X509", "subject cert has invalid structure");
                 return false;
             }
-            let is_valid = issuer_cert
-                .verify_signature(Some(subject_cert.public_key()))
+            let (_, subject_cert) =
+                x509_parser::parse_x509_certificate(subject_cert.original_cert.as_ref()).unwrap();
+            let structure_validity =
+                TbsCertificateStructureValidator.validate(&issuer_cert, &mut logger);
+            let x509_extensions_validity =
+                X509ExtensionsValidator.validate(&issuer_cert.extensions(), &mut logger);
+            if !(structure_validity && x509_extensions_validity) {
+                log_error!("X509", "issuer cert has invalid structure");
+                return false;
+            }
+            if !is_key_usage_correct(&issuer_cert) {
+                log_error!("X509", "issuer cert has incorrect key usage");
+                return false;
+            }
+            match is_basic_constraint_fulfilled(&issuer_cert, current_position, total_path_len) {
+                Ok(false) | Err(_) => {
+                    log_error!("X509", "basic constraint not fullfileld");
+                    return false;
+                }
+                _ => {}
+            }
+
+            let is_valid = subject_cert
+                .verify_signature(Some(issuer_cert.public_key()))
                 .is_ok();
             if !is_valid {
+                log_error!("X509", "signature invalid");
                 return false;
             }
-            if issuer_cert.issuer() != subject_cert.subject() {
+            if !are_x509_name_equal(&subject_cert.issuer, &issuer_cert.subject) {
+                log_error!("X509", "issuer name and subject name missmatch");
+                return false;
+            }
+
+            let issuer_validity = issuer_cert.validity();
+            if !issuer_validity.is_valid_at(time) {
+                log_error!("X509", "subject certificate is not valid");
                 return false;
             }
             let subject_validity = subject_cert.validity();
             if !subject_validity.is_valid_at(time) {
-                return false;
-            }
-            let issuer_validity = issuer_cert.validity();
-            if !issuer_validity.is_valid_at(time) {
+                log_error!("X509", "issuer certificate is not valid");
                 return false;
             }
             #[cfg(feature = "crl")]
-            match check_revocation(&issuer_cert) {
-                // certificate is revoked (on the CRL)
-                Ok(true) => return false,
-                // something went wrong
-                Err(_) => return false,
-                // network error or not on the list
-                _ => {}
+            if check_crl {
+                match check_revocation(&subject_cert) {
+                    // certificate is revoked (on the CRL)
+                    Ok(true) => return false,
+                    // something went wrong
+                    Err(_) => return false,
+                    // network error or not on the list
+                    _ => {}
+                }
+                #[cfg(feature = "crl")]
+                match check_revocation(&issuer_cert) {
+                    // certificate is revoked (on the CRL)
+                    Ok(true) => return false,
+                    // something went wrong
+                    Err(_) => return false,
+                    // network error or not on the list
+                    _ => {}
+                }
             }
-            #[cfg(feature = "crl")]
-            match check_revocation(&subject_cert) {
-                // certificate is revoked (on the CRL)
-                Ok(true) => return false,
-                // something went wrong
-                Err(_) => return false,
-                // network error or not on the list
-                _ => {}
-            }
+            current_position += 1;
         }
     }
     true
@@ -285,12 +312,71 @@ fn verify_chain(certs: Vec<X509Certificate>) -> bool {
         true,
     )
 }
+// key usage should be parsable and if present be certSign
+fn is_key_usage_correct(cert: &x509_parser::prelude::X509Certificate) -> bool {
+    let Ok(key_usage) = cert.key_usage() else {
+        log_error!("X509", "Failed to parse keyusage");
+        return false;
+    };
+    let Some(key_usage) = key_usage else {
+        // no key usage, everything fine
+        return true;
+    };
+    key_usage.value.key_cert_sign()
+}
+
+/// Make sure signing certificates have cA true
+fn is_basic_constraint_fulfilled(
+    cert: &x509_parser::prelude::X509Certificate,
+    current_path_len: usize,
+    total_path_len: usize,
+) -> Result<bool, ()> {
+    let Ok(basic_constraints) = cert.get_extension_unique(&oid!(2.5.29.19)) else {
+        return Err(());
+    };
+    // It was parsed successfully but no CRL found
+    let Some(basic_constraints) = basic_constraints else {
+        return Ok(false);
+    };
+    let ParsedExtension::BasicConstraints(basic_constraints) = basic_constraints.parsed_extension()
+    else {
+        return Err(());
+    };
+    // all intermediate have to have ca = true
+    if !basic_constraints.ca {
+        return Ok(false);
+    }
+    let remaining_path_len = total_path_len.saturating_sub(current_path_len);
+    if let Some(path_constraint) = basic_constraints.path_len_constraint {
+        if remaining_path_len > path_constraint as usize {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// compare x509 name removing trailing/leading bits and lowercasing
+fn are_x509_name_equal(left: &X509Name, right: &X509Name) -> bool {
+    let mut equal = true;
+    for (left_part, right_part) in left.iter().zip(right.iter()) {
+        for (left_component, right_component) in left_part.iter().zip(right_part.iter()) {
+            match (left_component.as_str(), right_component.as_str()) {
+                (Ok(left_str), Ok(right_str)) => {
+                    equal &= left_str.sift().to_lowercase() == right_str.sift().to_lowercase()
+                }
+                _ => equal &= left_component.as_slice() == right_component.as_slice(),
+            }
+        }
+    }
+    equal
+}
 
 #[cfg(feature = "crl")]
 /// Simplified function for checking and fetching a CRL over URL
 ///
 /// Note: *Network errors are ignored!*
 fn check_revocation(cert: &x509_parser::prelude::X509Certificate) -> Result<bool, ()> {
+    // log_debug!("X509", "checking revocation");
     // We have a parse error, return err
     let Ok(maybe_dist_points) = cert.get_extension_unique(&oid!(2.5.29.31)) else {
         return Err(());
@@ -351,7 +437,13 @@ fn check_revocation(cert: &x509_parser::prelude::X509Certificate) -> Result<bool
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::{BTreeMap, HashMap},
+        io::{Cursor, Read},
+    };
+
     use base64::Engine;
+    use flate2::read::GzDecoder;
 
     use crate::{base64_decode, jwt::get_x509_from_jwt};
 
@@ -405,5 +497,103 @@ nnW2WuEYWxYBKIHcotA=
         let (_, cert) = x509_parser::pem::parse_x509_pem(aki.as_bytes()).unwrap();
         let certs = extract_certs(cert.contents);
         println!("{:?}", certs);
+    }
+    #[test]
+    fn test_x509_path_validation() {
+        let truth_table: HashMap<&str, bool> = [
+            ("test1", true),
+            ("test2", false),
+            ("test3", false),
+            ("test4", true),
+            ("test5", false),
+            ("test6", false),
+            ("test7", true),
+            ("test8", false),
+            ("test9", false),
+            ("test10", false),
+            ("test11", false),
+            ("test12", true),
+            ("test13", false),
+            ("test14", false),
+            ("test15", true),
+            ("test16", true),
+            ("test17", true),
+            ("test18", true),
+            // revocation is not part of the cert
+            // ("test19", false),
+            // ("test20", false),
+            // ("test21", false),
+            ("test22", false),
+            ("test23", false),
+            ("test24", true),
+            ("test25", false),
+            ("test26", true),
+            ("test27", true),
+            ("test28", false),
+            ("test29", false),
+            ("test30", true),
+            ("test31", false),
+            ("test32", false),
+            ("test33", true),
+            ("test54", false),
+            ("test55", false),
+            ("test56", true),
+            ("test57", true),
+            ("test58", false),
+            ("test59", false),
+            ("test60", false),
+            ("test61", false),
+            ("test62", true),
+            ("test63", true),
+        ]
+        .into_iter()
+        .collect();
+        let test_suite_bytes = include_bytes!("../../x509tests.tgz");
+        let test_suite_bytes = GzDecoder::new(Cursor::new(test_suite_bytes));
+        let mut test_suite_archive = tar::Archive::new(test_suite_bytes);
+        let mut test_map = BTreeMap::<String, Vec<(String, Vec<u8>)>>::new();
+        let mut test_vec = Vec::new();
+        for entry in test_suite_archive.entries().unwrap() {
+            let Ok(mut entry) = entry else {
+                continue;
+            };
+            let path = entry.path().unwrap();
+            if path.extension().is_some() {
+                let testfile = path.strip_prefix("X509tests").unwrap();
+                let test_name = testfile.parent().unwrap().to_str().unwrap().to_string();
+                let file_name = testfile.file_name().unwrap().to_str().unwrap().to_string();
+                if !test_vec.contains(&test_name) {
+                    test_vec.push(test_name.clone());
+                }
+                let directory = test_map.entry(test_name).or_default();
+                let mut file_bytes = Vec::with_capacity(entry.size() as usize);
+                entry.read_to_end(&mut file_bytes).unwrap();
+                directory.push((file_name, file_bytes));
+            }
+        }
+        for test in test_vec {
+            let test_files = &test_map[&test];
+            let mut certs = test_files
+                .iter()
+                .filter(|a| a.0.ends_with(".crt"))
+                .map(|a| extract_certs(a.1.clone()).first().unwrap().to_owned())
+                .collect::<Vec<_>>();
+            certs.reverse();
+            let result = verify_chain(certs);
+            let matches = if let Some(expected) = truth_table.get(&test.as_str()) {
+                if expected == &result { "✅" } else { "❌" }
+            } else {
+                "-"
+            };
+            println!(
+                "{}: {} [{}] -> {matches}",
+                test,
+                result,
+                truth_table
+                    .get(&test.as_str())
+                    .map(|a| a.to_string())
+                    .unwrap_or("N/A".to_string())
+            );
+        }
     }
 }
