@@ -362,18 +362,16 @@ fn is_basic_constraint_fulfilled(
 
 /// compare x509 name removing trailing/leading bits and lowercasing
 fn are_x509_name_equal(left: &X509Name, right: &X509Name) -> bool {
-    let mut equal = true;
-    for (left_part, right_part) in left.iter().zip(right.iter()) {
-        for (left_component, right_component) in left_part.iter().zip(right_part.iter()) {
-            match (left_component.as_str(), right_component.as_str()) {
-                (Ok(left_str), Ok(right_str)) => {
-                    equal &= left_str.sift().to_lowercase() == right_str.sift().to_lowercase()
-                }
-                _ => equal &= left_component.as_slice() == right_component.as_slice(),
-            }
-        }
-    }
-    equal
+    left.iter().count() == right.iter().count()
+        && left.iter().zip(right.iter()).all(|(l, r)| {
+            l.iter().count() == r.iter().count()
+                && l.iter()
+                    .zip(r.iter())
+                    .all(|(lc, rc)| match (lc.as_str(), rc.as_str()) {
+                        (Ok(ls), Ok(rs)) => ls.sift().to_lowercase() == rs.sift().to_lowercase(),
+                        _ => lc.as_slice() == rc.as_slice(),
+                    })
+        })
 }
 
 #[cfg(feature = "crl")]
@@ -450,9 +448,12 @@ mod tests {
     use base64::Engine;
     use flate2::read::GzDecoder;
 
+    use x509_parser::der_parser::asn1_rs::{Any, Tag};
+    use x509_parser::x509::{AttributeTypeAndValue, RelativeDistinguishedName, X509Name};
+
     use crate::{base64_decode, jwt::get_x509_from_jwt};
 
-    use super::{extract_certs, verify_chain};
+    use super::{are_x509_name_equal, extract_certs, verify_chain};
 
     #[test]
     fn test_san() {
@@ -600,5 +601,59 @@ nnW2WuEYWxYBKIHcotA=
                     .unwrap_or("N/A".to_string())
             );
         }
+    }
+
+    fn make_rdn<'a>(oid_parts: &[u64], value: &'a [u8]) -> RelativeDistinguishedName<'a> {
+        let oid = x509_parser::der_parser::asn1_rs::Oid::from(oid_parts)
+            .unwrap()
+            .to_owned();
+        let any = Any::from_tag_and_data(Tag::PrintableString, value);
+        RelativeDistinguishedName::new(vec![AttributeTypeAndValue::new(oid, any)])
+    }
+
+    #[test]
+    fn test_name_prefix_not_equal() {
+        // CN=TrustedCA, O=Corp, C=US
+        let full_name = X509Name::new(
+            vec![
+                make_rdn(&[2, 5, 4, 3], b"TrustedCA"),
+                make_rdn(&[2, 5, 4, 10], b"Corp"),
+                make_rdn(&[2, 5, 4, 6], b"US"),
+            ],
+            &[],
+        );
+        // CN=TrustedCA (prefix of the above)
+        let prefix_name = X509Name::new(vec![make_rdn(&[2, 5, 4, 3], b"TrustedCA")], &[]);
+
+        assert!(!are_x509_name_equal(&prefix_name, &full_name));
+        assert!(!are_x509_name_equal(&full_name, &prefix_name));
+    }
+
+    #[test]
+    fn test_name_equal() {
+        let name_a = X509Name::new(
+            vec![
+                make_rdn(&[2, 5, 4, 3], b"TrustedCA"),
+                make_rdn(&[2, 5, 4, 10], b"Corp"),
+            ],
+            &[],
+        );
+        let name_b = X509Name::new(
+            vec![
+                make_rdn(&[2, 5, 4, 3], b"TrustedCA"),
+                make_rdn(&[2, 5, 4, 10], b"Corp"),
+            ],
+            &[],
+        );
+        assert!(are_x509_name_equal(&name_a, &name_b));
+    }
+
+    #[test]
+    fn test_empty_name_not_equal_to_nonempty() {
+        let empty = X509Name::new(vec![], &[]);
+        let nonempty = X509Name::new(vec![make_rdn(&[2, 5, 4, 3], b"TrustedCA")], &[]);
+
+        assert!(!are_x509_name_equal(&empty, &nonempty));
+        assert!(!are_x509_name_equal(&nonempty, &empty));
     }
 }
