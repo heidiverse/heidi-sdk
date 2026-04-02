@@ -505,6 +505,9 @@ nnW2WuEYWxYBKIHcotA=
         println!("{:?}", certs);
     }
     #[test]
+    /// Tests from https://csrc.nist.gov/Projects/pki-testing/x-509-path-validation-test-suite Version 1.07
+    /// Tests regarding the CRL are currently ignored, as the certificates do not contain distribution points.
+    ///
     fn test_x509_path_validation() {
         let truth_table: HashMap<&str, bool> = [
             ("test1", true),
@@ -525,10 +528,6 @@ nnW2WuEYWxYBKIHcotA=
             ("test16", true),
             ("test17", true),
             ("test18", true),
-            // revocation is not part of the cert
-            // ("test19", false),
-            // ("test20", false),
-            // ("test21", false),
             ("test22", false),
             ("test23", false),
             ("test24", true),
@@ -537,9 +536,6 @@ nnW2WuEYWxYBKIHcotA=
             ("test27", true),
             ("test28", false),
             ("test29", false),
-            ("test30", true),
-            ("test31", false),
-            ("test32", false),
             ("test33", true),
             ("test54", false),
             ("test55", false),
@@ -577,6 +573,8 @@ nnW2WuEYWxYBKIHcotA=
                 directory.push((file_name, file_bytes));
             }
         }
+        let mut correct = 0;
+        let mut total = 0;
         for test in test_vec {
             let test_files = &test_map[&test];
             let mut certs = test_files
@@ -587,7 +585,13 @@ nnW2WuEYWxYBKIHcotA=
             certs.reverse();
             let result = verify_chain(certs);
             let matches = if let Some(expected) = truth_table.get(&test.as_str()) {
-                if expected == &result { "✅" } else { "❌" }
+                total += 1;
+                if expected == &result {
+                    correct += 1;
+                    "✅"
+                } else {
+                    "❌"
+                }
             } else {
                 "-"
             };
@@ -601,6 +605,7 @@ nnW2WuEYWxYBKIHcotA=
                     .unwrap_or("N/A".to_string())
             );
         }
+        println!("{correct}/{total}");
     }
 
     fn make_rdn<'a>(oid_parts: &[u64], value: &'a [u8]) -> RelativeDistinguishedName<'a> {
