@@ -236,9 +236,9 @@ fn verify_chain_at(
             let (_, subject_cert) =
                 x509_parser::parse_x509_certificate(subject_cert.original_cert.as_ref()).unwrap();
             let structure_validity =
-                TbsCertificateStructureValidator.validate(&issuer_cert, &mut logger);
+                TbsCertificateStructureValidator.validate(&subject_cert, &mut logger);
             let x509_extensions_validity =
-                X509ExtensionsValidator.validate(&issuer_cert.extensions(), &mut logger);
+                X509ExtensionsValidator.validate(&subject_cert.extensions(), &mut logger);
             if !(structure_validity && x509_extensions_validity) {
                 log_error!("X509", "issuer cert has invalid structure");
                 return false;
