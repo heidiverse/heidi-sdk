@@ -100,6 +100,10 @@ class ViewModelFactory private constructor(
 		}
 	}
 
+	fun pruneIdentityCache(validIdentityNames: Set<String>) {
+		inMemoryCache.keys.retainAll(validIdentityNames)
+	}
+
 	@OptIn(ExperimentalEncodingApi::class)
 	fun getCredentialViewModel(
 		credential: CredentialModel,
@@ -200,11 +204,11 @@ class ViewModelFactory private constructor(
 	//TODO: We need to also do this for mdoc only schemas
 	//TODO: What about EAAs? How do we represent them? We should still use something like IdentityUiModel to combine them, but something less "personal identity" based
 	fun getIdentityUiModel(identity: IdentityModel, revocationCheck: RevocationCheck? = null): IdentityUiModel? {
-		val activities = activityRepository.getActivities(identity.credentials.map { it.id })
 		inMemoryCache[identity.name]?.let {
-			if (it.credentials.size == identity.credentials.size && it.activities.size == activities.size) {
+			if (it.credentials.size == identity.credentials.size) {
 				return it
 			}
+			val activities = activityRepository.getActivities(identity.credentials.map { it.id })
 			val updated = when (it) {
 				is IdentityUiModel.IdentityUiCredentialModel -> it.copy(
 					name = identity.name,
@@ -225,6 +229,7 @@ class ViewModelFactory private constructor(
 			trimPresentationCache()
 			return updated
 		}
+		val activities = activityRepository.getActivities(identity.credentials.map { it.id })
 
 		val credential = identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.SdJwt }
 			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.Mdoc }

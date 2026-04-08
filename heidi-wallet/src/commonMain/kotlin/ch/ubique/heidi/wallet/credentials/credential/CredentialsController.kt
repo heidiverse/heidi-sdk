@@ -102,6 +102,7 @@ class CredentialsController private constructor(
 		identityRepository.getByActivityId(activityId)?.let { viewModelFactory.getIdentityUiModel(it, revocationCheck) }
 
 	fun getAllIdentityUiModels() = identityRepository.getAllAsFlow().map {
+		viewModelFactory.pruneIdentityCache(it.map { identity -> identity.name }.toSet())
 		it.mapNotNull { identity ->
 			viewModelFactory.getIdentityUiModel(identity, revocationCheck)
 		}
@@ -111,6 +112,7 @@ class CredentialsController private constructor(
 			viewModelFactory.getIdentityUiModel(defId)
 		}
 	}, identityRepository.getAllAsFlow().map{
+		viewModelFactory.pruneIdentityCache(it.map { identity -> identity.name }.toSet())
 		it.mapNotNull { identity ->
 			viewModelFactory.getIdentityUiModel(identity, revocationCheck)
 		}

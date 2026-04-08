@@ -23,6 +23,7 @@ package ch.ubique.heidi.wallet.credentials.identity
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
+import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.identity.IdentityModel
 import ch.ubique.heidi.credentials.models.issuer.IssuerModel
 import ch.ubique.heidi.credentials.models.metadata.Tokens
@@ -30,6 +31,7 @@ import ch.ubique.heidi.credentials.models.oca.OcaBundleModel
 
 import ch.ubique.heidi.util.extensions.toBoolean
 import ch.ubique.heidi.util.extensions.toLong
+import ch.ubique.heidi.wallet.CredentialEntity
 import ch.ubique.heidi.wallet.HeidiDatabase
 import ch.ubique.heidi.wallet.IdentityEntity
 import ch.ubique.heidi.wallet.extensions.toModel
@@ -131,6 +133,8 @@ class IdentityRepository private constructor(db: HeidiDatabase) {
 		) { identities, issuers, credentials ->
 			identities.mapNotNull { identity ->
 				issuers.firstOrNull { it.url == identity.fk_issuer_url }?.toModel()?.let { issuer ->
+					val identityCredentials = credentials.filter { it.fk_identity_id == identity.id }
+
 					IdentityModel(
 						identity.id,
 						identity.name,
@@ -140,13 +144,11 @@ class IdentityRepository private constructor(db: HeidiDatabase) {
 						identity.oidc_settings,
 						issuer,
 						identity.credential_configuration_ids,
-						credentials.filter { it.fk_identity_id == identity.id }
-							.mapNotNull { it.toModel { url -> getOcaBundleForCredential(url) } },
+						identityCredentials.toListFlowCredentials(),
 						identity.is_pid?.toBoolean() ?: false,
 					)
 				}
 			}
-
 		}
 	}
 
@@ -246,6 +248,46 @@ class IdentityRepository private constructor(db: HeidiDatabase) {
 		return credentialQueries.getByIdentity(identityId)
 			.executeAsList()
 			.mapNotNull { it.toModel { url -> getOcaBundleForCredential(url) } }
+	}
+
+	private fun List<CredentialEntity>.toListFlowCredentials(): List<CredentialModel> {
+		val representativeCredentialId = firstRepresentativeCredentialId()
+		return mapNotNull { credential ->
+			val model = credential.toModel { url ->
+				if (credential.id == representativeCredentialId) {
+					getOcaBundleForCredential(url)
+				} else {
+					null
+				}
+			} ?: return@mapNotNull null
+
+			if (credential.id == representativeCredentialId) {
+				model
+			} else {
+				CredentialModel(
+					model.id,
+					model.identityId,
+					model.name,
+					model.metadata,
+					model.keyMaterialType,
+					model.credentialType,
+					"",
+					model.docType,
+					null,
+					model.isUsed,
+					model.createdAt,
+				)
+			}
+		}
+	}
+
+	private fun List<CredentialEntity>.firstRepresentativeCredentialId(): Long? {
+		return firstOrNull { it.credential_type == CredentialType.SdJwt }?.id
+			?: firstOrNull { it.credential_type == CredentialType.Mdoc }?.id
+			?: firstOrNull { it.credential_type == CredentialType.BbsTermwise }?.id
+			?: firstOrNull { it.credential_type == CredentialType.W3C_VCDM }?.id
+			?: firstOrNull { it.credential_type == CredentialType.OpenBadge303 }?.id
+			?: firstOrNull()?.id
 	}
 
 	private fun getOcaBundleForCredential(ocaBundleUrl: String): OcaBundleModel? {

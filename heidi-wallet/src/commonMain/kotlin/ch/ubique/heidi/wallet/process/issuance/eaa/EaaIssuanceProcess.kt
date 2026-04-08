@@ -421,23 +421,22 @@ open class EaaIssuanceProcess(
                     credentialMetadatas
                 )
 
-                return if (deferredEntry == null) {
-                    EaaIssuanceProcessStep.Error("Failed to insert identity")
-                } else {
-                    val updatedIdentity = identityRepository.getById(identity.id)
-                    val card = extractDeferredCardDetails(updatedIdentity, identityName, ocaServiceController, ocaRepository)
-                    val uiModel = viewModelFactory.getIdentityUiModel(deferredEntry, card)
+	                return if (deferredEntry == null) {
+	                    EaaIssuanceProcessStep.Error("Failed to insert identity")
+	                } else {
+	                    val updatedIdentity = identityRepository.getById(identity.id)
+	                    val card = extractDeferredCardDetails(updatedIdentity, identityName, ocaServiceController, ocaRepository)
+	                    val uiModel = viewModelFactory.getIdentityUiModel(deferredEntry, card)
 
-                    if (uiModel != null) {
-                        EaaIssuanceProcessStep.CredentialOffer(trustFlow.agentInformation, uiModel)
-                    } else {
-                        EaaIssuanceProcessStep.Error("Inserted identity could not be parsed")
-                    }
-                }
-            }
+	                    if (uiModel != null) {
+	                        EaaIssuanceProcessStep.CredentialOffer(trustFlow.agentInformation, uiModel)
+	                    } else {
+	                        EaaIssuanceProcessStep.Error("Inserted identity could not be parsed")
+	                    }
+	                }
+	            }
 
-
-            val insertedCredentialIds = if (credentials.subjects().isNotEmpty()) {
+            val credentialInsertions = if (credentials.subjects().isNotEmpty()) {
                 (credentials.credentials() zip credentials.subjects()).mapNotNull { (credential, signer) ->
 
                     val credentialMetadata = if (signer.privateKeyExportable()) {
@@ -457,44 +456,51 @@ open class EaaIssuanceProcess(
                         )
                     }
 
-                    val insertedCredential =
-                        insertCredential(identity.name, credential, credentialMetadata)
-                    return@mapNotNull insertedCredential?.id
+                    buildCredentialInsertion(identity.name, credential, credentialMetadata)
                 }
             } else {
                 credentials.credentials().mapNotNull { credential ->
                     val credentialMetadata = CredentialMetadata(KeyMaterial.Local.ClaimBased(), credential.credential.asMetadataFormat())
-                    val insertedCredential =
-                        insertCredential(identity.name, credential, credentialMetadata)
-                    return@mapNotNull insertedCredential?.id
+                    buildCredentialInsertion(identity.name, credential, credentialMetadata)
                 }
+            }
+
+            val insertedCredentialIds = db.transactionWithResult {
+                val insertedIds = credentialInsertions.mapNotNull { insertion ->
+                    executeCredentialInsertion(insertion)?.id
+                }
+
+                if (insertedIds.isNotEmpty()) {
+                    activityRepository.insertIssuance(
+                        baseUrl = trustFlow.agentInformation.domain,
+                        identityJwt = trustFlow.agentInformation.identityTrust,
+                        issuanceJwt = trustFlow.agentInformation.issuanceTrust,
+                        isVerified = trustFlow.agentInformation.isVerified,
+                        isTrusted = trustFlow.agentInformation.isTrusted,
+                        identityId = identity.id,
+                        credentialId = insertedIds.last(),
+                        trustFlow.agentInformation.trustFrameworkId
+                    )
+                }
+
+                insertedIds
             }
 
 
             if (insertedCredentialIds.isNotEmpty()) {
-                activityRepository.insertIssuance(
-                    baseUrl = trustFlow.agentInformation.domain,
-                    identityJwt = trustFlow.agentInformation.identityTrust,
-                    issuanceJwt = trustFlow.agentInformation.issuanceTrust,
-                    isVerified = trustFlow.agentInformation.isVerified,
-                    isTrusted = trustFlow.agentInformation.isTrusted,
-                    identityId = identity.id,
-                    credentialId = insertedCredentialIds.last(),
-                    trustFlow.agentInformation.trustFrameworkId
-                )
 
-                val updatedIdentity = identityRepository.getById(identity.id)
-                if (updatedIdentity == null) {
-                    EaaIssuanceProcessStep.Error("Failed to insert identity")
-                } else {
-                    val uiModel = viewModelFactory.getIdentityUiModel(updatedIdentity)
-                    if (uiModel != null) {
-                        EaaIssuanceProcessStep.CredentialOffer(trustFlow.agentInformation, uiModel)
-                    } else {
-                        EaaIssuanceProcessStep.Error("Inserted identity could not be parsed")
-                    }
-                }
-            } else {
+	                val updatedIdentity = identityRepository.getById(identity.id)
+	                if (updatedIdentity == null) {
+	                    EaaIssuanceProcessStep.Error("Failed to insert identity")
+	                } else {
+	                    val uiModel = viewModelFactory.getIdentityUiModel(updatedIdentity)
+	                    if (uiModel != null) {
+	                        EaaIssuanceProcessStep.CredentialOffer(trustFlow.agentInformation, uiModel)
+	                    } else {
+	                        EaaIssuanceProcessStep.Error("Inserted identity could not be parsed")
+	                    }
+	                }
+	            } else {
                 EaaIssuanceProcessStep.Error("No credentials inserted")
             }
         } catch (e: ApiException) {
