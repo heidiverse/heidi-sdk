@@ -51,6 +51,7 @@ import ch.ubique.heidi.visualization.oca.processing.AttributeValue
 import ch.ubique.heidi.visualization.oca.processing.OcaProcessor
 import ch.ubique.heidi.visualization.oca.processing.ProcessedAttribute
 import ch.ubique.heidi.wallet.credentials.activity.ActivityRepository
+import ch.ubique.heidi.wallet.credentials.activity.ActivityUiModel
 import ch.ubique.heidi.wallet.credentials.credential.CredentialUiModel
 import ch.ubique.heidi.wallet.credentials.format.sdjwt.getRenderMetadata
 import ch.ubique.heidi.wallet.credentials.identity.IdentityUiModel
@@ -91,6 +92,9 @@ class ViewModelFactory private constructor(
 	private val stringResourceProvider: StringResourceProvider,
 ) {
 	companion object {
+		private const val MAX_PRESENTATION_CACHE_ENTRIES = 64
+		private val inMemoryCache = LinkedHashMap<String, IdentityUiModel?>()
+
 		val koinModule = module {
 			factoryOf(::ViewModelFactory)
 		}
@@ -197,6 +201,30 @@ class ViewModelFactory private constructor(
 	//TODO: What about EAAs? How do we represent them? We should still use something like IdentityUiModel to combine them, but something less "personal identity" based
 	fun getIdentityUiModel(identity: IdentityModel, revocationCheck: RevocationCheck? = null): IdentityUiModel? {
 		val activities = activityRepository.getActivities(identity.credentials.map { it.id })
+		inMemoryCache[identity.name]?.let {
+			if (it.credentials.size == identity.credentials.size && it.activities.size == activities.size) {
+				return it
+			}
+			val updated = when (it) {
+				is IdentityUiModel.IdentityUiCredentialModel -> it.copy(
+					name = identity.name,
+					credentials = identity.credentials,
+					activities = activities,
+					frostBlob = identity.frostBlob,
+					credentialUiModel = emptyList(),
+				)
+				is IdentityUiModel.IdentityUiDeferredModel -> it.copy(
+					name = identity.name,
+					credentials = identity.credentials,
+					activities = activities,
+					frostBlob = identity.frostBlob,
+					credentialUiModel = emptyList(),
+				)
+			}
+			inMemoryCache[identity.name] = updated
+			trimPresentationCache()
+			return updated
+		}
 
 		val credential = identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.SdJwt }
 			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.Mdoc }
@@ -252,7 +280,7 @@ class ViewModelFactory private constructor(
 					isRevoked = isRevoked || runBlocking { revocationCheck.check(url, index.toInt()) }
 				}
 			}
-		}
+			}
 
 		try {
 			val jsonContent = jsonContent ?: return null
@@ -402,13 +430,23 @@ class ViewModelFactory private constructor(
                         frostBlob = identity.frostBlob,
                         credentialUiModel = emptyList()
                     )
-                }
+				}
                 CredentialType.Unknown -> null
 			}
-			return uiModel?.copy(isRevoked = isRevoked)
+			val newModel = uiModel?.copy(isRevoked = isRevoked)
+			inMemoryCache[identity.name] = newModel
+			trimPresentationCache()
+			return newModel
 		} catch (e: SerializationException) {
 			Logger.error("Could not map identity", e)
 			return null
+		}
+	}
+
+	private fun trimPresentationCache() {
+		while (inMemoryCache.size > MAX_PRESENTATION_CACHE_ENTRIES) {
+			val oldestKey = inMemoryCache.entries.firstOrNull()?.key ?: break
+			inMemoryCache.remove(oldestKey)
 		}
 	}
 
