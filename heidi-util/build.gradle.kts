@@ -32,7 +32,6 @@ kotlin {
 		}
 
 		iosTarget.binaries.all {
-			freeCompilerArgs += "-Xallocator=mimalloc"
 		}
 	}
 
