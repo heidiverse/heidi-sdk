@@ -33,6 +33,7 @@ class CredentialOfferRepository : HeidiIssuanceKoinComponent {
 	companion object {
 		private const val CREDENTIAL_OFFER_SCHEME = "openid-credential-offer"
 		private const val BIT_CREDENTIAL_OFFER_SCHEME = "swiyu"
+		private const val HAIP_CREDENTIAL_OFFER_SCHEME = "haip-vci"
 
 		private const val PARAM_CREDENTIAL_OFFER_URI = "credential_offer_uri"
 		private const val PARAM_CREDENTIAL_OFFER = "credential_offer"
@@ -48,7 +49,7 @@ class CredentialOfferRepository : HeidiIssuanceKoinComponent {
 		// Check if the offer string has the correct scheme
 		val parsedOfferString = Url(offerString)
 		val protocolName = parsedOfferString.protocol.name
-		if (!(protocolName == CREDENTIAL_OFFER_SCHEME || protocolName == BIT_CREDENTIAL_OFFER_SCHEME))  {
+		if (!(protocolName == CREDENTIAL_OFFER_SCHEME || protocolName == BIT_CREDENTIAL_OFFER_SCHEME || protocolName == HAIP_CREDENTIAL_OFFER_SCHEME)) {
 			return@withContext null
 		}
 
