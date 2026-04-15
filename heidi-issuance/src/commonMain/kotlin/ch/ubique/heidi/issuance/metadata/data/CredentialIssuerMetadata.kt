@@ -2,7 +2,7 @@ package ch.ubique.heidi.issuance.metadata.data
 
 import kotlinx.serialization.Serializable
 
-@Serializable
+@Serializable(with = CredentialIssuerMetadataSerializer::class)
 sealed class CredentialIssuerMetadata {
     @Serializable
     data class Signed(

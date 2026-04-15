@@ -96,8 +96,7 @@ class EaaRefreshProcess(
 				identity.issuer.authorizationServerMetadata,
 				identity.credentialConfigurationIds ?: "",
 			)
-			val credentialIssuerMetadata: CredentialIssuerMetadata? =
-				runCatching { json.decodeFromString<CredentialIssuerMetadata>(identity.issuer.credentialIssuerMetadata) }.getOrNull()
+			val credentialIssuerMetadata : CredentialIssuerMetadata = json.decodeFromString(identity.issuer.credentialIssuerMetadata)
 			val walletBackend = WalletBackend(EnvironmentController.getHsmBackendUrl())
 			val dpopSigner = secureHardwareAccess.getHardwareSigner(identity.tokens.dpopKeyReference)!!
 			val issuance = Oid4VciIssuance.fromMetadata(oidcMetadata, walletBackend, dpopSigner)
