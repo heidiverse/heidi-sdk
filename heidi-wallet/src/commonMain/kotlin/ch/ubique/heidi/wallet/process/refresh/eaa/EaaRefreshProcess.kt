@@ -28,6 +28,7 @@ import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
 import ch.ubique.heidi.credentials.models.metadata.Tokens
 import ch.ubique.heidi.issuance.metadata.data.AuthorizationServerMetadata
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataSerializer
 import ch.ubique.heidi.trust.TrustFrameworkController
 import ch.ubique.heidi.util.extensions.json
 import ch.ubique.heidi.util.log.Logger
@@ -97,7 +98,7 @@ class EaaRefreshProcess(
 				identity.credentialConfigurationIds ?: "",
 			)
 			val credentialIssuerMetadata: CredentialIssuerMetadata? =
-				runCatching { json.decodeFromString<CredentialIssuerMetadata>(identity.issuer.credentialIssuerMetadata) }.getOrNull()
+				runCatching { json.decodeFromString(CredentialIssuerMetadataSerializer, identity.issuer.credentialIssuerMetadata) }.getOrNull()
 			val walletBackend = WalletBackend(EnvironmentController.getHsmBackendUrl())
 			val dpopSigner = secureHardwareAccess.getHardwareSigner(identity.tokens.dpopKeyReference)!!
 			val issuance = Oid4VciIssuance.fromMetadata(oidcMetadata, walletBackend, dpopSigner)
