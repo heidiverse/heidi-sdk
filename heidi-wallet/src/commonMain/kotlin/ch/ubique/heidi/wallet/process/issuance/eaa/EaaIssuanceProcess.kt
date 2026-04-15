@@ -28,7 +28,6 @@ import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
 import ch.ubique.heidi.credentials.models.metadata.Tokens
 import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
-import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataSerializer
 import ch.ubique.heidi.trust.TrustFrameworkController
 import ch.ubique.heidi.util.random.RandomGenerator
 import ch.ubique.heidi.visualization.layout.LayoutData
@@ -129,7 +128,7 @@ open class EaaIssuanceProcess(
             val identity = identityRepository.getById(identityEntity.id)!!
             val deferredCredential = deferredCredentialsRepository.getForTransactionId(transactionId)!!
             val subjects = deferredCredential.decodeMetadata()!!
-            val credentialIssuerMetadata : CredentialIssuerMetadata = json.decodeFromString(CredentialIssuerMetadataSerializer, identity.issuer.credentialIssuerMetadata)
+            val credentialIssuerMetadata : CredentialIssuerMetadata = json.decodeFromString(identity.issuer.credentialIssuerMetadata)
             trustFlowFromSaved(credentialIssuerMetadata.claims.credentialIssuer, json.decodeFromString(identity.credentialConfigurationIds!!), credentialIssuerMetadata)
 
             val oidcMetadata =
