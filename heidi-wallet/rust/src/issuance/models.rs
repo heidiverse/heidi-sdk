@@ -90,6 +90,7 @@ pub struct CredentialIssuerMetadata {
     pub batch_credential_endpoint: Option<String>,
     pub deferred_credential_endpoint: Option<String>,
     pub notification_endpoint: Option<String>,
+    pub batch_credential_issuance: Option<BatchCredentialIssuance>,
     pub credential_request_encryption: Option<CredentialRequestEncryption>,
     pub credential_response_encryption: Option<CredentialResponseEncryption>,
     pub credential_identifiers_supported: Option<bool>,
@@ -97,6 +98,12 @@ pub struct CredentialIssuerMetadata {
     pub display: Option<Vec<Value>>,
     pub credential_configurations_supported:
         HashMap<String, CredentialConfigurationsSupportedObject>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
+pub struct BatchCredentialIssuance {
+    pub batch_size: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
