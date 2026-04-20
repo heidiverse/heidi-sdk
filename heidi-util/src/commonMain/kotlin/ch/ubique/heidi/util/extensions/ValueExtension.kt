@@ -243,11 +243,11 @@ fun Value.isSame(other: Value) : Boolean {
         is Value.Number if other is Value.Number -> this.v1.isSame(other.v1)
         is Value.Object if other is Value.Object && this.v1.size == other.v1.size -> {
             val thisEntries = this.v1.entries.toList()
-            val otherEntries = other.v1.entries.toList()
+            val otherEntries = other.v1
             for (i in 0..<this.v1.size) {
                 val thisEntry = thisEntries[i]
-                val otherEntry = otherEntries[i]
-                if(thisEntry.key != otherEntry.key || !thisEntry.value.isSame(otherEntry.value)) {
+                val otherEntry = otherEntries[thisEntry.key] ?: return false
+                if(!thisEntry.value.isSame(otherEntry)) {
                     return false
                 }
             }
