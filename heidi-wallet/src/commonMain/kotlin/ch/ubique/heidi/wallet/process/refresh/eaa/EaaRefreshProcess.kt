@@ -23,6 +23,7 @@ package ch.ubique.heidi.wallet.process.refresh.eaa
 import ch.ubique.heidi.credentials.SdJwt
 import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
+import ch.ubique.heidi.credentials.models.credential.CredentialModel
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
 import ch.ubique.heidi.credentials.models.metadata.Tokens
@@ -48,7 +49,6 @@ import ch.ubique.heidi.wallet.crypto.SecureHardwareAccess
 import ch.ubique.heidi.wallet.crypto.SigningProvider
 import ch.ubique.heidi.wallet.environment.EnvironmentController
 import ch.ubique.heidi.wallet.extensions.asErrorState
-import ch.ubique.heidi.wallet.keyvalue.KeyValueEntry
 import ch.ubique.heidi.wallet.keyvalue.KeyValueRepository
 import io.ktor.client.plugins.ResponseException
 import kotlinx.serialization.json.Json
@@ -117,11 +117,9 @@ class EaaRefreshProcess(
 			}
 
 			identityRepository.updateTokens(identity.id, Tokens.fromNative(tokens))
-			val numberOfCredentials =
-				credentialIssuerMetadata?.claims?.batchCredentialIssuance?.batchSize?.let { it.toUInt() / 2u } ?: keyValueRepository.getFor(
-					KeyValueEntry.MAX_CREDENTIALS
-				)
-					?.toUIntOrNull() ?: 1u
+			val batchSizeUint =
+				credentialIssuerMetadata.claims.batchCredentialIssuance?.batchSize?.toUInt()
+			val numberOfCredentials = determineNumberOfCredentialsToRefreshToBatchSize(identityUiModel.credentials, batchSizeUint ?: 0u)
 
 			val credentials = issuance.supplementIssuance(
 				tokens = tokens,
@@ -183,6 +181,31 @@ class EaaRefreshProcess(
 		}
 
 		return EaaRefreshProcessStep.Success
+	}
+
+	private fun determineNumberOfCredentialsToRefreshToBatchSize(credentials: List<CredentialModel>, batchSize: UInt): UInt {
+		// Only consider credential types that are actually present in the DB
+		val presentTypes = credentials.map { it.credentialType }.toSet()
+		val unusedCountsPerPresentType = presentTypes.map { type ->
+			credentials.count { it.credentialType == type && !it.isUsed }
+		}
+
+		// Try to fill up the most used credential type to the batch size.
+		val lowerUnusedCount = unusedCountsPerPresentType.minOrNull()?.toUInt() ?: 0u
+
+		if (lowerUnusedCount >= batchSize) {
+			// If we already have enough unused credentials, we just refresh 1 credential
+			return 1u
+		}
+
+		val missingCredentials = batchSize - lowerUnusedCount
+
+		// Request at most batch_size credentials, but bound it with 10 to avoid requesting too many credentials (DOS).
+		val maxNumberToRefresh = minOf(batchSize, 10u)
+		val numberToRefresh = minOf(missingCredentials, maxNumberToRefresh)
+
+		// Refresh at least 1 credential
+		return maxOf(numberToRefresh, 1u)
 	}
 
 	private suspend fun loadOcaBundleForCredential(credential: Credential): String? {
