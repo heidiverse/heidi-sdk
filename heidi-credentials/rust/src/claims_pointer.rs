@@ -124,7 +124,10 @@ pub fn selector(path: &Pointer) -> impl Fn(&Value) -> Result<Vec<Value>, QueryEr
                 return Err(QueryError::NoElementsFound);
             }
         }
-        Ok(currently_selected)
+        Ok(currently_selected
+            .into_iter()
+            .filter(|a| !a.is_null())
+            .collect())
     }
 }
 
