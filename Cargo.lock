@@ -2200,8 +2200,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c1832837b905bbfb5101e07cc24c8deddf52f93225eee6ead5f4d63d53ddcb"
 dependencies = [
  "const-oid 0.9.6",
- "der_derive",
- "flagset",
  "pem-rfc7468 0.7.0",
  "zeroize",
 ]
@@ -2229,17 +2227,6 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "rusticata-macros",
-]
-
-[[package]]
-name = "der_derive"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8034092389675178f570469e6c3b0465d3d30b4505c294a6550db47f3c17ad18"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -2920,12 +2907,6 @@ name = "fixedbitset"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
-
-[[package]]
-name = "flagset"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
 
 [[package]]
 name = "flate2"
@@ -3687,16 +3668,16 @@ dependencies = [
 [[package]]
 name = "heidi-jwt"
 version = "0.1.2"
-source = "git+https://github.com/heidiverse/heidi-jwt?tag=v0.1.0#a3a4e59b0ab25c72a9597d1b281d9774bd081dd6"
+source = "git+https://github.com/heidiverse/heidi-jwt?tag=v0.2.0#c774bd7c78f2c3dfc5518933daeed6532e1601b3"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "heidi-x509",
  "itertools 0.14.0",
- "josekit 0.10.3 (git+https://github.com/ubamrein/josekit-rs.git)",
+ "josekit",
  "serde",
  "serde_json",
  "tracing",
- "x509-cert",
 ]
 
 [[package]]
@@ -3728,7 +3709,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "heidi-jwt",
- "josekit 0.10.3 (git+https://github.com/heidiverse/josekit-rs.git)",
+ "josekit",
  "openidconnect-federation",
  "reqwest 0.11.27",
  "serde_json",
@@ -3777,11 +3758,12 @@ dependencies = [
  "heidi-credentials-rust",
  "heidi-jwt",
  "heidi-util-rust",
+ "heidi-x509",
  "hex",
  "hkdf 0.12.4",
  "http 0.2.12",
  "is_empty",
- "josekit 0.10.3 (git+https://github.com/heidiverse/josekit-rs.git)",
+ "josekit",
  "jsonpath_lib",
  "jsonschema",
  "lazy_static",
@@ -3825,9 +3807,9 @@ dependencies = [
 [[package]]
 name = "heidi-x509"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/heidi-x509.git#72e36c2b17460af7c2a2ab5c8252b24e1f7ec12f"
+source = "git+https://github.com/heidiverse/heidi-x509.git#8207b4d1dad155bf1459413cf50065af788f43e2"
 dependencies = [
- "josekit 0.10.3 (git+https://github.com/ubamrein/josekit-rs.git)",
+ "josekit",
  "oid-registry",
  "rsa 0.10.0-rc.9",
  "sha1",
@@ -4707,46 +4689,6 @@ dependencies = [
 name = "josekit"
 version = "0.10.3"
 source = "git+https://github.com/heidiverse/josekit-rs.git#89a3a6d24c9af2558ea4c910cae7cfe384a2b6c8"
-dependencies = [
- "aes 0.8.4",
- "aes-gcm 0.10.3",
- "aes-kw",
- "anyhow",
- "base64 0.22.1",
- "cbc 0.1.2",
- "crypto-bigint 0.7.0-rc.8",
- "crypto-primes",
- "cx448",
- "der 0.8.0-rc.7",
- "ed25519-dalek 2.2.0",
- "flate2",
- "getrandom 0.2.17",
- "getrandom 0.3.4",
- "hmac 0.13.0",
- "k256",
- "p256 0.13.2",
- "p384",
- "p521",
- "pbkdf2",
- "pem",
- "pkcs1 0.8.0-rc.3",
- "rand 0.9.4",
- "regex",
- "rsa 0.10.0-rc.9",
- "serde",
- "serde_json",
- "sha1",
- "sha2 0.11.0",
- "signature 3.0.0-rc.4",
- "thiserror 2.0.18",
- "time",
- "x25519-dalek 2.0.1",
-]
-
-[[package]]
-name = "josekit"
-version = "0.10.3"
-source = "git+https://github.com/ubamrein/josekit-rs.git#89a3a6d24c9af2558ea4c910cae7cfe384a2b6c8"
 dependencies = [
  "aes 0.8.4",
  "aes-gcm 0.10.3",
@@ -6033,7 +5975,7 @@ dependencies = [
 [[package]]
 name = "openidconnect-federation"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/openidconnect-federation.git?branch=main#314acb73030c61c825818f098f295dc804e87006"
+source = "git+https://github.com/UbiqueInnovation/openidconnect-federation.git?branch=main#89f0859c8473d9c1f5faf768dfbff5d35215d1d7"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -9224,27 +9166,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
-name = "tls_codec"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0de2e01245e2bb89d6f05801c564fa27624dbd7b1846859876c7dad82e90bf6b"
-dependencies = [
- "tls_codec_derive",
- "zeroize",
-]
-
-[[package]]
-name = "tls_codec_derive"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2e76690929402faae40aebdda620a2c0e25dd6d3b9afe48867dfd95991f4bd"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "tokio"
 version = "1.52.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11273,18 +11194,6 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "zeroize",
-]
-
-[[package]]
-name = "x509-cert"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1301e935010a701ae5f8655edc0ad17c44bad3ac5ce8c39185f75453b720ae94"
-dependencies = [
- "const-oid 0.9.6",
- "der 0.7.10",
- "spki 0.7.3",
- "tls_codec",
 ]
 
 [[package]]
