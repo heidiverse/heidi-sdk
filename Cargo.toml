@@ -36,6 +36,6 @@ jsonschema = { version = "0.17", default-features = false }
 openidconnect-federation = { git = "https://github.com/UbiqueInnovation/openidconnect-federation.git", branch = "main" }
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 ark-serialize = "0.4.2"
-josekit = { git = "https://github.com/ubamrein/josekit-rs.git", default-features = false, features = [
+josekit = { git = "https://github.com/heidiverse/josekit-rs.git", default-features = false, features = [
     "rustcrypto",
 ] }
