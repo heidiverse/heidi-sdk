@@ -29,8 +29,8 @@ ubique-gradle-preset = "8.10.0"
 ubique-gradle-signing = "8.10.0"
 ubique-qrscanner = "1.1.1"
 vanniktech-publish = "0.34.0"
-uniffi-bindgen = "v0.6.14"
-uniffi-plugin = "0.4.0"
+uniffi-bindgen = "v1.0.7"
+uniffi-plugin = "1.0.7"
 material-icons = "1.7.8"
 
 [libraries]
