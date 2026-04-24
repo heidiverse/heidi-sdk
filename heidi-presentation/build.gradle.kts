@@ -34,10 +34,9 @@ kotlin {
 		}
 
 		iosTarget.binaries.all {
-			freeCompilerArgs += "-Xallocator=mimalloc"
 		}
 
-		iosTarget.compilations.getByName("main") {
+		iosTarget.compilations.configureEach {
 			useRustUpLinker()
 		}
 	}
