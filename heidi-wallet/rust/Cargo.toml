@@ -67,6 +67,7 @@ next-gen-signatures = { git = "https://github.com/UbiqueInnovation/sprind-next-g
 ], optional = true }
 josekit.workspace = true
 heidi-jwt.workspace = true
+heidi-x509.workspace = true
 serde_with_macros.workspace = true
 jsonschema.workspace = true
 is_empty = "0.3.0"

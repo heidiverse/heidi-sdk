@@ -26,8 +26,8 @@ under the License.
 use crate::log_error;
 
 use heidi_jwt::jwt::{
-    verifier::{ClaimValidator, DefaultVerifier},
     Jwt,
+    verifier::{ClaimValidator, DefaultVerifier},
 };
 
 use std::{collections::VecDeque, fmt::Debug, str::FromStr};
@@ -43,8 +43,8 @@ use x509_parser::{
 use crate::issuance::{self, metadata::MetadataFetcher};
 #[allow(unused)]
 use crate::{
-    error::{AgentParseError, IssuerError, VerifierError, VerifierParseError},
     ApiError,
+    error::{AgentParseError, IssuerError, VerifierError, VerifierParseError},
 };
 #[cfg(all(feature = "uniffi", feature = "reqwest"))]
 use crate::{TRUSTED_CAS, TRUSTED_ISSUERS};
@@ -198,7 +198,8 @@ impl AgentInfo {
         };
 
         // check the integrity of the certificate chain
-        let Ok(_) = heidi_jwt::jwt::check_x5c_chain(&chain) else {
+
+        if !heidi_x509::x509::verify_chain(chain.clone()) {
             log_error!("AgentInfo::Parsing", "X5C integrity check failed");
             return decode_jwt_insecure(&jwt).await;
         };
