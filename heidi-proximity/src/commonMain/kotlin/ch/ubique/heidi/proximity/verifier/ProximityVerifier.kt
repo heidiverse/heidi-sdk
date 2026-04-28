@@ -44,10 +44,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import uniffi.heidi_crypto_rust.EphemeralKey
+import uniffi.heidi_crypto_rust.KeyType
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
 import uniffi.heidi_crypto_rust.base64UrlEncode
-import uniffi.heidi_crypto_rust.sha256Rs
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.encodeCbor
 import kotlin.uuid.Uuid
@@ -73,11 +73,12 @@ class ProximityVerifier<T> private constructor(
 							  requester: DocumentRequester<T>,
 							  serviceUuid: String,
 							  preferDcApi: Boolean = true,
-							  peripheralServerUuid: String? = null): ProximityVerifier<T> {
-			val publicKey = EphemeralKey(Role.SK_READER)
+							  peripheralServerUuid: String? = null,
+							  keyType: KeyType = KeyType.ED25519): ProximityVerifier<T> {
+			val publicKey = EphemeralKey(Role.SK_READER, keyType)
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
-					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey())
+					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey(), keyType)
 					val coseKeyEncoded = encodeCbor(coseKey)
 
 					val transportProtocol = MdlTransportProtocol(
@@ -116,11 +117,12 @@ class ProximityVerifier<T> private constructor(
 			requester: DocumentRequester<T>,
 			qrcodeData: String? = null,
 			preferDcApi: Boolean = true,
+			keyType: KeyType = KeyType.ED25519
 		): ProximityVerifier<T>? {
-			val publicKey = EphemeralKey(Role.SK_READER)
+			val publicKey = EphemeralKey(Role.SK_READER, keyType)
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
-					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey())
+					val coseKey = MdlCoseKey.fromPublicKeyBytes(publicKey.publicKey(), keyType)
 					val engagementData = qrcodeData ?: return null
 					val deviceEngagement = MdlEngagement.fromQrCode(engagementData)
 					val transportProtocol = MdlTransportProtocol(

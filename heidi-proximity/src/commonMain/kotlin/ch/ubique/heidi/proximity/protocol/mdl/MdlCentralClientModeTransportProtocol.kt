@@ -34,6 +34,7 @@ import ch.ubique.heidi.proximity.ble.server.GattRequestResult
 import ch.ubique.heidi.proximity.di.HeidiProximityKoinComponent
 import ch.ubique.heidi.proximity.protocol.BleTransportProtocol
 import ch.ubique.heidi.util.extensions.asBytes
+import ch.ubique.heidi.util.extensions.asLong
 import ch.ubique.heidi.util.extensions.asOrderedObject
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.toCbor
@@ -88,9 +89,20 @@ internal class MdlCentralClientModeTransportProtocol(
 		)
 		// Use the peerKey if we are the mdl reader
 		val coseKey = decodeCbor(peerCoseKey ?: eReaderKeyBytes)
-		val x = coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes() ?: return null
-		val y = coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes() ?: return null
-		val publicKey = byteArrayOf(0x04) + x + y
+		val kty = coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(1)))!!.asLong() ?: return null
+		val publicKey = when(kty) {
+			// OKP, only x coordinate
+			1L -> {
+				coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes() ?: return null
+			}
+			// EC key sec1 bytes
+			2L -> {
+				val x = coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-2)))!!.asBytes() ?: return null
+				val y = coseKey.asOrderedObject()?.get(Value.Number(JsonNumber.Integer(-3)))!!.asBytes() ?: return null
+				byteArrayOf(0x04) + x + y
+			}
+			else -> return null
+		}
 		return this.ephemeralKey.getSessionCipher(sessionTranscriptBytes, publicKey)
 	}
 
