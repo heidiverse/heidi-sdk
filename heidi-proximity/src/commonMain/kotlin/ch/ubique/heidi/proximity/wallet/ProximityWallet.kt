@@ -57,6 +57,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import uniffi.heidi_crypto_rust.EphemeralKey
+import uniffi.heidi_crypto_rust.KeyType
 import uniffi.heidi_crypto_rust.Role
 import uniffi.heidi_crypto_rust.SessionCipher
 import uniffi.heidi_crypto_rust.sha256Rs
@@ -77,12 +78,13 @@ class ProximityWallet private constructor(
 	companion object {
 		fun createReverse(	protocol: ProximityProtocol,
 							  scope: CoroutineScope,
-						   readerEngagement: String
+						   readerEngagement: String,
+						   keyType: KeyType = KeyType.ED25519
 						   ) : ProximityWallet {
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
-					val keypair = EphemeralKey(Role.SK_DEVICE)
-					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
+					val keypair = EphemeralKey(Role.SK_DEVICE,keyType)
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey(), keyType)
 					val readerEngagement = MdlEngagement.fromQrCode(readerEngagement)
 
 					val transportProtocol = MdlTransportProtocol(
@@ -115,12 +117,13 @@ class ProximityWallet private constructor(
 			protocol: ProximityProtocol,
 			scope: CoroutineScope,
 			serviceUuid: String,
-			peripheralServerUuid: String? = null
+			peripheralServerUuid: String? = null,
+			keyType: KeyType = KeyType.ED25519
 		): ProximityWallet {
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
-					val keypair = EphemeralKey(Role.SK_DEVICE)
-					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
+					val keypair = EphemeralKey(Role.SK_DEVICE, keyType)
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey(), keyType)
 
 					val transportProtocol = MdlTransportProtocol(
 						TransportProtocol.Role.WALLET,
@@ -153,12 +156,13 @@ class ProximityWallet private constructor(
 			protocol: ProximityProtocol,
 			scope: CoroutineScope,
 			serviceUuid: Uuid,
-			peripheralServerUuid: Uuid? = null
+			peripheralServerUuid: Uuid? = null,
+			keyType: KeyType = KeyType.ED25519
 		): ProximityWallet {
 			return when (protocol) {
 				ProximityProtocol.MDL -> {
-					val keypair = EphemeralKey(Role.SK_DEVICE)
-					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey())
+					val keypair = EphemeralKey(Role.SK_DEVICE, keyType)
+					val coseKey = MdlCoseKey.encodedFromPublicKeyBytes(keypair.publicKey(), keyType)
 
 					val transportProtocol = MdlTransportProtocol(
 						TransportProtocol.Role.WALLET,
