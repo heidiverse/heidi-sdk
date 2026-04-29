@@ -19,19 +19,128 @@ under the License.
  */
 
 use std::sync::{
+    Arc, Mutex,
     atomic::{AtomicU32, Ordering},
-    Arc,
 };
 
-use aes_gcm::{aead::AeadMut, Aes256Gcm, KeyInit, Nonce};
-use heidi_util_rust::log::{log, LogPriority};
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce, aead::AeadMut};
+use heidi_util_rust::log::{LogPriority, log};
 use hkdf::Hkdf;
 use rand::rngs::OsRng;
 use sha2::{Digest, Sha256};
 
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
+#[derive(Copy, Clone)]
+pub enum KeyType {
+    P256,
+    P384,
+    P521,
+    Ed25519,
+    #[cfg(feature = "x448")]
+    Ed448,
+}
+
+pub enum EphemeralSecretKey {
+    P256(p256::ecdh::EphemeralSecret),
+    P384(p384::ecdh::EphemeralSecret),
+    P521(p521::ecdh::EphemeralSecret),
+    Ed25519(x25519_dalek::EphemeralSecret),
+    #[cfg(feature = "x448")]
+    Ed448(x448::Secret),
+}
+
+impl EphemeralSecretKey {
+    pub fn random(key_type: KeyType) -> Self {
+        match key_type {
+            KeyType::P256 => Self::P256(p256::ecdh::EphemeralSecret::random(&mut OsRng)),
+            KeyType::P384 => Self::P384(p384::ecdh::EphemeralSecret::random(&mut OsRng)),
+            KeyType::P521 => Self::P521(p521::ecdh::EphemeralSecret::random(&mut OsRng)),
+            KeyType::Ed25519 => {
+                Self::Ed25519(x25519_dalek::EphemeralSecret::random_from_rng(&mut OsRng))
+            }
+            #[cfg(feature = "x448")]
+            KeyType::Ed448 => {
+                // Problems with different trait versions, fill bytes here directly
+                use rand::RngCore;
+                let mut bytes = [0u8; 56];
+                OsRng.fill_bytes(&mut bytes);
+                Self::Ed448(x448::Secret::from(bytes))
+            }
+        }
+    }
+    pub fn public_key(k: &Self) -> Vec<u8> {
+        match k {
+            EphemeralSecretKey::P256(ephemeral_secret) => {
+                ephemeral_secret.public_key().to_sec1_bytes().to_vec()
+            }
+            EphemeralSecretKey::P384(ephemeral_secret) => {
+                ephemeral_secret.public_key().to_sec1_bytes().to_vec()
+            }
+            EphemeralSecretKey::P521(ephemeral_secret) => {
+                ephemeral_secret.public_key().to_sec1_bytes().to_vec()
+            }
+            EphemeralSecretKey::Ed25519(ephemeral_secret) => {
+                x25519_dalek::PublicKey::from(ephemeral_secret)
+                    .to_bytes()
+                    .to_vec()
+            }
+            #[cfg(feature = "x448")]
+            EphemeralSecretKey::Ed448(ephemeral_secret) => {
+                x448::PublicKey::from(ephemeral_secret).as_bytes().to_vec()
+            }
+        }
+    }
+    pub fn diffie_hellman(self, peer_public_key: &[u8]) -> Option<Vec<u8>> {
+        Some(match self {
+            EphemeralSecretKey::P256(ephemeral_secret) => {
+                let pub_key = p256::PublicKey::from_sec1_bytes(peer_public_key).ok()?;
+                ephemeral_secret
+                    .diffie_hellman(&pub_key)
+                    .raw_secret_bytes()
+                    .to_vec()
+            }
+            EphemeralSecretKey::P384(ephemeral_secret) => {
+                let pub_key = p384::PublicKey::from_sec1_bytes(peer_public_key).ok()?;
+                ephemeral_secret
+                    .diffie_hellman(&pub_key)
+                    .raw_secret_bytes()
+                    .to_vec()
+            }
+            EphemeralSecretKey::P521(ephemeral_secret) => {
+                let pub_key = p521::PublicKey::from_sec1_bytes(peer_public_key).ok()?;
+                ephemeral_secret
+                    .diffie_hellman(&pub_key)
+                    .raw_secret_bytes()
+                    .to_vec()
+            }
+            EphemeralSecretKey::Ed25519(ephemeral_secret) => {
+                let mut pub_key = [0u8; 32];
+                if peer_public_key.len() != 32 {
+                    return None;
+                }
+                pub_key.copy_from_slice(&peer_public_key[..32]);
+                let pub_key = x25519_dalek::PublicKey::try_from(pub_key).ok()?;
+                ephemeral_secret
+                    .diffie_hellman(&pub_key)
+                    .to_bytes()
+                    .to_vec()
+            }
+            #[cfg(feature = "x448")]
+            EphemeralSecretKey::Ed448(ephemeral_secret) => {
+                let pub_key = x448::PublicKey::from_bytes(peer_public_key)?;
+                ephemeral_secret
+                    .to_diffie_hellman(&pub_key)?
+                    .as_bytes()
+                    .to_vec()
+            }
+        })
+    }
+}
+
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct EphemeralKey {
-    key: p256::ecdh::EphemeralSecret,
+    key: Arc<Mutex<Option<EphemeralSecretKey>>>,
+    public_key: Vec<u8>,
     role: Role,
 }
 
@@ -45,32 +154,34 @@ pub enum Role {
 #[cfg_attr(feature = "uniffi", uniffi::export)]
 impl EphemeralKey {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
-    pub fn new(role: Role) -> Self {
+    pub fn new(role: Role, key_type: KeyType) -> Self {
+        let ephemeral_secret = EphemeralSecretKey::random(key_type);
+        let public_key = EphemeralSecretKey::public_key(&ephemeral_secret);
         Self {
-            key: p256::ecdh::EphemeralSecret::random(&mut OsRng),
+            key: Arc::new(Mutex::new(Some(ephemeral_secret))),
+            public_key,
             role,
         }
     }
     pub fn public_key(&self) -> Vec<u8> {
-        self.key.public_key().to_sec1_bytes().to_vec()
+        self.public_key.clone()
     }
     pub fn get_session_cipher(
         &self,
         session_transcript: &[u8],
         peer_public_key: &[u8],
     ) -> Option<Arc<SessionCipher>> {
-        let peer_public_key = p256::PublicKey::from_sec1_bytes(peer_public_key).ok()?;
-        let shared_secret = self.key.diffie_hellman(&peer_public_key);
-        let sk_reader_key = hkdf_iso_180135(
-            shared_secret.raw_secret_bytes(),
-            session_transcript,
-            Role::SkReader,
-        );
-        let sk_device_key = hkdf_iso_180135(
-            shared_secret.raw_secret_bytes(),
-            session_transcript,
-            Role::SkDevice,
-        );
+        let Ok(mut guard) = self.key.lock() else {
+            return None;
+        };
+        let Some(k) = guard.take() else {
+            return None;
+        };
+        let shared_secret = k.diffie_hellman(peer_public_key)?;
+        let sk_reader_key =
+            hkdf_iso_180135(shared_secret.as_slice(), session_transcript, Role::SkReader);
+        let sk_device_key =
+            hkdf_iso_180135(shared_secret.as_slice(), session_transcript, Role::SkDevice);
         Some(Arc::new(SessionCipher {
             sk_reader_key,
             sk_device_key,
@@ -188,7 +299,7 @@ pub fn decrypt_epoch_iso_180135(
 #[cfg(test)]
 mod tests {
     use crate::iso180135::{
-        decrypt_epoch_iso_180135, encrypt_epoch_iso_180135, EphemeralKey, Role,
+        EphemeralKey, KeyType, Role, decrypt_epoch_iso_180135, encrypt_epoch_iso_180135,
     };
 
     #[test]
@@ -201,32 +312,41 @@ mod tests {
     }
     #[test]
     pub fn test_encrypt_decrypt_sk_device() {
-        let mdoc_reader = EphemeralKey::new(Role::SkReader);
-        let mdoc = EphemeralKey::new(Role::SkDevice);
-        let mdoc_reader_session = mdoc_reader
-            .get_session_cipher(&vec![], &mdoc.public_key())
-            .unwrap();
-        let mdoc_session = mdoc
-            .get_session_cipher(&vec![], &mdoc_reader.public_key())
-            .unwrap();
+        for key_type in [
+            KeyType::P256,
+            KeyType::P384,
+            KeyType::P521,
+            KeyType::Ed25519,
+            #[cfg(feature = "x448")]
+            KeyType::Ed448,
+        ] {
+            let mdoc_reader = EphemeralKey::new(Role::SkReader, key_type);
+            let mdoc = EphemeralKey::new(Role::SkDevice, key_type);
+            let mdoc_reader_session = mdoc_reader
+                .get_session_cipher(&vec![], &mdoc.public_key())
+                .unwrap();
+            let mdoc_session = mdoc
+                .get_session_cipher(&vec![], &mdoc_reader.public_key())
+                .unwrap();
 
-        let cipher_reader_to_mdoc = mdoc_reader_session.encrypt(b"hallo").unwrap();
-        let decrypted = mdoc_session.decrypt(&cipher_reader_to_mdoc).unwrap();
-        assert_eq!(b"hallo", decrypted.as_slice());
-        let cipher_mdoc_to_reader = mdoc_session.encrypt("hallo zurück".as_bytes()).unwrap();
-        let decrypted = mdoc_reader_session.decrypt(&cipher_mdoc_to_reader).unwrap();
-        assert_eq!("hallo zurück".as_bytes(), decrypted.as_slice());
-        let cipher_mdoc_to_reader = mdoc_session.encrypt("hallo zurück".as_bytes()).unwrap();
-        let decrypted = mdoc_reader_session.decrypt(&cipher_mdoc_to_reader).unwrap();
-        assert_eq!("hallo zurück".as_bytes(), decrypted.as_slice());
-        let cipher_mdoc_to_reader = mdoc_session.encrypt("hallo zurück".as_bytes()).unwrap();
-        let decrypted = mdoc_reader_session.decrypt(&cipher_mdoc_to_reader).unwrap();
-        assert_eq!("hallo zurück".as_bytes(), decrypted.as_slice());
-        let cipher_mdoc_to_reader = mdoc_session.encrypt("hallo zurück".as_bytes()).unwrap();
-        let decrypted = mdoc_reader_session.decrypt(&cipher_mdoc_to_reader).unwrap();
-        assert_eq!("hallo zurück".as_bytes(), decrypted.as_slice());
-        let cipher_reader_to_mdoc = mdoc_reader_session.encrypt(b"hallo").unwrap();
-        let decrypted = mdoc_session.decrypt(&cipher_reader_to_mdoc).unwrap();
-        assert_eq!(b"hallo", decrypted.as_slice());
+            let cipher_reader_to_mdoc = mdoc_reader_session.encrypt(b"hallo").unwrap();
+            let decrypted = mdoc_session.decrypt(&cipher_reader_to_mdoc).unwrap();
+            assert_eq!(b"hallo", decrypted.as_slice());
+            let cipher_mdoc_to_reader = mdoc_session.encrypt("hallo zurück".as_bytes()).unwrap();
+            let decrypted = mdoc_reader_session.decrypt(&cipher_mdoc_to_reader).unwrap();
+            assert_eq!("hallo zurück".as_bytes(), decrypted.as_slice());
+            let cipher_mdoc_to_reader = mdoc_session.encrypt("hallo zurück".as_bytes()).unwrap();
+            let decrypted = mdoc_reader_session.decrypt(&cipher_mdoc_to_reader).unwrap();
+            assert_eq!("hallo zurück".as_bytes(), decrypted.as_slice());
+            let cipher_mdoc_to_reader = mdoc_session.encrypt("hallo zurück".as_bytes()).unwrap();
+            let decrypted = mdoc_reader_session.decrypt(&cipher_mdoc_to_reader).unwrap();
+            assert_eq!("hallo zurück".as_bytes(), decrypted.as_slice());
+            let cipher_mdoc_to_reader = mdoc_session.encrypt("hallo zurück".as_bytes()).unwrap();
+            let decrypted = mdoc_reader_session.decrypt(&cipher_mdoc_to_reader).unwrap();
+            assert_eq!("hallo zurück".as_bytes(), decrypted.as_slice());
+            let cipher_reader_to_mdoc = mdoc_reader_session.encrypt(b"hallo").unwrap();
+            let decrypted = mdoc_session.decrypt(&cipher_reader_to_mdoc).unwrap();
+            assert_eq!(b"hallo", decrypted.as_slice());
+        }
     }
 }
