@@ -22,6 +22,7 @@ package ch.ubique.heidi.wallet.extensions
 
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
+import ch.ubique.heidi.credentials.models.credential.CredentialSummaryModel
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.issuer.IssuerModel
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterialType
@@ -75,6 +76,27 @@ fun CredentialEntity.toModel(
 			this.fk_oca_bundle_url?.let { ocaBundleProvider.invoke(it) },
 			this.used.toBoolean(),
 			this.created_at
+		)
+	}
+}
+
+fun CredentialEntity.toSummaryModel(
+	includePayload: Boolean,
+	ocaBundleProvider: (String) -> OcaBundleModel?,
+): CredentialSummaryModel? {
+	return this.decodeMetadata()?.let { metadata ->
+		CredentialSummaryModel(
+			id = this.id,
+			identityId = this.fk_identity_id,
+			name = this.name,
+			metadata = metadata,
+			keyMaterialType = this.key_material_type,
+			credentialType = this.credential_type,
+			payload = this.payload.takeIf { includePayload },
+			docType = this.doc_type,
+			ocaBundle = this.fk_oca_bundle_url?.let { ocaBundleProvider.invoke(it) },
+			isUsed = this.used.toBoolean(),
+			createdAt = this.created_at,
 		)
 	}
 }

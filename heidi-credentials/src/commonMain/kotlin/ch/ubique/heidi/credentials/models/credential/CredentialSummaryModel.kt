@@ -1,0 +1,59 @@
+/* Copyright 2025 Ubique Innovation AG
+
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+ */
+
+package ch.ubique.heidi.credentials.models.credential
+
+import ch.ubique.heidi.credentials.models.metadata.KeyMaterialType
+import ch.ubique.heidi.credentials.models.oca.OcaBundleModel
+
+/**
+ * Lightweight credential representation for list/overview use-cases.
+ *
+ * Payload and OCA content are optional so overview flows can keep just the
+ * representative credential hydrated and avoid materializing every large
+ * string for every credential in the wallet.
+ */
+data class CredentialSummaryModel(
+	val id: Long,
+	val identityId: Long,
+	val name: String,
+	val metadata: CredentialMetadata,
+	val keyMaterialType: KeyMaterialType,
+	val credentialType: CredentialType,
+	val payload: String?,
+	val docType: String,
+	val ocaBundle: OcaBundleModel?,
+	val isUsed: Boolean,
+	val createdAt: Long,
+) {
+	fun toCredentialModel() = CredentialModel(
+		id = id,
+		identityId = identityId,
+		name = name,
+		metadata = metadata,
+		keyMaterialType = keyMaterialType,
+		credentialType = credentialType,
+		payload = payload.orEmpty(),
+		docType = docType,
+		ocaBundle = ocaBundle,
+		isUsed = isUsed,
+		createdAt = createdAt,
+	)
+}
