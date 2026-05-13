@@ -192,6 +192,8 @@ pub enum DcqlCredentialQueryMismatch {
     W3CMeta(W3CMetaMismatch),
     /// Credential types does not match the one from the query
     LdpMeta(LdpMetaMismatch),
+    /// Externally registered data types
+    CredentialMetaMismatch,
 
     /// This credential does not have a matching format
     ExpectedFormat(String),
@@ -202,6 +204,37 @@ pub enum DcqlCredentialQueryMismatch {
     UnsatisfiedClaimQueries(Vec<DcqlClaimQueryMismatch>),
     /// The credential does not match the trusted authorities matcher (of which we have registered ones)
     UnstatisfiedTrustedAuthority(Vec<TrustedAuthority>),
+}
+#[derive(Debug, Clone, uniffi::Enum, Serialize)]
+pub enum MetaMismatch {
+    SdJwtMetaMismatch(SdJwtMetaMismatch),
+    MdocMetaMismatch(MdocMetaMismatch),
+    BbsMetaMismatch(BbsMetaMismatch),
+    W3CMetaMismatch(W3CMetaMismatch),
+    LdpMetaMismatch(LdpMetaMismatch),
+    Other,
+}
+impl From<MetaMismatch> for DcqlCredentialQueryMismatch {
+    fn from(value: MetaMismatch) -> Self {
+        match value {
+            MetaMismatch::SdJwtMetaMismatch(sd_jwt_meta_mismatch) => {
+                DcqlCredentialQueryMismatch::SdJwtMeta(sd_jwt_meta_mismatch)
+            }
+            MetaMismatch::MdocMetaMismatch(mdoc_meta_mismatch) => {
+                DcqlCredentialQueryMismatch::MdocMeta(mdoc_meta_mismatch)
+            }
+            MetaMismatch::BbsMetaMismatch(bbs_meta_mismatch) => {
+                DcqlCredentialQueryMismatch::BbsMeta(bbs_meta_mismatch)
+            }
+            MetaMismatch::W3CMetaMismatch(w3_cmeta_mismatch) => {
+                DcqlCredentialQueryMismatch::W3CMeta(w3_cmeta_mismatch)
+            }
+            MetaMismatch::LdpMetaMismatch(ldp_meta_mismatch) => {
+                DcqlCredentialQueryMismatch::LdpMeta(ldp_meta_mismatch)
+            }
+            MetaMismatch::Other => DcqlCredentialQueryMismatch::CredentialMetaMismatch,
+        }
+    }
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
@@ -507,12 +540,13 @@ pub fn get_requested_attributes(
         for claim in claims {
             // generate a unified body payload type...
             let body = match &credential {
-                Credential::SdJwtCredential(sdjwt) => sdjwt.claims.clone(),
-                Credential::MdocCredential(mdoc) => mdoc.namespace_map.clone(),
+                Credential::SdJwtCredential(sdjwt) => sdjwt.get_body(),
+                Credential::MdocCredential(mdoc) => mdoc.get_body(),
                 #[cfg(feature = "bbs")]
-                Credential::BbsCredential(bbs) => bbs.body().clone(),
-                Credential::W3CCredential(w3c) => w3c.json.clone(),
-                Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
+                Credential::BbsCredential(bbs) => bbs.get_body(),
+                Credential::W3CCredential(w3c) => w3c.get_body(),
+                Credential::OpenBadge303Credential(vc) => vc.get_body(),
+                Credential::Other(o) => o.get_body(),
             };
 
             // ... and try resolve the pointers (as there is also slicing)
@@ -546,12 +580,13 @@ pub fn get_requested_attributes(
             };
 
             let body = match &credential {
-                Credential::SdJwtCredential(sdjwt) => sdjwt.claims.clone(),
-                Credential::MdocCredential(mdoc) => mdoc.namespace_map.clone(),
+                Credential::SdJwtCredential(sdjwt) => sdjwt.get_body(),
+                Credential::MdocCredential(mdoc) => mdoc.get_body(),
                 #[cfg(feature = "bbs")]
-                Credential::BbsCredential(bbs) => bbs.body().clone(),
-                Credential::W3CCredential(w3c) => w3c.json.clone(),
-                Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
+                Credential::BbsCredential(bbs) => bbs.get_body().clone(),
+                Credential::W3CCredential(w3c) => w3c.get_body(),
+                Credential::OpenBadge303Credential(vc) => vc.get_body(),
+                Credential::Other(credential_like) => credential_like.get_body(),
             };
 
             let all_ptrs = claim.path.resolve_ptr(body.clone()).unwrap_or(vec![]);
@@ -691,34 +726,42 @@ impl Credential {
             {
                 return Err(expected_format_error)
             }
+            Credential::Other(o) if !o.format_specifiers().contains(&credential_query.format) => {
+                return Err(expected_format_error)
+            }
             _ => (),
         }
         // check for the meta attribute
         match self {
             Credential::SdJwtCredential(sd_jwt) => {
-                if let Err(e) = Self::matches_meta_sdjwt(sd_jwt, credential_query.meta.as_ref()) {
-                    return Err(DcqlCredentialQueryMismatch::SdJwtMeta(e));
+                if let Some(e) = sd_jwt.matches_meta(credential_query.meta.clone()) {
+                    return Err(e.into());
                 }
             }
             Credential::MdocCredential(mdoc) => {
-                if let Err(e) = Self::matches_meta_mdoc(mdoc, credential_query.meta.as_ref()) {
-                    return Err(DcqlCredentialQueryMismatch::MdocMeta(e));
+                if let Some(e) = mdoc.matches_meta(credential_query.meta.clone()) {
+                    return Err(e.into());
                 }
             }
             #[cfg(feature = "bbs")]
             Credential::BbsCredential(bbs) => {
-                if let Err(e) = Self::matches_meta_bbs(bbs, credential_query.meta.as_ref()) {
-                    return Err(DcqlCredentialQueryMismatch::BbsMeta(e));
+                if let Some(e) = bbs.matches_meta(credential_query.meta.clone()) {
+                    return Err(e.into());
                 }
             }
             Credential::W3CCredential(w3c) => {
-                if let Err(e) = Self::matches_meta_w3c(w3c, credential_query.meta.as_ref()) {
-                    return Err(DcqlCredentialQueryMismatch::W3CMeta(e));
+                if let Some(e) = w3c.matches_meta(credential_query.meta.clone()) {
+                    return Err(e.into());
                 }
             }
             Credential::OpenBadge303Credential(vc) => {
-                if let Err(e) = Self::matches_meta_open_badges(vc, credential_query.meta.as_ref()) {
-                    return Err(DcqlCredentialQueryMismatch::LdpMeta(e));
+                if let Some(e) = vc.matches_meta(credential_query.meta.clone()) {
+                    return Err(e.into());
+                }
+            }
+            Credential::Other(credential_like) => {
+                if let Some(e) = credential_like.matches_meta(credential_query.meta.clone()) {
+                    return Err(e.into());
                 }
             }
         }
@@ -803,10 +846,10 @@ impl ClaimsQuery {
         // retrieve the data pointed to by the pointer
         // the claims pointer MUST point to one value exactly
         let data = match credential {
-            Credential::SdJwtCredential(sd_jwt) => sd_jwt.get(Arc::new(self.path.clone())),
-            Credential::MdocCredential(mdoc) => mdoc.get(Arc::new(self.path.clone())),
+            Credential::SdJwtCredential(sd_jwt) => sd_jwt.clone().get(Arc::new(self.path.clone())),
+            Credential::MdocCredential(mdoc) => mdoc.clone().get(Arc::new(self.path.clone())),
             #[cfg(feature = "bbs")]
-            Credential::BbsCredential(bbs) => bbs.get(Arc::new(self.path.clone())),
+            Credential::BbsCredential(bbs) => bbs.clone().get(Arc::new(self.path.clone())),
             Credential::W3CCredential(w3c) => {
                 let path = if matches!(self.path.first(),
                     Some(PointerPart::String(s)) if s == "credentialSubject"
@@ -817,9 +860,10 @@ impl ClaimsQuery {
                     path.insert(0, PointerPart::String("credentialSubject".to_string()));
                     path
                 };
-                w3c.get(Arc::new(path))
+                w3c.clone().get(Arc::new(path))
             }
-            Credential::OpenBadge303Credential(c) => c.get(Arc::new(self.path.clone())),
+            Credential::OpenBadge303Credential(c) => c.clone().get(Arc::new(self.path.clone())),
+            Credential::Other(o) => o.clone().get(Arc::new(self.path.clone())),
         };
 
         let Some(data) = data else {
@@ -874,6 +918,8 @@ pub fn select_credentials_with_info(
 
 #[cfg(test)]
 mod tests {
+
+    use std::sync::Arc;
 
     use heidi_credentials_rust::{models::PointerPart, sdjwt::decode_sdjwt};
 
@@ -1056,7 +1102,12 @@ mod tests {
         assert_eq!(
             "https://dev-ssi-schema-creator-ws.ubique.ch/v1/schema/studierendenausweis-31iq2/0.0.4",
             sdjwt
-                .get_as_str(vec![PointerPart::String("vct".into())])
+                .clone()
+                .get(Arc::new(vec![PointerPart::String("vct".into())]))
+                .unwrap()
+                .first()
+                .unwrap()
+                .as_str()
                 .unwrap()
         );
         // we should NOT choose the one with dateOfBirth
@@ -1243,7 +1294,7 @@ mod tests {
            }"#;
         let query: DcqlQuery = serde_json::from_str(query_requesting_null).unwrap();
         let result = select_credentials_with_info(query.clone(), vec![sdjwt_str.to_string()]);
-        let sdjwt = decode_sdjwt(sdjwt_str).unwrap();
+        let _sdjwt = decode_sdjwt(sdjwt_str).unwrap();
         println!("{:?}", result.set_options);
     }
 }

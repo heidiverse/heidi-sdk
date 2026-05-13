@@ -17,19 +17,20 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
  */
+pub mod parser;
 pub mod trusted_authority;
 
-#[cfg(feature = "bbs")]
-use heidi_credentials_rust::bbs::{decode_bbs, BbsRust};
-use heidi_credentials_rust::sdjwt::{decode_sdjwt, SdJwtRust};
-use heidi_credentials_rust::{
-    mdoc::{decode_mdoc, MdocRust},
-    w3c::{W3CSdJwt, W3CVerifiableCredential},
-};
-use heidi_credentials_rust::{models::Pointer, w3c::parse_w3c_sd_jwt};
+use heidi_credentials_rust::claims_pointer::Selector;
+
+use heidi_credentials_rust::models::Pointer;
 use heidi_util_rust::value::Value;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 use std::str::FromStr;
+use std::sync::Arc;
+
+use crate::models::parser::REGISTERED_PARSERS;
+use crate::MetaMismatch;
 
 #[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
 /// A DCQL Query (https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-digital-credentials-query-l)
@@ -96,15 +97,82 @@ impl<T: AsRef<str>> From<T> for TrustedAuthorityQueryType {
         }
     }
 }
+#[uniffi::export(with_foreign)]
+pub trait CredentialLike: Send + Sync + std::fmt::Debug {
+    fn get_body(&self) -> Value;
+    fn serialize(&self) -> String;
+    fn format_specifiers(&self) -> Vec<String>;
+    fn matches_meta(&self, meta: Option<Meta>) -> Option<MetaMismatch>;
+    fn get(self: Arc<Self>, selector: Arc<dyn Selector>) -> Option<Vec<Value>>;
+}
 
-#[derive(Debug, Clone, uniffi::Enum, Serialize)]
+pub trait SdJwtLike: Send + Sync + Debug {
+    fn get_vct(&self) -> Option<String>;
+}
+impl<T> SdJwtLike for Arc<T>
+where
+    T: CredentialLike,
+{
+    fn get_vct(&self) -> Option<String> {
+        let b = self.get_body();
+        let Some(vct) = b.get("vct").and_then(|a| a.as_str()) else {
+            return None;
+        };
+        Some(vct.to_string())
+    }
+}
+#[uniffi::export(with_foreign)]
+pub trait MdocLike: Send + Sync + Debug {}
+#[uniffi::export(with_foreign)]
+pub trait BbsLike: Send + Sync + Debug {}
+#[uniffi::export(with_foreign)]
+pub trait W3CLike: Send + Sync + Debug {}
+#[uniffi::export(with_foreign)]
+pub trait OpenBadgeLike: Send + Sync + Debug {}
+
+impl Serialize for Credential {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Credential::SdJwtCredential(sd_jwt_rust) => {
+                let body = sd_jwt_rust.get_body();
+                serializer.serialize_newtype_struct("Other", &body)
+            }
+            Credential::MdocCredential(mdoc_rust) => {
+                let body = mdoc_rust.get_body();
+                serializer.serialize_newtype_struct("Other", &body)
+            }
+            Credential::BbsCredential(bbs_rust) => {
+                let body = bbs_rust.get_body();
+                serializer.serialize_newtype_struct("Other", &body)
+            }
+            Credential::W3CCredential(w3_csd_jwt) => {
+                let body = w3_csd_jwt.get_body();
+                serializer.serialize_newtype_struct("Other", &body)
+            }
+            Credential::OpenBadge303Credential(w3_cverifiable_credential) => {
+                let body = w3_cverifiable_credential.get_body();
+                serializer.serialize_newtype_struct("Other", &body)
+            }
+            Credential::Other(credential_like) => {
+                let body = credential_like.get_body();
+                serializer.serialize_newtype_struct("Other", &body)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, uniffi::Enum)]
 pub enum Credential {
-    SdJwtCredential(SdJwtRust),
-    MdocCredential(MdocRust),
+    SdJwtCredential(Arc<dyn CredentialLike>),
+    MdocCredential(Arc<dyn CredentialLike>),
     #[cfg(feature = "bbs")]
-    BbsCredential(BbsRust),
-    W3CCredential(W3CSdJwt),
-    OpenBadge303Credential(W3CVerifiableCredential),
+    BbsCredential(Arc<dyn CredentialLike>),
+    W3CCredential(Arc<dyn CredentialLike>),
+    OpenBadge303Credential(Arc<dyn CredentialLike>),
+    Other(Arc<dyn CredentialLike>),
 }
 
 #[derive(Clone, Debug, uniffi::Record, Serialize)]
@@ -138,40 +206,50 @@ impl FromStr for Credential {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let sdjwt = decode_sdjwt(s);
-        let w3c = parse_w3c_sd_jwt(s);
+        // let sdjwt = decode_sdjwt(s);
+        // let w3c = parse_w3c_sd_jwt(s);
 
-        match (sdjwt, w3c) {
-            (Ok(sdjwt), Ok(w3c)) => {
-                // NOTE: This is a hack, there should be a type hint somewhere
+        // match (sdjwt, w3c) {
+        //     (Ok(sdjwt), Ok(w3c)) => {
+        //         // NOTE: This is a hack, there should be a type hint somewhere
 
-                // To distinguish between W3C and SD-JWT credentials,
-                // we check if the W3C credential has a context.
-                return if w3c.json.get("@context").is_some() {
-                    Ok(Credential::W3CCredential(w3c))
-                } else {
-                    Ok(Credential::SdJwtCredential(sdjwt))
-                };
-            }
-            (Ok(sdjwt), _) => return Ok(Credential::SdJwtCredential(sdjwt)),
-            (_, Ok(w3c)) => return Ok(Credential::W3CCredential(w3c)),
+        //         // To distinguish between W3C and SD-JWT credentials,
+        //         // we check if the W3C credential has a context.
+        //         return if w3c.json.get("@context").is_some() {
+        //             Ok(Credential::W3CCredential(w3c))
+        //         } else {
+        //             Ok(Credential::SdJwtCredential(sdjwt))
+        //         };
+        //     }
+        //     (Ok(sdjwt), _) => return Ok(Credential::SdJwtCredential(sdjwt)),
+        //     (_, Ok(w3c)) => return Ok(Credential::W3CCredential(w3c)),
 
-            // Fallthrough to other formats
-            _ => (),
+        //     // Fallthrough to other formats
+        //     _ => (),
+        // };
+
+        // if let Ok(vc) = serde_json::from_str::<W3CVerifiableCredential>(s) {
+        //     if vc.types.contains(&"OpenBadgeCredential".to_string()) {
+        //         return Ok(Credential::OpenBadge303Credential(vc));
+        //     }
+        // }
+
+        // if let Ok(mdoc) = decode_mdoc(s) {
+        //     return Ok(Credential::MdocCredential(mdoc));
+        // }
+        // #[cfg(feature = "bbs")]
+        // if let Ok(bbs) = decode_bbs(s) {
+        //     return Ok(Credential::BbsCredential(bbs));
+        // }
+        // Err(ParseError::Invalid)
+        //
+        let Ok(parsers) = REGISTERED_PARSERS.lock() else {
+            return Err(ParseError::Invalid);
         };
-
-        if let Ok(vc) = serde_json::from_str::<W3CVerifiableCredential>(s) {
-            if vc.types.contains(&"OpenBadgeCredential".to_string()) {
-                return Ok(Credential::OpenBadge303Credential(vc));
+        for p in parsers.iter() {
+            if let Some(c) = p.from_str(s.to_string()) {
+                return Ok(c);
             }
-        }
-
-        if let Ok(mdoc) = decode_mdoc(s) {
-            return Ok(Credential::MdocCredential(mdoc));
-        }
-        #[cfg(feature = "bbs")]
-        if let Ok(bbs) = decode_bbs(s) {
-            return Ok(Credential::BbsCredential(bbs));
         }
         Err(ParseError::Invalid)
     }
