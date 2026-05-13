@@ -26,11 +26,21 @@ import ch.ubique.heidi.credentials.SdJwtErrors
 import ch.ubique.heidi.util.extensions.asObject
 import ch.ubique.heidi.util.extensions.get
 import uniffi.heidi_credentials_rust.BbsRust
+import uniffi.heidi_credentials_rust.BbsWrapper
 import uniffi.heidi_credentials_rust.ClaimBasedParams
 import uniffi.heidi_credentials_rust.PointerPart
+import uniffi.heidi_credentials_rust.Selector
 import uniffi.heidi_credentials_rust.bbsDeriveClaimBasedProof
 import uniffi.heidi_credentials_rust.bbsGetBody
+import uniffi.heidi_credentials_rust.decodeBbs
+import uniffi.heidi_dcql_rust.CombinedBbsMetaMismatch
+import uniffi.heidi_dcql_rust.Credential
+import uniffi.heidi_dcql_rust.CredentialLike
+import uniffi.heidi_dcql_rust.CredentialParser
 import uniffi.heidi_dcql_rust.CredentialQuery
+import uniffi.heidi_dcql_rust.Meta
+import uniffi.heidi_dcql_rust.MetaMismatch
+import uniffi.heidi_dcql_rust.registerParser
 import uniffi.heidi_util_rust.Value
 
 sealed interface BbsErrors {
@@ -49,6 +59,56 @@ sealed interface BbsErrors {
     data object UnsatisfiableCredentialQuery : BbsErrors,
         Throwable("The credential query couldn't be satisfied")
 }
+
+object BbsParser: CredentialParser {
+    init {
+        registerParser(BbsParser)
+    }
+
+    override fun id(): String {
+        return "BBS-PARSER"
+    }
+
+    override fun fromStr(credential: String): Credential? {
+        return runCatching {
+            val bbs = decodeBbs(credential)
+            return Credential.BbsCredential(BbsCredential(BbsWrapper.fromBbs(bbs)))
+        }.getOrNull()
+    }
+
+}
+
+class BbsCredential(val bbs: BbsWrapper) : CredentialLike {
+    override fun getBody(): Value {
+       return bbs.body()
+    }
+    override fun serialize(): String {
+        return bbs.getBbs().originalBbs
+    }
+
+    override fun formatSpecifiers(): List<String> {
+        return listOf("bbs-termwise")
+    }
+
+    override fun matchesMeta(meta: Meta?): MetaMismatch? {
+        return when(meta) {
+		   is Meta.W3c -> {
+               val bbsTypes = bbs.types()
+               return if(!meta.credentialTypes.any { bbsTypes.contains(it) }) {
+                   MetaMismatch.BbsMetaMismatch(CombinedBbsMetaMismatch.WRONG_CREDENTIAL_TYPE)
+               } else {
+                   null
+               }
+           }
+            else if meta == null -> null
+            else -> MetaMismatch.BbsMetaMismatch(CombinedBbsMetaMismatch.INVALID_META)
+	   }
+    }
+    override fun get(selector: Selector): List<Value>? {
+        return bbs.get(selector)
+    }
+}
+
 
 fun BbsRust.body() : Value {
     return bbsGetBody(this)

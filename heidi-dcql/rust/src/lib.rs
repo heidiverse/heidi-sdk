@@ -55,7 +55,6 @@ const W3C_FORMATS: [&str; 1] = ["vc+sd-jwt"];
 /// OpenBadges are just plain JSON-LD with linked data proofs
 const OPEN_BADGE_FORMATS: [&str; 1] = ["ldp_vc"];
 
-#[cfg(feature = "bbs")]
 /// We use a bbs-termwise type format type
 const BBS_FORMATS: [&str; 1] = ["bbs-termwise"];
 
@@ -190,16 +189,15 @@ pub enum DcqlQueryMismatch {
 /// Data type explaining, why a credential did not match the requested credential query
 pub enum DcqlCredentialQueryMismatch {
     /// VCT of the credential does not match the one from the query
-    SdJwtMeta(SdJwtMetaMismatch),
+    SdJwtMeta(CombinedSdJwtMetaMismatch),
     /// Doctype does not match the one from the query
-    MdocMeta(MdocMetaMismatch),
-    #[cfg(feature = "bbs")]
+    MdocMeta(CombinedMdocMetaMismatch),
     /// Credential type does not match the one from the query
-    BbsMeta(BbsMetaMismatch),
+    BbsMeta(CombinedBbsMetaMismatch),
     /// Invalid W3C meta data
-    W3CMeta(W3CMetaMismatch),
+    W3CMeta(CombinedW3CMetaMismatch),
     /// Credential types does not match the one from the query
-    LdpMeta(LdpMetaMismatch),
+    LdpMeta(CombinedLdpMetaMismatch),
     /// Externally registered data types
     CredentialMetaMismatch,
 
@@ -215,12 +213,11 @@ pub enum DcqlCredentialQueryMismatch {
 }
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
 pub enum MetaMismatch {
-    SdJwtMetaMismatch(SdJwtMetaMismatch),
-    MdocMetaMismatch(MdocMetaMismatch),
-    #[cfg(feature = "bbs")]
-    BbsMetaMismatch(BbsMetaMismatch),
-    W3CMetaMismatch(W3CMetaMismatch),
-    LdpMetaMismatch(LdpMetaMismatch),
+    SdJwtMetaMismatch(CombinedSdJwtMetaMismatch),
+    MdocMetaMismatch(CombinedMdocMetaMismatch),
+    BbsMetaMismatch(CombinedBbsMetaMismatch),
+    W3CMetaMismatch(CombinedW3CMetaMismatch),
+    LdpMetaMismatch(CombinedLdpMetaMismatch),
     Other,
 }
 impl From<MetaMismatch> for DcqlCredentialQueryMismatch {
@@ -232,7 +229,7 @@ impl From<MetaMismatch> for DcqlCredentialQueryMismatch {
             MetaMismatch::MdocMetaMismatch(mdoc_meta_mismatch) => {
                 DcqlCredentialQueryMismatch::MdocMeta(mdoc_meta_mismatch)
             }
-            #[cfg(feature = "bbs")]
+
             MetaMismatch::BbsMetaMismatch(bbs_meta_mismatch) => {
                 DcqlCredentialQueryMismatch::BbsMeta(bbs_meta_mismatch)
             }
@@ -248,31 +245,30 @@ impl From<MetaMismatch> for DcqlCredentialQueryMismatch {
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
-pub enum SdJwtMetaMismatch {
+pub enum CombinedSdJwtMetaMismatch {
     WrongVctValue,
     InvalidMeta,
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
-pub enum MdocMetaMismatch {
+pub enum CombinedMdocMetaMismatch {
     WrongDocType,
     InvalidMeta,
 }
 
-#[cfg(feature = "bbs")]
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
-pub enum BbsMetaMismatch {
+pub enum CombinedBbsMetaMismatch {
     InvalidMeta,
     WrongCredentialType,
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
-pub enum W3CMetaMismatch {
+pub enum CombinedW3CMetaMismatch {
     InvalidMeta,
 }
 
 #[derive(Debug, Clone, uniffi::Enum, Serialize)]
-pub enum LdpMetaMismatch {
+pub enum CombinedLdpMetaMismatch {
     InvalidMeta,
     WrongCredentialTypes,
 }
@@ -552,7 +548,6 @@ pub fn get_requested_attributes(
             let body = match &credential {
                 Credential::SdJwtCredential(sdjwt) => sdjwt.get_body(),
                 Credential::MdocCredential(mdoc) => mdoc.get_body(),
-                #[cfg(feature = "bbs")]
                 Credential::BbsCredential(bbs) => bbs.get_body(),
                 Credential::W3CCredential(w3c) => w3c.get_body(),
                 Credential::OpenBadge303Credential(vc) => vc.get_body(),
@@ -592,7 +587,6 @@ pub fn get_requested_attributes(
             let body = match &credential {
                 Credential::SdJwtCredential(sdjwt) => sdjwt.get_body(),
                 Credential::MdocCredential(mdoc) => mdoc.get_body(),
-                #[cfg(feature = "bbs")]
                 Credential::BbsCredential(bbs) => bbs.get_body().clone(),
                 Credential::W3CCredential(w3c) => w3c.get_body(),
                 Credential::OpenBadge303Credential(vc) => vc.get_body(),
@@ -620,15 +614,18 @@ pub fn get_requested_attributes(
 impl Credential {
     /// Check if the credential matches the meta information from the query
     #[cfg(feature = "builtin_parsers")]
-    pub fn matches_meta_mdoc(mdoc: &MdocRust, meta: Option<&Meta>) -> Result<(), MdocMetaMismatch> {
+    pub fn matches_meta_mdoc(
+        mdoc: &MdocRust,
+        meta: Option<&Meta>,
+    ) -> Result<(), CombinedMdocMetaMismatch> {
         // Assume that if meta is set, we also have vct_values set
         if let Some(Meta::IsoMdoc { doctype_value }) = meta {
             let doc_type = mdoc.get_doc_type();
             if &doc_type != doctype_value {
-                return Err(MdocMetaMismatch::WrongDocType);
+                return Err(CombinedMdocMetaMismatch::WrongDocType);
             }
         } else if meta.is_some() {
-            return Err(MdocMetaMismatch::InvalidMeta);
+            return Err(CombinedMdocMetaMismatch::InvalidMeta);
         }
         Ok(())
     }
@@ -637,40 +634,46 @@ impl Credential {
     pub fn matches_meta_sdjwt(
         sd_jwt: &SdJwtRust,
         meta: Option<&Meta>,
-    ) -> Result<(), SdJwtMetaMismatch> {
+    ) -> Result<(), CombinedSdJwtMetaMismatch> {
         // Assume that if meta is set, we also have vct_values set
         if let Some(Meta::SdjwtVc { vct_values: values }) = meta {
             let vct = Self::get_vct(sd_jwt);
             if !values.iter().any(|a| a == vct) {
-                return Err(SdJwtMetaMismatch::WrongVctValue);
+                return Err(CombinedSdJwtMetaMismatch::WrongVctValue);
             }
         } else if meta.is_some() {
-            return Err(SdJwtMetaMismatch::InvalidMeta);
+            return Err(CombinedSdJwtMetaMismatch::InvalidMeta);
         }
         Ok(())
     }
 
     #[cfg(feature = "bbs")]
     /// Check if the credential matches the meta information from the query
-    pub fn matches_meta_bbs(bbs: &BbsRust, meta: Option<&Meta>) -> Result<(), BbsMetaMismatch> {
+    pub fn matches_meta_bbs(
+        bbs: &BbsRust,
+        meta: Option<&Meta>,
+    ) -> Result<(), CombinedBbsMetaMismatch> {
         // Assume that if meta is set, we also have vct_values set
         match meta {
             Some(Meta::W3C { credential_types }) => {
                 let types = bbs.types();
 
                 if !credential_types.iter().any(|a| types.contains(a)) {
-                    Err(BbsMetaMismatch::WrongCredentialType)
+                    Err(CombinedBbsMetaMismatch::WrongCredentialType)
                 } else {
                     Ok(())
                 }
             }
             None => Ok(()),
-            _ => Err(BbsMetaMismatch::InvalidMeta),
+            _ => Err(CombinedBbsMetaMismatch::InvalidMeta),
         }
     }
     #[cfg(feature = "builtin_parsers")]
     /// We don't match meta for W3C for now
-    pub fn matches_meta_w3c(_w3c: &W3CSdJwt, _meta: Option<&Meta>) -> Result<(), W3CMetaMismatch> {
+    pub fn matches_meta_w3c(
+        _w3c: &W3CSdJwt,
+        _meta: Option<&Meta>,
+    ) -> Result<(), CombinedW3CMetaMismatch> {
         Ok(())
     }
     #[cfg(feature = "builtin_parsers")]
@@ -678,7 +681,7 @@ impl Credential {
     pub fn matches_meta_open_badges(
         vc: &W3CVerifiableCredential,
         meta: Option<&Meta>,
-    ) -> Result<(), LdpMetaMismatch> {
+    ) -> Result<(), CombinedLdpMetaMismatch> {
         match meta {
             Some(Meta::LdpVc { type_values }) => {
                 if type_values
@@ -687,11 +690,11 @@ impl Credential {
                 {
                     return Ok(());
                 } else {
-                    return Err(LdpMetaMismatch::WrongCredentialTypes);
+                    return Err(CombinedLdpMetaMismatch::WrongCredentialTypes);
                 }
             }
             None => Ok(()),
-            _ => Err(LdpMetaMismatch::InvalidMeta),
+            _ => Err(CombinedLdpMetaMismatch::InvalidMeta),
         }
     }
     #[cfg(feature = "builtin_parsers")]
@@ -725,7 +728,6 @@ impl Credential {
             {
                 return Err(expected_format_error)
             }
-            #[cfg(feature = "bbs")]
             Credential::BbsCredential(_)
                 if !BBS_FORMATS.contains(&credential_query.format.as_str()) =>
             {
@@ -758,7 +760,6 @@ impl Credential {
                     return Err(e.into());
                 }
             }
-            #[cfg(feature = "bbs")]
             Credential::BbsCredential(bbs) => {
                 if let Some(e) = bbs.matches_meta(credential_query.meta.clone()) {
                     return Err(e.into());
@@ -863,7 +864,6 @@ impl ClaimsQuery {
         let data = match credential {
             Credential::SdJwtCredential(sd_jwt) => sd_jwt.clone().get(Arc::new(self.path.clone())),
             Credential::MdocCredential(mdoc) => mdoc.clone().get(Arc::new(self.path.clone())),
-            #[cfg(feature = "bbs")]
             Credential::BbsCredential(bbs) => bbs.clone().get(Arc::new(self.path.clone())),
             Credential::W3CCredential(w3c) => {
                 let path = if matches!(self.path.first(),

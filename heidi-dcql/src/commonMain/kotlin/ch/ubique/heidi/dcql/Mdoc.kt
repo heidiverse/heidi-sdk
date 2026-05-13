@@ -23,6 +23,8 @@ package ch.ubique.heidi.dcql
 import ch.ubique.heidi.credentials.Mdoc
 import ch.ubique.heidi.credentials.Mdoc.Companion.MDOC_FORMATS
 import ch.ubique.heidi.credentials.SdJwtErrors
+import ch.ubique.heidi.credentials.get
+import ch.ubique.heidi.credentials.toClaimsPointer
 import ch.ubique.heidi.util.extensions.asArray
 import ch.ubique.heidi.util.extensions.asBytes
 import ch.ubique.heidi.util.extensions.asObject
@@ -32,13 +34,80 @@ import ch.ubique.heidi.util.extensions.asTag
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.isSame
 import ch.ubique.heidi.util.extensions.toCbor
+import kotlinx.serialization.json.Json
+import uniffi.heidi_credentials_rust.MdocRust
 import uniffi.heidi_credentials_rust.PointerPart
+import uniffi.heidi_credentials_rust.Selector
 import uniffi.heidi_credentials_rust.SignatureCreator
+import uniffi.heidi_credentials_rust.decodeMdoc
 import uniffi.heidi_crypto_rust.base64UrlEncode
+import uniffi.heidi_dcql_rust.CombinedMdocMetaMismatch
+import uniffi.heidi_dcql_rust.Credential
+import uniffi.heidi_dcql_rust.CredentialLike
+import uniffi.heidi_dcql_rust.CredentialParser
 import uniffi.heidi_dcql_rust.CredentialQuery
+import uniffi.heidi_dcql_rust.Meta
+import uniffi.heidi_dcql_rust.MetaMismatch
+import uniffi.heidi_dcql_rust.registerParser
 import uniffi.heidi_util_rust.Value
 import uniffi.heidi_util_rust.decodeCbor
 import uniffi.heidi_util_rust.encodeCbor
+
+object MdocParser: CredentialParser {
+    init {
+        registerParser(this)
+    }
+    override fun id(): String {
+        return "mdoc-parser"
+    }
+
+    override fun fromStr(credential: String): Credential? {
+        return runCatching { decodeMdoc(credential) }.getOrNull()?.let {
+            Credential.MdocCredential(MdocCredential(it))
+        }
+    }
+}
+
+class MdocCredential(val mdoc: MdocRust) : CredentialLike {
+    override fun getBody(): Value {
+        return mdoc.namespaceMap
+    }
+
+    override fun serialize(): String {
+        return mdoc.originalMdoc
+    }
+
+    override fun formatSpecifiers(): List<String> {
+       return listOf("mso_mdoc")
+    }
+
+    override fun matchesMeta(meta: Meta?): MetaMismatch? {
+       return when(meta){
+		   is Meta.IsoMdoc -> {
+               val docType = docType() ?: return MetaMismatch.MdocMetaMismatch(CombinedMdocMetaMismatch.WRONG_DOC_TYPE)
+               return if(docType != meta.doctypeValue) {
+                   MetaMismatch.MdocMetaMismatch(CombinedMdocMetaMismatch.WRONG_DOC_TYPE)
+               } else {
+                   null
+               }
+           }
+		   null -> null
+           else -> MetaMismatch.MdocMetaMismatch(CombinedMdocMetaMismatch.INVALID_META)
+	   }
+    }
+
+    override fun get(selector: Selector): List<Value>? {
+		return mdoc.namespaceMap[selector]
+    }
+    fun docType() : String? {
+        val result = this.mdoc.issuerAuth[listOf("docType").toClaimsPointer()!!]
+        if (result.size != 1) {
+            return null
+        }
+        return result[0].asString()
+    }
+}
+
 
 fun Mdoc.getVpToken(
     query: CredentialQuery,

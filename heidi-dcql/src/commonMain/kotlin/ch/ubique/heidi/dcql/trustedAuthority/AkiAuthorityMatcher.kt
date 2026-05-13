@@ -1,5 +1,6 @@
 package ch.ubique.heidi.dcql.trustedAuthority
 
+import uniffi.heidi_credentials_rust.decodeSdjwt
 import uniffi.heidi_crypto_rust.getX509FromJwt
 import uniffi.heidi_dcql_rust.Credential
 import uniffi.heidi_dcql_rust.TrustedAuthority
@@ -21,7 +22,8 @@ object AkiAuthorityMatcher : TrustedAuthorityMatcher {
 		if(value !is Credential.SdJwtCredential) {
 			return null
 		}
-		val x509Chain = getX509FromJwt(value.v1.originalJwt) ?: return null
+		val v = decodeSdjwt(value.v1.serialize())
+		val x509Chain = getX509FromJwt(v.originalJwt) ?: return null
 		for(c in x509Chain) {
 			if(trustedAuthority.values.contains(c.authorityKeyIdentifier)) {
 				return true

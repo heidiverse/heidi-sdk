@@ -97,6 +97,7 @@ impl<T: AsRef<str>> From<T> for TrustedAuthorityQueryType {
         }
     }
 }
+
 #[uniffi::export(with_foreign)]
 pub trait CredentialLike: Send + Sync + std::fmt::Debug {
     fn get_body(&self) -> Value;
@@ -138,24 +139,23 @@ impl Serialize for Credential {
         match self {
             Credential::SdJwtCredential(sd_jwt_rust) => {
                 let body = sd_jwt_rust.get_body();
-                serializer.serialize_newtype_struct("Other", &body)
+                serializer.serialize_newtype_struct("SdJwt", &body)
             }
             Credential::MdocCredential(mdoc_rust) => {
                 let body = mdoc_rust.get_body();
-                serializer.serialize_newtype_struct("Other", &body)
+                serializer.serialize_newtype_struct("Mdoc", &body)
             }
-            #[cfg(feature = "bbs")]
             Credential::BbsCredential(bbs_rust) => {
                 let body = bbs_rust.get_body();
-                serializer.serialize_newtype_struct("Other", &body)
+                serializer.serialize_newtype_struct("Bbs", &body)
             }
             Credential::W3CCredential(w3_csd_jwt) => {
                 let body = w3_csd_jwt.get_body();
-                serializer.serialize_newtype_struct("Other", &body)
+                serializer.serialize_newtype_struct("W3C", &body)
             }
             Credential::OpenBadge303Credential(w3_cverifiable_credential) => {
                 let body = w3_cverifiable_credential.get_body();
-                serializer.serialize_newtype_struct("Other", &body)
+                serializer.serialize_newtype_struct("OpenBadge", &body)
             }
             Credential::Other(credential_like) => {
                 let body = credential_like.get_body();
@@ -169,7 +169,6 @@ impl Serialize for Credential {
 pub enum Credential {
     SdJwtCredential(Arc<dyn CredentialLike>),
     MdocCredential(Arc<dyn CredentialLike>),
-    #[cfg(feature = "bbs")]
     BbsCredential(Arc<dyn CredentialLike>),
     W3CCredential(Arc<dyn CredentialLike>),
     OpenBadge303Credential(Arc<dyn CredentialLike>),
@@ -207,43 +206,6 @@ impl FromStr for Credential {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // let sdjwt = decode_sdjwt(s);
-        // let w3c = parse_w3c_sd_jwt(s);
-
-        // match (sdjwt, w3c) {
-        //     (Ok(sdjwt), Ok(w3c)) => {
-        //         // NOTE: This is a hack, there should be a type hint somewhere
-
-        //         // To distinguish between W3C and SD-JWT credentials,
-        //         // we check if the W3C credential has a context.
-        //         return if w3c.json.get("@context").is_some() {
-        //             Ok(Credential::W3CCredential(w3c))
-        //         } else {
-        //             Ok(Credential::SdJwtCredential(sdjwt))
-        //         };
-        //     }
-        //     (Ok(sdjwt), _) => return Ok(Credential::SdJwtCredential(sdjwt)),
-        //     (_, Ok(w3c)) => return Ok(Credential::W3CCredential(w3c)),
-
-        //     // Fallthrough to other formats
-        //     _ => (),
-        // };
-
-        // if let Ok(vc) = serde_json::from_str::<W3CVerifiableCredential>(s) {
-        //     if vc.types.contains(&"OpenBadgeCredential".to_string()) {
-        //         return Ok(Credential::OpenBadge303Credential(vc));
-        //     }
-        // }
-
-        // if let Ok(mdoc) = decode_mdoc(s) {
-        //     return Ok(Credential::MdocCredential(mdoc));
-        // }
-        // #[cfg(feature = "bbs")]
-        // if let Ok(bbs) = decode_bbs(s) {
-        //     return Ok(Credential::BbsCredential(bbs));
-        // }
-        // Err(ParseError::Invalid)
-        //
         let Ok(parsers) = REGISTERED_PARSERS.lock() else {
             return Err(ParseError::Invalid);
         };

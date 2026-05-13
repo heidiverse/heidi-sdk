@@ -2,6 +2,7 @@ package ch.ubique.heidi.dcql.trustedAuthority
 
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
+import uniffi.heidi_credentials_rust.decodeSdjwt
 import uniffi.heidi_crypto_rust.getKidFromJwt
 import uniffi.heidi_dcql_rust.Credential
 import uniffi.heidi_dcql_rust.TrustedAuthority
@@ -19,9 +20,10 @@ object DidAuthorityMatcher : TrustedAuthorityMatcher {
 	override fun matches(value: Credential, trustedAuthority: TrustedAuthority): Boolean? {
 		return when (value) {
 			is Credential.SdJwtCredential -> {
-				val kid = getKidFromJwt(value.v1.originalJwt)
+				val jwt = decodeSdjwt(value.v1.serialize())
+				val kid = getKidFromJwt(jwt.originalJwt)
 				val did = kid?.split("#")?.firstOrNull()
-				val issuer = value.v1.claims["iss"].asString() ?: did ?: return false
+				val issuer = jwt.claims["iss"].asString() ?: did ?: return false
 				trustedAuthority.values.contains(issuer)
 			}
 			else -> null

@@ -22,12 +22,104 @@ package ch.ubique.heidi.dcql
 
 import uniffi.heidi_dcql_rust.CredentialQuery
 import ch.ubique.heidi.credentials.*
+import ch.ubique.heidi.util.extensions.asString
+import ch.ubique.heidi.util.extensions.get
+import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.*
+import uniffi.heidi_dcql_rust.CombinedSdJwtMetaMismatch
+import uniffi.heidi_dcql_rust.Credential
+import uniffi.heidi_dcql_rust.CredentialLike
+import uniffi.heidi_dcql_rust.CredentialParser
+import uniffi.heidi_dcql_rust.Meta
+import uniffi.heidi_dcql_rust.MetaMismatch
+import uniffi.heidi_dcql_rust.registerParser
 import uniffi.heidi_util_rust.*
+
+object SdJwtW3CParser: CredentialParser {
+
+    init {
+        registerParser(this)
+    }
+
+    override fun id(): String {
+        return "sdjwt+w3c-parser"
+    }
+
+    override fun fromStr(credential: String): Credential? {
+        val sdjwt = runCatching { decodeSdjwt(credential) }.getOrNull()
+        val w3c = runCatching { parseW3cSdJwt(credential) }.getOrNull()
+        return if(sdjwt != null && w3c != null) {
+            if(w3c.json["@context"] != Value.Null) {
+                Credential.W3cCredential(W3CCredential(w3c = w3c))
+            } else {
+                Credential.SdJwtCredential(SdJwtCredential(sdjwt = sdjwt))
+            }
+        } else if (sdjwt != null) {
+            Credential.SdJwtCredential(SdJwtCredential(sdjwt = sdjwt))
+        } else if (w3c != null) {
+            Credential.W3cCredential(W3CCredential(w3c = w3c))
+        } else {
+            null
+        }
+    }
+}
+
+class SdJwtCredential(val sdjwt: SdJwtRust): CredentialLike {
+    override fun getBody(): Value {
+        return sdjwt.claims
+    }
+
+    override fun serialize(): String {
+        return sdjwt.originalSdjwt
+    }
+
+    override fun formatSpecifiers(): List<String> {
+       return listOf("dc+sd-jwt", "vc+sd-jwt")
+    }
+
+    override fun matchesMeta(meta: Meta?): MetaMismatch? {
+        val vct = this.sdjwt.claims["vct"].asString() ?: return MetaMismatch.SdJwtMetaMismatch(CombinedSdJwtMetaMismatch.WRONG_VCT_VALUE)
+        return when(meta) {
+            is Meta.SdjwtVc -> {
+                if(meta.vctValues.any { vct == it }){
+                    null
+                } else {
+                    MetaMismatch.SdJwtMetaMismatch(CombinedSdJwtMetaMismatch.WRONG_VCT_VALUE)
+                }
+            }
+            else if meta == null -> null
+            else -> MetaMismatch.SdJwtMetaMismatch(CombinedSdJwtMetaMismatch.INVALID_META)
+        }
+    }
+
+    override fun get(selector: Selector): List<Value>? {
+        return sdjwt.claims[selector]
+    }
+}
+class W3CCredential(val w3c: W3cSdJwt): CredentialLike {
+    override fun getBody(): Value {
+        return w3c.json
+    }
+
+    override fun serialize(): String {
+        return Json{}.encodeToString(w3c)
+    }
+
+    override fun formatSpecifiers(): List<String> {
+        return listOf("vc+sd-jwt")
+    }
+
+    override fun matchesMeta(meta: Meta?): MetaMismatch? {
+        return null
+    }
+
+    override fun get(selector: Selector): List<Value>? {
+        return w3c.json[selector]
+    }
+}
 
 fun SdJwtBuilder.getVpToken(
     claims: Value,
-
     query: CredentialQuery,
     audience: String,
     transactionData: List<String>?,

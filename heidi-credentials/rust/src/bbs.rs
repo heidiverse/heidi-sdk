@@ -27,7 +27,7 @@ use std::{
 };
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_util_rust::value::Value;
 use next_gen_signatures::crypto::zkp::{
     deserialize_public_key_uncompressed, deserialize_signature,
@@ -36,16 +36,16 @@ use num_bigint::BigUint;
 use rand_core::OsRng;
 use rdf_util::oxrdf::{Graph, GraphName};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use zkp_util::{
     device_binding::{DeviceBindingPresentation, SecpFr},
     vc::{
-        presentation::{present, VerifiablePresentation},
+        VerifiableCredential,
+        presentation::{VerifiablePresentation, present},
         requirements::{
             DeviceBindingRequirement, DeviceBindingVerificationParams, DiscloseRequirement,
             EqualClaimsRequirement, ProofRequirement,
         },
-        VerifiableCredential,
     },
 };
 
@@ -57,6 +57,32 @@ pub struct BbsRust {
     pub proof: String,
 
     pub original_bbs: String,
+}
+
+#[derive(Clone, Debug, uniffi::Object)]
+pub struct BbsWrapper(BbsRust);
+
+#[uniffi::export]
+impl BbsWrapper {
+    #[uniffi::constructor]
+    fn from_bbs(bbs: BbsRust) -> Self {
+        Self(bbs)
+    }
+    pub fn get(&self, selector: Arc<dyn Selector>) -> Option<Vec<Value>> {
+        self.0.get(selector)
+    }
+    pub fn get_bbs(&self) -> BbsRust {
+        self.0.clone()
+    }
+    pub fn body(&self) -> Value {
+        self.0.body()
+    }
+    pub fn serialize(&self) -> String {
+        serde_json::to_string(&self.0).unwrap()
+    }
+    pub fn types(&self) -> Vec<String> {
+        self.0.types()
+    }
 }
 
 impl BbsRust {

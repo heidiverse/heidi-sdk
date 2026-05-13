@@ -25,12 +25,14 @@ import ch.ubique.heidi.credentials.SdJwt
 import ch.ubique.heidi.util.extensions.*
 import ch.ubique.heidi.credentials.get
 import ch.ubique.heidi.credentials.toClaimsPointer
+import ch.ubique.heidi.dcql.SdJwtW3CParser
 import ch.ubique.heidi.dcql.checkDcqlPresentation
 import ch.ubique.heidi.dcql.getVpToken
 import ch.ubique.heidi.dcql.trustedAuthority.AkiAuthorityMatcher
 import ch.ubique.heidi.dcql.trustedAuthority.DidAuthorityMatcher
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.SignatureCreator
+import uniffi.heidi_credentials_rust.decodeSdjwt
 import uniffi.heidi_crypto_rust.SoftwareKeyPair
 import uniffi.heidi_dcql_rust.Credential
 import uniffi.heidi_dcql_rust.DcqlQuery
@@ -223,6 +225,7 @@ class TestDcql {
 
     @Test
     fun immatrikulationsBst() {
+        val p = SdJwtW3CParser
         val claims1: Value = createMusterMatriculationConf("Universität Musterstadt", Json.decodeFromString(subjects1))
         val claims2: Value = createMusterMatriculationConf("Universität Musterwil", Json.decodeFromString(subjects1))
         val disclosures : List<ClaimsPointer> = listOf(
@@ -248,10 +251,10 @@ class TestDcql {
         val selectedCredential = results.options[0].credential
         assertIs<Credential.SdJwtCredential>(selectedCredential)
 
-        val enrolledAt = selectedCredential.v1.claims[listOf("unv", "enrolledAt").toClaimsPointer()!!][0].asString()!!
+        val enrolledAt = selectedCredential.v1.getBody()[listOf("unv", "enrolledAt").toClaimsPointer()!!][0].asString()!!
         assertEquals(enrolledAt, "Universität Musterstadt")
         val respectiveQuery = query.credentials!!.first { it.id == results.id }
-        val vpToken = SdJwt(selectedCredential.v1).getVpToken(respectiveQuery,"test", null, null, "1234", TestSigner(
+        val vpToken = SdJwt(decodeSdjwt(selectedCredential.v1.serialize())).getVpToken(respectiveQuery,"test", null, null, "1234", TestSigner(
             SoftwareKeyPair.fromJwkString(privateKeyKeyBinding))).getOrThrow()
 
         val parsedVpToken = SdJwt.parse(vpToken)
@@ -306,7 +309,7 @@ class TestDcql {
         val selectedCredential = setOption.options[0].credential
         assertIs<Credential.SdJwtCredential>(selectedCredential)
         val credentialQuery = rolesParentRolesQuery.credentials!!.first { it.id == setOption.id}
-        val vpToken = SdJwt(selectedCredential.v1).getVpToken(credentialQuery, "123", null, null, "123", TestSigner(
+        val vpToken = SdJwt(decodeSdjwt(selectedCredential.v1.serialize())).getVpToken(credentialQuery, "123", null, null, "123", TestSigner(
             SoftwareKeyPair.fromJwkString(privateKeyKeyBinding))).getOrThrow()
 
         val parsedVpToken = SdJwt.parse(vpToken)
@@ -321,8 +324,8 @@ class TestDcql {
 
         assertTrue(checkDcqlPresentation(
             rolesParentRolesQuery2,
-            mapOf(credentialQuery.id to SdJwt(
-                (result2[0].setOptions[0][0].options[0].credential as Credential.SdJwtCredential).v1
+            mapOf(credentialQuery.id to SdJwt( decodeSdjwt(
+                (result2[0].setOptions[0][0].options[0].credential as Credential.SdJwtCredential).v1.serialize())
             ).getVpToken(credentialQuery, "123", null, null, "123", TestSigner(
                 SoftwareKeyPair.fromJwkString(privateKeyKeyBinding)
             )).getOrThrow()),
@@ -331,7 +334,7 @@ class TestDcql {
         assertTrue(checkDcqlPresentation(
             rolesParentRolesQuery2,
             mapOf(credentialQuery.id to SdJwt(
-                (result3[0].setOptions[0][0].options[0].credential as Credential.SdJwtCredential).v1
+                (decodeSdjwt((result3[0].setOptions[0][0].options[0].credential as Credential.SdJwtCredential).v1.serialize()))
             ).getVpToken(credentialQuery, "123", null, null,"123", TestSigner(
                 SoftwareKeyPair.fromJwkString(privateKeyKeyBinding)
             )).getOrThrow()),
@@ -372,7 +375,7 @@ class TestDcql {
         val selectedCredential = setOption.options[0].credential
         assertIs<Credential.SdJwtCredential>(selectedCredential)
         val credentialQuery = rolesAllNamesQuery.credentials!!.first { it.id == setOption.id}
-        val vpToken = SdJwt(selectedCredential.v1).getVpToken(credentialQuery, "123", null, null, "123", TestSigner(
+        val vpToken = SdJwt(decodeSdjwt(selectedCredential.v1.serialize()) ).getVpToken(credentialQuery, "123", null, null, "123", TestSigner(
             SoftwareKeyPair.fromJwkString(privateKeyKeyBinding))).getOrThrow()
 
         val parsedVpToken = SdJwt.parse(vpToken)
