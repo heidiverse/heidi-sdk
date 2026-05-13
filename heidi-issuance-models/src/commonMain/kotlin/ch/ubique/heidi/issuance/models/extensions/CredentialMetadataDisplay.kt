@@ -19,9 +19,9 @@
  * under the License.
  */
 
-package ch.ubique.heidi.issuance.extensions
+package ch.ubique.heidi.issuance.models.extensions
 
-import ch.ubique.heidi.issuance.metadata.data.Display
+import ch.ubique.heidi.issuance.models.metadata.Display
 
 fun List<Display>?.getLocalizedLabel(locale: String): String? {
 	if (this == null) return null

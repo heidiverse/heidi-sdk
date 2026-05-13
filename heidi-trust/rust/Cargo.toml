@@ -15,6 +15,7 @@ reqwest.workspace = true
 serde_json.workspace = true
 josekit.workspace = true
 heidi-jwt.workspace = true
+heidi-util-rust = {path = "../../heidi-util/rust"}
 
 [features]
 default = ["uniffi"]

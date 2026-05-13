@@ -6,7 +6,6 @@ plugins {
 	alias(libs.plugins.kotlin.serialization)
 	alias(libs.plugins.android.library)
 	alias(libs.plugins.skie)
-	alias(libs.plugins.uniffi.plugin)
 	alias(libs.plugins.vanniktech.publish)
 }
 
@@ -28,7 +27,7 @@ kotlin {
 		iosSimulatorArm64()
 	).forEach { iosTarget ->
 		iosTarget.binaries.framework {
-			baseName = "heidi-issuance"
+			baseName = "heidi-issuance-models"
 			isStatic = true
 		}
 
@@ -44,9 +43,6 @@ kotlin {
 	sourceSets {
 		commonMain.dependencies {
 			implementation(project(":heidi-util"))
-			implementation(project(":heidi-trust"))
-			implementation(project(":heidi-issuance-models"))
-			implementation(project(":heidi-crypto"))
 			implementation(libs.kotlin.coroutines)
 			implementation(libs.kotlin.serialization)
 
@@ -73,7 +69,7 @@ kotlin {
 }
 
 android {
-	namespace = "ch.ubique.heidi.issuance"
+	namespace = "ch.ubique.heidi.issuance.models"
 	compileSdk = libs.versions.android.compileSdk.get().toInt()
 
 	ndkVersion = libs.versions.android.ndk.get()
@@ -94,27 +90,6 @@ skie {
 		enabled = false
 		disableUpload = true
 	}
-}
-
-uniffi {
-	bindgenFromGitTag(
-		"https://github.com/UbiqueInnovation/uniffi-kotlin-multiplatform-bindings.git",
-		libs.versions.uniffi.bindgen.get()
-	)
-	generateFromLibrary()
-}
-
-cargo {
-	packageDirectory = layout.projectDirectory.dir("rust")
-//	builds.android {
-//		debug.profile = CargoProfile.Dev
-//	}
-//	builds.desktop {
-//		debug.profile = CargoProfile.Release
-//	}
-//	builds.appleMobile {
-//		debug.profile = CargoProfile.Release
-//	}
 }
 
 mavenPublishing {

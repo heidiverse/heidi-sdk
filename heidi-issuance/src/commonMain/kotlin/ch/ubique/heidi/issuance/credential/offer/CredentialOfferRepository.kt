@@ -21,6 +21,7 @@ under the License.
 package ch.ubique.heidi.issuance.credential.offer
 
 import ch.ubique.heidi.issuance.di.HeidiIssuanceKoinComponent
+import ch.ubique.heidi.issuance.models.offer.CredentialOfferParameters
 import io.ktor.http.Url
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO

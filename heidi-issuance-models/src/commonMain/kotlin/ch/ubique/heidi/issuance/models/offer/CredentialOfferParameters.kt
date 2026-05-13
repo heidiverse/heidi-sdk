@@ -18,7 +18,7 @@ specific language governing permissions and limitations
 under the License.
  */
 
-package ch.ubique.heidi.issuance.credential.offer
+package ch.ubique.heidi.issuance.models.offer
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

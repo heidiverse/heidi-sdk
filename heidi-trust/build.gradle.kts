@@ -46,7 +46,7 @@ kotlin {
 			implementation(project(":heidi-util"))
 			implementation(project(":heidi-crypto"))
 			implementation(project(":heidi-credentials"))
-			implementation(project(":heidi-issuance"))
+			implementation(project(":heidi-issuance-models"))
 			implementation(project(":heidi-presentation"))
 			implementation(project(":heidi-dcql"))
 

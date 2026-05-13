@@ -43,6 +43,8 @@ kotlin {
 
             export(projects.heidiUtil)
             export(projects.heidiCredentials)
+            export(projects.heidiDcql)
+            export(projects.heidiCrypto)
             export(projects.heidiIssuance)
             export(projects.heidiPresentation)
             export(projects.heidiTrust)
@@ -68,7 +70,7 @@ kotlin {
             api(project(":heidi-util"))
             api(project(":heidi-credentials"))
             api(project(":heidi-dcql"))
-            implementation(project(":heidi-crypto"))
+            api(project(":heidi-crypto"))
             api(project(":heidi-issuance"))
             api(project(":heidi-presentation"))
             api(project(":heidi-trust"))

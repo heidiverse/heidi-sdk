@@ -20,10 +20,10 @@ under the License.
 
 package ch.ubique.heidi.issuance.metadata
 
-import ch.ubique.heidi.issuance.credential.offer.CredentialOfferParameters
+import ch.ubique.heidi.issuance.models.offer.CredentialOfferParameters
 import ch.ubique.heidi.issuance.di.HeidiIssuanceKoinComponent
-import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
-import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
+import ch.ubique.heidi.issuance.models.metadata.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.models.metadata.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.util.extensions.transform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO

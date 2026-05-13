@@ -20,9 +20,9 @@ under the License.
 
 package ch.ubique.heidi.issuance.metadata
 
-import ch.ubique.heidi.issuance.metadata.data.AuthorizationServerMetadata
-import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
-import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
+import ch.ubique.heidi.issuance.models.metadata.AuthorizationServerMetadata
+import ch.ubique.heidi.issuance.models.metadata.CredentialIssuerMetadata
+import ch.ubique.heidi.issuance.models.metadata.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.util.extensions.json
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -37,8 +37,8 @@ import io.ktor.http.appendPathSegments
 import org.koin.core.module.dsl.factoryOf
 import org.koin.dsl.module
 import uniffi.heidi_crypto_rust.parseEncodedJwtPayload
-import uniffi.heidi_util_rust.FederationResult
-import uniffi.heidi_util_rust.fetchMetadataFromIssuerUrl
+import uniffi.heidi_trust_rust.FederationResult
+import uniffi.heidi_trust_rust.fetchMetadataFromIssuerUrl
 
 internal class MetadataService(
 	private val httpClient: HttpClient,
