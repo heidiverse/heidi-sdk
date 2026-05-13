@@ -12,10 +12,17 @@ uniffi.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
-jlc = { git = "https://github.com/UbiqueInnovation/possum.git" }
+jlc = { git = "https://github.com/UbiqueInnovation/possum.git", optional = true }
 heidi-util-rust = { path = "../../heidi-util/rust" }
 heidi-credentials-rust = { path = "../../heidi-credentials/rust", default-features = false }
 
 [features]
-default = ["bbs"]
-bbs = ["heidi-credentials-rust/bbs", "heidi-credentials-rust/uniffi"]
+default = ["uniffi"]
+bbs = ["heidi-credentials-rust/bbs"]
+mdoc = ["heidi-credentials-rust/mdoc"]
+sdjwt = ["heidi-credentials-rust/sdjwt"]
+w3c = ["heidi-credentials-rust/w3c"]
+openbadges = ["heidi-credentials-rust/openbadges"]
+uniffi = ["heidi-credentials-rust/uniffi"]
+builtin_parsers = ["bbs", "mdoc", "sdjwt", "w3c", "openbadges"]
+jlc = ["dep:jlc"]

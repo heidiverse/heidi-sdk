@@ -1,15 +1,22 @@
 use std::sync::{Arc, LazyLock, Mutex};
 
-use heidi_util_rust::log_error;
+#[cfg(feature = "builtin_parsers")]
+use crate::models::parser::builtin::AllPurposeParser;
 
-use crate::models::{parser::builtin::AllPurposeParser, Credential};
+use crate::models::Credential;
+use heidi_util_rust::log_error;
 
 /// List of currently registered matchers
 pub(crate) static REGISTERED_PARSERS: LazyLock<Mutex<Vec<Arc<dyn CredentialParser>>>> =
     LazyLock::new(|| {
+        #[allow(unused_mut)]
         // Register default matchers
-        let all_purpose = Arc::new(AllPurposeParser);
-        Mutex::new(vec![all_purpose])
+        let mut parsers: Vec<Arc<dyn CredentialParser>> = vec![];
+        #[cfg(feature = "builtin_parsers")]
+        {
+            parsers.push(Arc::new(AllPurposeParser))
+        }
+        Mutex::new(parsers)
     });
 
 #[uniffi::export(with_foreign)]
@@ -39,14 +46,13 @@ pub fn register_parser(matcher: Arc<dyn CredentialParser>) {
     }
     matcher_lock.push(matcher)
 }
-
+#[cfg(feature = "builtin_parsers")]
 mod builtin {
     use std::sync::Arc;
 
     #[cfg(feature = "bbs")]
-    use heidi_credentials_rust::bbs::decode_bbs;
+    use heidi_credentials_rust::bbs::{decode_bbs, BbsRust};
     use heidi_credentials_rust::{
-        bbs::BbsRust,
         claims_pointer::Selector,
         mdoc::{decode_mdoc, MdocRust},
         sdjwt::{decode_sdjwt, SdJwtRust},
@@ -54,9 +60,11 @@ mod builtin {
     };
     use heidi_util_rust::value::Value;
 
+    #[cfg(feature = "bbs")]
+    use crate::BBS_FORMATS;
     use crate::{
         models::{parser::CredentialParser, Credential, CredentialLike, Meta},
-        MetaMismatch, BBS_FORMATS, MDOC_FORMATS, OPEN_BADGE_FORMATS, SDJWT_FORMATS, W3C_FORMATS,
+        MetaMismatch, MDOC_FORMATS, OPEN_BADGE_FORMATS, SDJWT_FORMATS, W3C_FORMATS,
     };
 
     impl CredentialLike for SdJwtRust {
@@ -129,6 +137,7 @@ mod builtin {
             MdocRust::get(&self, selector)
         }
     }
+    #[cfg(feature = "bbs")]
     impl CredentialLike for BbsRust {
         fn get_body(&self) -> Value {
             self.body()

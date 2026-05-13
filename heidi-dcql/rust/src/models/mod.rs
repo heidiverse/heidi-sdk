@@ -144,6 +144,7 @@ impl Serialize for Credential {
                 let body = mdoc_rust.get_body();
                 serializer.serialize_newtype_struct("Other", &body)
             }
+            #[cfg(feature = "bbs")]
             Credential::BbsCredential(bbs_rust) => {
                 let body = bbs_rust.get_body();
                 serializer.serialize_newtype_struct("Other", &body)

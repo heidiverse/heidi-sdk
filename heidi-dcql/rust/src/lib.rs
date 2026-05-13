@@ -19,20 +19,28 @@ under the License.
  */
 
 pub mod models;
+#[cfg(feature = "jlc")]
 pub mod verify;
 
 use crate::models::trusted_authority::{TrustedAuthorityMatcher, REGISTERED_MATCHERS};
+#[cfg(feature = "builtin_parsers")]
+use crate::models::Meta;
 use crate::models::{SetOption, TrustedAuthority};
 #[cfg(feature = "bbs")]
 use heidi_credentials_rust::bbs::BbsRust;
+
+use heidi_credentials_rust::claims_pointer::Selector;
 use heidi_credentials_rust::models::{Pointer, PointerPart};
+#[cfg(feature = "builtin_parsers")]
 use heidi_credentials_rust::sdjwt::SdJwtRust;
-use heidi_credentials_rust::{claims_pointer::Selector, w3c::W3CSdJwt};
+#[cfg(feature = "builtin_parsers")]
+use heidi_credentials_rust::w3c::W3CSdJwt;
+#[cfg(feature = "builtin_parsers")]
 use heidi_credentials_rust::{mdoc::MdocRust, w3c::W3CVerifiableCredential};
 use heidi_util_rust::value::Value;
 use models::{
     ClaimsQuery, Credential, CredentialOptions, CredentialQuery, CredentialSetOption, DcqlQuery,
-    Disclosure, Meta,
+    Disclosure,
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -209,6 +217,7 @@ pub enum DcqlCredentialQueryMismatch {
 pub enum MetaMismatch {
     SdJwtMetaMismatch(SdJwtMetaMismatch),
     MdocMetaMismatch(MdocMetaMismatch),
+    #[cfg(feature = "bbs")]
     BbsMetaMismatch(BbsMetaMismatch),
     W3CMetaMismatch(W3CMetaMismatch),
     LdpMetaMismatch(LdpMetaMismatch),
@@ -223,6 +232,7 @@ impl From<MetaMismatch> for DcqlCredentialQueryMismatch {
             MetaMismatch::MdocMetaMismatch(mdoc_meta_mismatch) => {
                 DcqlCredentialQueryMismatch::MdocMeta(mdoc_meta_mismatch)
             }
+            #[cfg(feature = "bbs")]
             MetaMismatch::BbsMetaMismatch(bbs_meta_mismatch) => {
                 DcqlCredentialQueryMismatch::BbsMeta(bbs_meta_mismatch)
             }
@@ -609,6 +619,7 @@ pub fn get_requested_attributes(
 
 impl Credential {
     /// Check if the credential matches the meta information from the query
+    #[cfg(feature = "builtin_parsers")]
     pub fn matches_meta_mdoc(mdoc: &MdocRust, meta: Option<&Meta>) -> Result<(), MdocMetaMismatch> {
         // Assume that if meta is set, we also have vct_values set
         if let Some(Meta::IsoMdoc { doctype_value }) = meta {
@@ -621,6 +632,7 @@ impl Credential {
         }
         Ok(())
     }
+    #[cfg(feature = "builtin_parsers")]
     /// Check if the credential matches the meta information from the query
     pub fn matches_meta_sdjwt(
         sd_jwt: &SdJwtRust,
@@ -656,10 +668,12 @@ impl Credential {
             _ => Err(BbsMetaMismatch::InvalidMeta),
         }
     }
+    #[cfg(feature = "builtin_parsers")]
     /// We don't match meta for W3C for now
     pub fn matches_meta_w3c(_w3c: &W3CSdJwt, _meta: Option<&Meta>) -> Result<(), W3CMetaMismatch> {
         Ok(())
     }
+    #[cfg(feature = "builtin_parsers")]
     /// Check if the credential matches the meta information from the query
     pub fn matches_meta_open_badges(
         vc: &W3CVerifiableCredential,
@@ -680,6 +694,7 @@ impl Credential {
             _ => Err(LdpMetaMismatch::InvalidMeta),
         }
     }
+    #[cfg(feature = "builtin_parsers")]
     /// Returns the VCT for a sd jwt
     pub fn get_vct(sd_jwt: &SdJwtRust) -> &str {
         sd_jwt
@@ -916,7 +931,7 @@ pub fn select_credentials_with_info(
     query.select_credentials_with_info(credentials.iter().map(String::as_str).collect::<Vec<_>>())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "builtin_parsers"))]
 mod tests {
 
     use std::sync::Arc;

@@ -1,7 +1,6 @@
-use base64::Engine;
-use curve25519_dalek::{ristretto::CompressedRistretto, RistrettoPoint, Scalar};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
+use curve25519_dalek::{RistrettoPoint, Scalar, ristretto::CompressedRistretto};
 use heidi_util_rust::log_debug;
-use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
 use sha2::Sha512;
 
 use crate::{sdjwt::SdJwtRust, sdjwt_util::hash_algs::ec_pedersen::canonicalize::stringify_value};
@@ -317,18 +316,9 @@ impl EqualityProof {
 
         let verify1 = self.s1 * g1 + self.r1 * h1 + challenge * c1;
         let verify2 = self.s2 * g2 + self.r2 * h2 + challenge * c2;
-        log_debug!(
-            "ZKP",
-            &format!("{}", verify1 == self.com1).to_string()
-        );
-        log_debug!(
-            "ZKP",
-            &format!("{}", verify2 == self.com2).to_string()
-        );
-        log_debug!(
-            "ZKP",
-            &format!("{}", self.s1 == self.s2).to_string()
-        );
+        log_debug!("ZKP", &format!("{}", verify1 == self.com1).to_string());
+        log_debug!("ZKP", &format!("{}", verify2 == self.com2).to_string());
+        log_debug!("ZKP", &format!("{}", self.s1 == self.s2).to_string());
 
         verify1 == self.com1 && verify2 == self.com2 && self.s1 == self.s2
     }
