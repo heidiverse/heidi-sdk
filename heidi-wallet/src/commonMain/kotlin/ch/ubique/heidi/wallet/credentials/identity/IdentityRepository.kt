@@ -23,6 +23,7 @@ package ch.ubique.heidi.wallet.credentials.identity
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
+import ch.ubique.heidi.credentials.models.credential.CredentialSummaryModel
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.identity.IdentityModel
 import ch.ubique.heidi.credentials.models.issuer.IssuerModel
@@ -35,6 +36,7 @@ import ch.ubique.heidi.wallet.CredentialEntity
 import ch.ubique.heidi.wallet.HeidiDatabase
 import ch.ubique.heidi.wallet.IdentityEntity
 import ch.ubique.heidi.wallet.extensions.toModel
+import ch.ubique.heidi.wallet.extensions.toSummaryModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
@@ -251,32 +253,20 @@ class IdentityRepository private constructor(db: HeidiDatabase) {
 	}
 
 	private fun List<CredentialEntity>.toListFlowCredentials(): List<CredentialModel> {
+		return toListFlowCredentialSummaries().map { it.toCredentialModel() }
+	}
+
+	private fun List<CredentialEntity>.toListFlowCredentialSummaries(): List<CredentialSummaryModel> {
 		val representativeCredentialId = firstRepresentativeCredentialId()
 		return mapNotNull { credential ->
-			val model = credential.toModel { url ->
+			credential.toSummaryModel(
+				includePayload = credential.id == representativeCredentialId,
+			) { url ->
 				if (credential.id == representativeCredentialId) {
 					getOcaBundleForCredential(url)
 				} else {
 					null
 				}
-			} ?: return@mapNotNull null
-
-			if (credential.id == representativeCredentialId) {
-				model
-			} else {
-				CredentialModel(
-					model.id,
-					model.identityId,
-					model.name,
-					model.metadata,
-					model.keyMaterialType,
-					model.credentialType,
-					"",
-					model.docType,
-					null,
-					model.isUsed,
-					model.createdAt,
-				)
 			}
 		}
 	}
