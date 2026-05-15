@@ -39,3 +39,7 @@ ark-serialize = "0.4.2"
 josekit = { git = "https://github.com/ubamrein/josekit-rs.git", default-features = false, features = [
     "rustcrypto",
 ] }
+
+[profile.release]
+opt-level = "z"
+strip = "debuginfo"

@@ -23,13 +23,14 @@ use crate::error::{GenericError, InnerError};
 use crate::formats::mdoc::{device_signature, helper};
 use crate::signing::NativeSigner;
 use crate::vc::VerifiableCredential;
-use crate::{log::log, ApiError};
+use crate::{ApiError, log::log};
 use base64::Engine;
 use mdoc::helper as mdoc_helper;
 use mdoc::helper::CBorHelper;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::UNIX_EPOCH};
 
+#[cfg(feature = "bbs")]
 pub mod bbs;
 pub mod mdoc;
 pub mod sdjwt;

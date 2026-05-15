@@ -34,6 +34,7 @@ pub use issuance::*;
 #[cfg(feature = "uniffi")]
 mod issuance {
     use anyhow::{Context, anyhow};
+    #[cfg(feature = "bbs")]
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
     use heidi_util_rust::value::Value;
 
@@ -845,10 +846,17 @@ mod issuance {
                             CredentialType::SdJwt
                         } else if heidi_credentials_rust::mdoc::decode_mdoc(&payload).is_ok() {
                             CredentialType::Mdoc
-                        } else if heidi_credentials_rust::bbs::decode_bbs(&payload).is_ok() {
-                            CredentialType::BbsTermWise
                         } else {
-                            return Err(anyhow!("no credential type specified").into());
+                            #[cfg(feature = "bbs")]
+                            if heidi_credentials_rust::bbs::decode_bbs(&payload).is_ok() {
+                                CredentialType::BbsTermWise
+                            } else {
+                                return Err(anyhow!("no credential type specified").into());
+                            }
+                            #[cfg(not(feature = "bbs"))]
+                            {
+                                return Err(anyhow!("no credential type specified").into());
+                            }
                         };
                     vec![CredentialResult::CredentialType(Credential {
                         credential: match credential_type {
@@ -2405,12 +2413,17 @@ mod issuance {
                     // format as non-W3C SD-JWTs.
                     // We can distinguish them by checking if the @context is present.
                     log_debug!("ISSUANCE", &format!("we have sdjwt: {:?}", format));
+                    #[cfg(feature = "bbs")]
                     if parse_w3c_sd_jwt(payload)
                         .map(|c| c.json.get("@context").is_some())
                         .unwrap_or(false)
                     {
                         Some(CredentialType::W3C)
                     } else {
+                        Some(CredentialType::SdJwt)
+                    }
+                    #[cfg(not(feature = "bbs"))]
+                    {
                         Some(CredentialType::SdJwt)
                     }
                 }
@@ -2427,30 +2440,41 @@ mod issuance {
             }
         } else {
             let sdjwt = heidi_credentials_rust::sdjwt::decode_sdjwt(payload);
-            let w3c = parse_w3c_sd_jwt(payload);
+            #[cfg(feature = "bbs")]
+            {
+                let w3c = parse_w3c_sd_jwt(payload);
 
-            match (sdjwt, w3c) {
-                (Ok(_), Ok(w3c)) => {
-                    if w3c.json.get("@context").is_some() {
-                        return Some(CredentialType::W3C);
+                match (sdjwt, w3c) {
+                    (Ok(_), Ok(w3c)) => {
+                        if w3c.json.get("@context").is_some() {
+                            return Some(CredentialType::W3C);
+                        }
+                        return Some(CredentialType::SdJwt);
                     }
-                    return Some(CredentialType::SdJwt);
-                }
-                (Ok(_), Err(_)) => return Some(CredentialType::SdJwt),
-                (Err(_), Ok(_)) => return Some(CredentialType::W3C),
-                (Err(e), Err(e2)) => {
-                    log_debug!("ISSUANCE", &format!("invalid format: {e}/{e2}"));
-                    ()
-                }
-            };
+                    (Ok(_), Err(_)) => return Some(CredentialType::SdJwt),
+                    (Err(_), Ok(_)) => return Some(CredentialType::W3C),
+                    (Err(e), Err(e2)) => {
+                        log_debug!("ISSUANCE", &format!("invalid format: {e}/{e2}"));
+                        ()
+                    }
+                };
+            }
 
             return if heidi_credentials_rust::mdoc::decode_mdoc(&payload).is_ok() {
                 Some(CredentialType::Mdoc)
-            } else if heidi_credentials_rust::bbs::decode_bbs(&payload).is_ok() {
-                Some(CredentialType::BbsTermWise)
             } else {
-                log_debug!("ISSUANCE", &format!("invalid format: {:?}", format));
-                None
+                #[cfg(feature = "bbs")]
+                if heidi_credentials_rust::bbs::decode_bbs(&payload).is_ok() {
+                    Some(CredentialType::BbsTermWise)
+                } else {
+                    log_debug!("ISSUANCE", &format!("invalid format: {:?}", format));
+                    None
+                }
+                #[cfg(not(feature = "bbs"))]
+                {
+                    log_debug!("ISSUANCE", &format!("invalid format: {:?}", format));
+                    None
+                }
             };
         }
     }

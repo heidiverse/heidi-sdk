@@ -1,7 +1,7 @@
 use base64::Engine;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use curve25519_dalek::{RistrettoPoint, Scalar, ristretto::CompressedRistretto};
 use heidi_util_rust::log_debug;
-use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
 use sha2::Sha512;
 pub mod canonicalize;
 

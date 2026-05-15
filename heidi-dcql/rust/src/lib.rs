@@ -23,12 +23,15 @@ pub mod verify;
 
 use crate::models::trusted_authority::{TrustedAuthorityMatcher, REGISTERED_MATCHERS};
 use crate::models::{SetOption, TrustedAuthority};
-#[cfg(feature = "bbs")]
-use heidi_credentials_rust::bbs::BbsRust;
+use heidi_credentials_rust::claims_pointer::Selector;
+use heidi_credentials_rust::mdoc::MdocRust;
 use heidi_credentials_rust::models::{Pointer, PointerPart};
 use heidi_credentials_rust::sdjwt::SdJwtRust;
-use heidi_credentials_rust::{claims_pointer::Selector, w3c::W3CSdJwt};
-use heidi_credentials_rust::{mdoc::MdocRust, w3c::W3CVerifiableCredential};
+#[cfg(feature = "bbs")]
+use heidi_credentials_rust::{
+    bbs::BbsRust,
+    w3c::{W3CSdJwt, W3CVerifiableCredential},
+};
 use heidi_util_rust::value::Value;
 use models::{
     ClaimsQuery, Credential, CredentialOptions, CredentialQuery, CredentialSetOption, DcqlQuery,
@@ -511,7 +514,9 @@ pub fn get_requested_attributes(
                 Credential::MdocCredential(mdoc) => mdoc.namespace_map.clone(),
                 #[cfg(feature = "bbs")]
                 Credential::BbsCredential(bbs) => bbs.body().clone(),
+                #[cfg(feature = "bbs")]
                 Credential::W3CCredential(w3c) => w3c.json.clone(),
+                #[cfg(feature = "bbs")]
                 Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
             };
 
@@ -550,7 +555,9 @@ pub fn get_requested_attributes(
                 Credential::MdocCredential(mdoc) => mdoc.namespace_map.clone(),
                 #[cfg(feature = "bbs")]
                 Credential::BbsCredential(bbs) => bbs.body().clone(),
+                #[cfg(feature = "bbs")]
                 Credential::W3CCredential(w3c) => w3c.json.clone(),
+                #[cfg(feature = "bbs")]
                 Credential::OpenBadge303Credential(vc) => vc.clone().into_value(),
             };
 
@@ -622,10 +629,12 @@ impl Credential {
         }
     }
     /// We don't match meta for W3C for now
+    #[cfg(feature = "bbs")]
     pub fn matches_meta_w3c(_w3c: &W3CSdJwt, _meta: Option<&Meta>) -> Result<(), W3CMetaMismatch> {
         Ok(())
     }
     /// Check if the credential matches the meta information from the query
+    #[cfg(feature = "bbs")]
     pub fn matches_meta_open_badges(
         vc: &W3CVerifiableCredential,
         meta: Option<&Meta>,
@@ -681,11 +690,13 @@ impl Credential {
             {
                 return Err(expected_format_error)
             }
+            #[cfg(feature = "bbs")]
             Credential::W3CCredential(_)
                 if !W3C_FORMATS.contains(&credential_query.format.as_str()) =>
             {
                 return Err(expected_format_error)
             }
+            #[cfg(feature = "bbs")]
             Credential::OpenBadge303Credential(_)
                 if !OPEN_BADGE_FORMATS.contains(&credential_query.format.as_str()) =>
             {
@@ -711,11 +722,13 @@ impl Credential {
                     return Err(DcqlCredentialQueryMismatch::BbsMeta(e));
                 }
             }
+            #[cfg(feature = "bbs")]
             Credential::W3CCredential(w3c) => {
                 if let Err(e) = Self::matches_meta_w3c(w3c, credential_query.meta.as_ref()) {
                     return Err(DcqlCredentialQueryMismatch::W3CMeta(e));
                 }
             }
+            #[cfg(feature = "bbs")]
             Credential::OpenBadge303Credential(vc) => {
                 if let Err(e) = Self::matches_meta_open_badges(vc, credential_query.meta.as_ref()) {
                     return Err(DcqlCredentialQueryMismatch::LdpMeta(e));
@@ -807,6 +820,7 @@ impl ClaimsQuery {
             Credential::MdocCredential(mdoc) => mdoc.get(Arc::new(self.path.clone())),
             #[cfg(feature = "bbs")]
             Credential::BbsCredential(bbs) => bbs.get(Arc::new(self.path.clone())),
+            #[cfg(feature = "bbs")]
             Credential::W3CCredential(w3c) => {
                 let path = if matches!(self.path.first(),
                     Some(PointerPart::String(s)) if s == "credentialSubject"
@@ -819,6 +833,7 @@ impl ClaimsQuery {
                 };
                 w3c.get(Arc::new(path))
             }
+            #[cfg(feature = "bbs")]
             Credential::OpenBadge303Credential(c) => c.get(Arc::new(self.path.clone())),
         };
 

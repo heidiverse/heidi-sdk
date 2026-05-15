@@ -40,8 +40,10 @@ use crate::{
         Disclosure, DisclosureIndex, DisclosureNode, DisclosureTree, Header, base64_hash,
         hash_algs::SdJwtHasher,
     },
-    w3c::W3CSdJwt,
 };
+
+#[cfg(feature = "bbs")]
+use crate::w3c::W3CSdJwt;
 
 const UNDISCLOSABLE_CLAIMS: [&str; 5] = ["iss", "iat", "exp", "nbf", "vct"];
 
@@ -325,6 +327,29 @@ impl SdJwtBuilder {
     }
 }
 
+#[cfg(feature = "bbs")]
+#[cfg_attr(feature = "bbs", uniffi::export)]
+impl SdJwtBuilder {
+    #[uniffi::constructor]
+    pub fn from_w3c(w3c: &W3CSdJwt) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(BuilderImpl {
+                claims: w3c.json.clone(),
+                original_jwt: w3c.original_jwt.clone(),
+                disclosure_map: w3c.disclosure_map.clone(),
+                disclosure_tree: w3c.disclosure_tree.clone(),
+                disclosures: vec![],
+                nonce: None,
+                aud: None,
+                #[cfg(feature = "experimental")]
+                zk_proofs: vec![],
+                transaction_data: None,
+                is_w3c: true,
+            })),
+        }
+    }
+}
+
 #[uniffi::export]
 impl SdJwtBuilder {
     #[uniffi::constructor]
@@ -342,25 +367,6 @@ impl SdJwtBuilder {
                 #[cfg(feature = "experimental")]
                 zk_proofs: vec![],
                 is_w3c: false,
-            })),
-        }
-    }
-
-    #[uniffi::constructor]
-    pub fn from_w3c(w3c: &W3CSdJwt) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(BuilderImpl {
-                claims: w3c.json.clone(),
-                original_jwt: w3c.original_jwt.clone(),
-                disclosure_map: w3c.disclosure_map.clone(),
-                disclosure_tree: w3c.disclosure_tree.clone(),
-                disclosures: vec![],
-                nonce: None,
-                aud: None,
-                #[cfg(feature = "experimental")]
-                zk_proofs: vec![],
-                transaction_data: None,
-                is_w3c: true,
             })),
         }
     }

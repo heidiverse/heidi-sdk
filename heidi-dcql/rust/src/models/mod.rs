@@ -19,14 +19,14 @@ under the License.
  */
 pub mod trusted_authority;
 
-#[cfg(feature = "bbs")]
-use heidi_credentials_rust::bbs::{decode_bbs, BbsRust};
+use heidi_credentials_rust::mdoc::{decode_mdoc, MdocRust};
+use heidi_credentials_rust::models::Pointer;
 use heidi_credentials_rust::sdjwt::{decode_sdjwt, SdJwtRust};
+#[cfg(feature = "bbs")]
 use heidi_credentials_rust::{
-    mdoc::{decode_mdoc, MdocRust},
-    w3c::{W3CSdJwt, W3CVerifiableCredential},
+    bbs::{decode_bbs, BbsRust},
+    w3c::{parse_w3c_sd_jwt, W3CSdJwt, W3CVerifiableCredential},
 };
-use heidi_credentials_rust::{models::Pointer, w3c::parse_w3c_sd_jwt};
 use heidi_util_rust::value::Value;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -103,7 +103,9 @@ pub enum Credential {
     MdocCredential(MdocRust),
     #[cfg(feature = "bbs")]
     BbsCredential(BbsRust),
+    #[cfg(feature = "bbs")]
     W3CCredential(W3CSdJwt),
+    #[cfg(feature = "bbs")]
     OpenBadge303Credential(W3CVerifiableCredential),
 }
 
@@ -139,27 +141,31 @@ impl FromStr for Credential {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let sdjwt = decode_sdjwt(s);
-        let w3c = parse_w3c_sd_jwt(s);
+        #[cfg(feature = "bbs")]
+        {
+            let w3c = parse_w3c_sd_jwt(s);
 
-        match (sdjwt, w3c) {
-            (Ok(sdjwt), Ok(w3c)) => {
-                // NOTE: This is a hack, there should be a type hint somewhere
+            match (sdjwt, w3c) {
+                (Ok(sdjwt), Ok(w3c)) => {
+                    // NOTE: This is a hack, there should be a type hint somewhere
 
-                // To distinguish between W3C and SD-JWT credentials,
-                // we check if the W3C credential has a context.
-                return if w3c.json.get("@context").is_some() {
-                    Ok(Credential::W3CCredential(w3c))
-                } else {
-                    Ok(Credential::SdJwtCredential(sdjwt))
-                };
-            }
-            (Ok(sdjwt), _) => return Ok(Credential::SdJwtCredential(sdjwt)),
-            (_, Ok(w3c)) => return Ok(Credential::W3CCredential(w3c)),
+                    // To distinguish between W3C and SD-JWT credentials,
+                    // we check if the W3C credential has a context.
+                    return if w3c.json.get("@context").is_some() {
+                        Ok(Credential::W3CCredential(w3c))
+                    } else {
+                        Ok(Credential::SdJwtCredential(sdjwt))
+                    };
+                }
+                (Ok(sdjwt), _) => return Ok(Credential::SdJwtCredential(sdjwt)),
+                (_, Ok(w3c)) => return Ok(Credential::W3CCredential(w3c)),
 
-            // Fallthrough to other formats
-            _ => (),
-        };
+                // Fallthrough to other formats
+                _ => (),
+            };
+        }
 
+        #[cfg(feature = "bbs")]
         if let Ok(vc) = serde_json::from_str::<W3CVerifiableCredential>(s) {
             if vc.types.contains(&"OpenBadgeCredential".to_string()) {
                 return Ok(Credential::OpenBadge303Credential(vc));

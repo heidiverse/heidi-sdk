@@ -1,5 +1,5 @@
 use base64::Engine;
-use next_gen_signatures::BASE64_URL_SAFE_NO_PAD;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 
 use crate::sdjwt_util::hash_algs::SdJwtHashAlgorithm;

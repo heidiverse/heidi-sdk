@@ -26,13 +26,17 @@ use std::ops::Add;
 #[cfg(feature = "bbs")]
 pub mod bbs;
 pub mod claims_pointer;
+#[cfg(feature = "bbs")]
 pub mod json_ld;
+#[cfg(feature = "bbs")]
 pub mod ldp;
 pub mod mdoc;
 pub mod models;
+#[cfg(feature = "bbs")]
 pub mod open_badges;
 pub mod sdjwt;
 pub mod sdjwt_util;
+#[cfg(feature = "bbs")]
 pub mod w3c;
 
 #[uniffi::export]
