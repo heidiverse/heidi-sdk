@@ -3434,6 +3434,7 @@ dependencies = [
  "next-gen-signatures",
  "num-bigint",
  "openssl",
+ "openssl-sys",
  "p256 0.13.2",
  "png 0.18.0",
  "rand 0.8.5",
