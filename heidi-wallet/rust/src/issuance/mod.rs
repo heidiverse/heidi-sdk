@@ -2439,9 +2439,9 @@ mod issuance {
                 }
             }
         } else {
-            let sdjwt = heidi_credentials_rust::sdjwt::decode_sdjwt(payload);
             #[cfg(feature = "bbs")]
             {
+                let sdjwt = heidi_credentials_rust::sdjwt::decode_sdjwt(payload);
                 let w3c = parse_w3c_sd_jwt(payload);
 
                 match (sdjwt, w3c) {

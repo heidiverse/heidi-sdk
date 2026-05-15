@@ -21,7 +21,9 @@ pub mod trusted_authority;
 
 use heidi_credentials_rust::mdoc::{decode_mdoc, MdocRust};
 use heidi_credentials_rust::models::Pointer;
-use heidi_credentials_rust::sdjwt::{decode_sdjwt, SdJwtRust};
+#[cfg(feature = "bbs")]
+use heidi_credentials_rust::sdjwt::decode_sdjwt;
+use heidi_credentials_rust::sdjwt::SdJwtRust;
 #[cfg(feature = "bbs")]
 use heidi_credentials_rust::{
     bbs::{decode_bbs, BbsRust},
@@ -140,9 +142,9 @@ impl FromStr for Credential {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let sdjwt = decode_sdjwt(s);
         #[cfg(feature = "bbs")]
         {
+            let sdjwt = decode_sdjwt(s);
             let w3c = parse_w3c_sd_jwt(s);
 
             match (sdjwt, w3c) {

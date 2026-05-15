@@ -46,8 +46,10 @@ const SDJWT_FORMATS: [&str; 2] = ["dc+sd-jwt", "vc+sd-jwt"];
 /// The mdoc format type
 const MDOC_FORMATS: [&str; 1] = ["mso_mdoc"];
 /// W3C VCDM format type. Note: It overlaps with SD-JWT format type, so we need further heuristics (like @context or so)
+#[cfg(feature = "bbs")]
 const W3C_FORMATS: [&str; 1] = ["vc+sd-jwt"];
 /// OpenBadges are just plain JSON-LD with linked data proofs
+#[cfg(feature = "bbs")]
 const OPEN_BADGE_FORMATS: [&str; 1] = ["ldp_vc"];
 
 #[cfg(feature = "bbs")]
