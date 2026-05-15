@@ -20,6 +20,7 @@ under the License.
 
 package ch.ubique.heidi.util.json
 
+/*
 import ch.ubique.heidi.credentials.BbsPresentation
 import ch.ubique.heidi.util.extensions.asObject
 import ch.ubique.heidi.util.extensions.asString
@@ -66,3 +67,4 @@ class BbsTests {
         )
     }
 }
+*/

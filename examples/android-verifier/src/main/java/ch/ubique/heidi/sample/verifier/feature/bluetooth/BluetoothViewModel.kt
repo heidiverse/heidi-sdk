@@ -33,6 +33,7 @@ import ch.ubique.heidi.dcql.DcqlPresentation
 import ch.ubique.heidi.dcql.checkDcqlPresentation
 import ch.ubique.heidi.dcql.sdJwtDcqlClaimsFromAttributes
 import ch.ubique.heidi.presentation.request.PresentationRequest
+import ch.ubique.heidi.proximity.ProximityError
 import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.documents.DocumentRequester
@@ -102,8 +103,8 @@ class BluetoothViewModel(
 			transportProtocol?.disconnect()
 		}
 
-		override fun onError(error: Throwable) {
-			bluetoothLogMutable.update { it.plus(error.stackTraceToString()) }
+		override fun onError(error: ProximityError) {
+			bluetoothLogMutable.update { it.plus(error.message) }
 		}
 	}
 

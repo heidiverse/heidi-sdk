@@ -62,6 +62,7 @@ import uniffi.heidi_wallet_rust.VerifiableCredential
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
+import kotlin.to
 
 @OptIn(ExperimentalTime::class)
 class ProximityPresentationProcess(
@@ -412,7 +413,7 @@ class ProximityPresentationProcess(
                         val identity = identityRepository.getById(cred.identityId)
                         val isRefreshable = identity?.tokens?.refreshToken != null
                         val isClaimBound = cred.decodeMetadata()?.keyMaterial is KeyMaterial.Local.ClaimBased
-                        if (!isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
+                        if (!isClaimBound && isRefreshable /*&& cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise*/) {
                             credentialsRepository.useCredential(cred.id)
                         }
 

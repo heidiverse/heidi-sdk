@@ -20,9 +20,9 @@ under the License.
 
 package ch.ubique.heidi.wallet.credentials
 
-import ch.ubique.heidi.credentials.Bbs
+// import ch.ubique.heidi.credentials.Bbs
 import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.W3C
+// import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
 import ch.ubique.heidi.credentials.models.credential.CredentialType
@@ -65,6 +65,7 @@ import ch.ubique.heidi.wallet.credentials.signature.Signature
 import ch.ubique.heidi.wallet.credentials.signature.SignatureValidationState
 import ch.ubique.heidi.wallet.process.presentation.ZkpOptions
 import ch.ubique.heidi.wallet.resources.StringResourceProvider
+import com.android.identity.util.Logger.e
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DateTimePeriod
 import kotlinx.datetime.LocalDateTime
@@ -116,23 +117,23 @@ class ViewModelFactory private constructor(
 				val exp = mdoc?.get("exp")?.jsonPrimitiveOrNull()?.longOrNull
 				iat to exp
 			}
-			CredentialType.BbsTermwise -> {
-				null to null
-			}
-			CredentialType.W3C_VCDM -> {
-				val claims = W3C.parse(credential.payload).asJson()
-				val validFrom = claims["iat"].asLong()
-				val validUntil = claims["exp"].asLong()
-
-				validFrom to validUntil
-			}
-            CredentialType.OpenBadge303 -> {
-                val vc = W3C.OpenBadge303.parseSerialized(credential.payload).asJson()
-                val validFrom = vc["validFrom"].asString()?.let { Instant.parse(it).epochSeconds }
-                val validUntil = vc["validUntil"].asString()?.let { Instant.parse(it).epochSeconds }
-
-                validFrom to validUntil
-            }
+//			CredentialType.BbsTermwise -> {
+//				null to null
+//			}
+//			CredentialType.W3C_VCDM -> {
+//				val claims = uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credential.payload).asJson()
+//				val validFrom = claims["iat"].asLong()
+//				val validUntil = claims["exp"].asLong()
+//
+//				validFrom to validUntil
+//			}
+//            CredentialType.OpenBadge303 -> {
+//                val vc = uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303.parseSerialized(credential.payload).asJson()
+//                val validFrom = vc["validFrom"].asString()?.let { Instant.parse(it).epochSeconds }
+//                val validUntil = vc["validUntil"].asString()?.let { Instant.parse(it).epochSeconds }
+//
+//                validFrom to validUntil
+//            }
 			CredentialType.Unknown -> null to null
         }
 
@@ -143,25 +144,25 @@ class ViewModelFactory private constructor(
 			CredentialType.Mdoc -> {
 				mdocAsJsonRepresentation(credential.payload)
 			}
-			CredentialType.BbsTermwise -> runCatching {
-				val cred = Json.parseToJsonElement(base64UrlDecode(credential.payload).decodeToString())
-				val document = cred.jsonObject["document"]!!
-				bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString())
-			}.getOrNull() ?: ""
-			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse(credential.payload).asJson())
-            CredentialType.OpenBadge303 -> Json.encodeToString(
-                W3C.OpenBadge303.parseSerialized(credential.payload).asJson())
+//			CredentialType.BbsTermwise -> runCatching {
+//				val cred = Json.parseToJsonElement(base64UrlDecode(credential.payload).decodeToString())
+//				val document = cred.jsonObject["document"]!!
+//				bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString())
+//			}.getOrNull() ?: ""
+//			CredentialType.W3C_VCDM -> Json.encodeToString(uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credential.payload).asJson())
+//            CredentialType.OpenBadge303 -> Json.encodeToString(
+//                uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303.parseSerialized(credential.payload).asJson())
             CredentialType.Unknown -> ""
 		}
 
 		val signatureVerified = when (credential.metadata.credentialType) {
 			CredentialType.SdJwt -> SdJwt.parse(credential.payload).isSignatureValid()
 			CredentialType.Mdoc -> null
-			CredentialType.BbsTermwise -> null
-			CredentialType.W3C_VCDM -> W3C.parse(credential.payload).isSignatureValid()
-            CredentialType.OpenBadge303 -> W3C.OpenBadge303
-                .parseSerialized(credential.payload)
-                .isSignatureValid()
+//			CredentialType.BbsTermwise -> null
+//			CredentialType.W3C_VCDM -> uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credential.payload).isSignatureValid()
+//            CredentialType.OpenBadge303 -> uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303
+//                .parseSerialized(credential.payload)
+//                .isSignatureValid()
             CredentialType.Unknown -> null
 		}
 
@@ -210,14 +211,14 @@ class ViewModelFactory private constructor(
 
 		val credential = identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.SdJwt }
 			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.Mdoc }
-			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.BbsTermwise }
-            ?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.W3C_VCDM }
-            ?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.OpenBadge303 }
+//			?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.BbsTermwise }
+//            ?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.W3C_VCDM }
+//            ?: identity.credentials.firstOrNull { it.metadata.credentialType == CredentialType.OpenBadge303 }
 			?: return null
 		var possibleSdJwt: SdJwt? = null
-		var possibleBbs: Bbs? = null
-		var possibleW3C: W3C? = null
-        var possibleOpenBadge303: W3C.OpenBadge303? = null
+//		var possibleBbs: Bbs? = null
+//		var possibleW3C: W3C? = null
+//        var possibleOpenBadge303: W3C.OpenBadge303? = null
 
 		val credentialType = credential.metadata.credentialType
 		val jsonContent = when (credentialType) {
@@ -227,18 +228,18 @@ class ViewModelFactory private constructor(
 			}
 			//TODO: improve the mdocAsJsonRepresentation
 			CredentialType.Mdoc -> mdocAsJsonRepresentation(credential.payload) ?: return null
-			CredentialType.BbsTermwise -> runCatching {
-				possibleBbs = Bbs.parse(credential.payload)
-				json.encodeToString(possibleBbs.body())
-			}.getOrNull() ?: return null
-			CredentialType.W3C_VCDM -> {
-				possibleW3C = W3C.parse(credential.payload)
-				Json.encodeToString(possibleW3C.asJson())
-			}
-            CredentialType.OpenBadge303 -> {
-                possibleOpenBadge303 = W3C.OpenBadge303.parseSerialized(credential.payload)
-                Json.encodeToString(possibleOpenBadge303.asJson())
-            }
+//			CredentialType.BbsTermwise -> runCatching {
+//				possibleBbs = Bbs.parse(credential.payload)
+//				json.encodeToString(possibleBbs.body())
+//			}.getOrNull() ?: return null
+//			CredentialType.W3C_VCDM -> {
+//				possibleW3C = uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credential.payload)
+//				Json.encodeToString(possibleW3C.asJson())
+//			}
+//            CredentialType.OpenBadge303 -> {
+//                possibleOpenBadge303 = uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303.parseSerialized(credential.payload)
+//                Json.encodeToString(possibleOpenBadge303.asJson())
+//            }
             CredentialType.Unknown -> return null
 		}
 		var isRevoked = false
@@ -249,9 +250,9 @@ class ViewModelFactory private constructor(
 					CredentialType.SdJwt -> runCatching { SdJwt.parse(c.payload).toJson() }.getOrNull() ?: continue
 					//TODO: improve the mdocAsJsonRepresentation
 					CredentialType.Mdoc -> mdocAsJsonRepresentation(c.payload) ?: return null
-					CredentialType.BbsTermwise -> continue
-					CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse(c.payload).asJson())
-                    CredentialType.OpenBadge303 -> continue // TODO: OpenBadges implement status list
+//					CredentialType.BbsTermwise -> continue
+//					CredentialType.W3C_VCDM -> Json.encodeToString(uniffi.heidi_wallet_rust.CredentialType.W3C.parse(c.payload).asJson())
+//					CredentialType.OpenBadge303 -> continue // TODO: OpenBadges implement status list
                     CredentialType.Unknown -> return null
 				}
 				val jsonElement = json.parseToJsonElement(newContent)
@@ -322,97 +323,97 @@ class ViewModelFactory private constructor(
 						)
 					}
 				}
-				CredentialType.BbsTermwise -> {
-					val bbs = possibleBbs ?: return null
-					val ocaType = bbs.body()["http://schema.org/ocaUrl"].asString()?.let { OcaType.Reference(it) } ?: identity.credentials.firstOrNull()?.let {  OcaType.BuiltIn.FromMetadata("metadata://${it.docType}") }
-					ocaType?.let {
-						ocaIdentityMapper.mapIdentity(
-							ocaRepository = ocaRepository,
-							it,
-							identity,
-							jsonContent,
-							activities,
-							identity.credentials
-						)
-					} ?: fallbackIdentityMapper.mapIdentity(
-						CredentialType.SdJwt,
-						identity,
-						jsonContent,
-						activities,
-						identity.credentials
-					)
-				}
+//				CredentialType.BbsTermwise -> {
+//					val bbs = possibleBbs ?: return null
+//					val ocaType = bbs.body()["http://schema.org/ocaUrl"].asString()?.let { OcaType.Reference(it) } ?: identity.credentials.firstOrNull()?.let {  OcaType.BuiltIn.FromMetadata("metadata://${it.docType}") }
+//					ocaType?.let {
+//						ocaIdentityMapper.mapIdentity(
+//							ocaRepository = ocaRepository,
+//							it,
+//							identity,
+//							jsonContent,
+//							activities,
+//							identity.credentials
+//						)
+//					} ?: fallbackIdentityMapper.mapIdentity(
+//						CredentialType.SdJwt,
+//						identity,
+//						jsonContent,
+//						activities,
+//						identity.credentials
+//					)
+//				}
 
-				CredentialType.W3C_VCDM -> {
-					val cred = possibleW3C ?: return null
-					val ocaType = cred.asJson()["render"]["oca"].asString()?.let { OcaType.Reference(it) }
-						?: OcaBundleFactory.getBuiltInOcaType(cred.docType)
-
-					ocaType?.let {
-						ocaIdentityMapper.mapIdentity(
-							ocaRepository = ocaRepository,
-							it,
-							identity,
-							jsonContent,
-							activities,
-							identity.credentials
-						)
-					} ?: fallbackIdentityMapper.mapIdentity(
-						CredentialType.W3C_VCDM,
-						identity,
-						jsonContent,
-						activities,
-						identity.credentials
-					)
-				}
-                CredentialType.OpenBadge303 -> {
-                    val vc = possibleOpenBadge303 ?: return null
-                    val title = vc.name ?: "Open Badge Credential"
-                    val subtitle = vc.achievement["description"].asString()?.truncate(100) ?: ""
-                    val issuer = vc.issuerName ?: "Open Badge Issuer"
-
-                    val signatureValid = if (vc.isSignatureValid()) {
-                        SignatureValidationState.VALID
-                    } else {
-                        SignatureValidationState.VALID
-                    }
-
-                    val backgroundImage = vc.pngBytes?.let {
-                        LayoutCardImage.Base64(it)
-                    }
-
-                    val card = LayoutData.Card(
-                        credentialName = title,
-                        issuerName = issuer,
-                        title = title,
-                        subtitle = subtitle,
-                        textColor = TextShade.DARK,
-                        cardColor = 0xFFFFFFFF,
-                        backgroundImage = backgroundImage,
-                        overlays = null
-                    )
-
-                    IdentityUiModel.IdentityUiCredentialModel(
-                        id = identity.id,
-                        name = identity.name,
-                        card = card,
-                        title = title,
-                        subtitle = subtitle,
-                        signature = Signature(signatureValid, issuer),
-                        detailList = LayoutData.DetailList(emptyList()),
-                        hasEmergencyPass = false,
-                        hasOnlyEmergencyPass = false,
-                        credentials = identity.credentials,
-                        activities = activities,
-                        isPid = false,
-                        isUsable = true,
-                        isRevoked = isRevoked,
-                        isRefreshable = false,
-                        docType = "OpenBadge",
-                        frostBlob = identity.frostBlob,
-                        credentialUiModel = emptyList()
-                    )
-                }
+//				CredentialType.W3C_VCDM -> {
+//					val cred = possibleW3C ?: return null
+//					val ocaType = cred.asJson()["render"]["oca"].asString()?.let { OcaType.Reference(it) }
+//						?: OcaBundleFactory.getBuiltInOcaType(cred.docType)
+//
+//					ocaType?.let {
+//						ocaIdentityMapper.mapIdentity(
+//							ocaRepository = ocaRepository,
+//							it,
+//							identity,
+//							jsonContent,
+//							activities,
+//							identity.credentials
+//						)
+//					} ?: fallbackIdentityMapper.mapIdentity(
+//						CredentialType.W3C_VCDM,
+//						identity,
+//						jsonContent,
+//						activities,
+//						identity.credentials
+//					)
+//				}
+//                CredentialType.OpenBadge303 -> {
+//                    val vc = possibleOpenBadge303 ?: return null
+//                    val title = vc.name ?: "Open Badge Credential"
+//                    val subtitle = vc.achievement["description"].asString()?.truncate(100) ?: ""
+//                    val issuer = vc.issuerName ?: "Open Badge Issuer"
+//
+//                    val signatureValid = if (vc.isSignatureValid()) {
+//                        SignatureValidationState.VALID
+//                    } else {
+//                        SignatureValidationState.VALID
+//                    }
+//
+//                    val backgroundImage = vc.pngBytes?.let {
+//                        LayoutCardImage.Base64(it)
+//                    }
+//
+//                    val card = LayoutData.Card(
+//                        credentialName = title,
+//                        issuerName = issuer,
+//                        title = title,
+//                        subtitle = subtitle,
+//                        textColor = TextShade.DARK,
+//                        cardColor = 0xFFFFFFFF,
+//                        backgroundImage = backgroundImage,
+//                        overlays = null
+//                    )
+//
+//                    IdentityUiModel.IdentityUiCredentialModel(
+//                        id = identity.id,
+//                        name = identity.name,
+//                        card = card,
+//                        title = title,
+//                        subtitle = subtitle,
+//                        signature = Signature(signatureValid, issuer),
+//                        detailList = LayoutData.DetailList(emptyList()),
+//                        hasEmergencyPass = false,
+//                        hasOnlyEmergencyPass = false,
+//                        credentials = identity.credentials,
+//                        activities = activities,
+//                        isPid = false,
+//                        isUsable = true,
+//                        isRevoked = isRevoked,
+//                        isRefreshable = false,
+//                        docType = "OpenBadge",
+//                        frostBlob = identity.frostBlob,
+//                        credentialUiModel = emptyList()
+//                    )
+//                }
                 CredentialType.Unknown -> null
 			}
 			val newModel = uiModel?.copy(isRevoked = isRevoked)
@@ -512,15 +513,15 @@ class ViewModelFactory private constructor(
 			CredentialType.SdJwt -> runCatching { SdJwt.parse(credential.payload).toJson()}.getOrNull() ?: return null
 			//TODO: improve the mdocAsJsonRepresentation
 			CredentialType.Mdoc -> mdocAsJsonRepresentation(credential.payload) ?: return null
-			CredentialType.BbsTermwise -> runCatching {
-				val cred = Json.parseToJsonElement(base64UrlDecode(credential.payload).decodeToString())
-				val document = cred.jsonObject["document"]!!
-				bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString())!!
-			}.getOrNull() ?: return null
-			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse(credential.payload).asJson())
-            CredentialType.OpenBadge303 -> Json.encodeToString(
-                W3C.OpenBadge303.parseSerialized(credential.payload).asJson())
-            CredentialType.Unknown -> return null
+//			CredentialType.BbsTermwise -> runCatching {
+//				val cred = Json.parseToJsonElement(base64UrlDecode(credential.payload).decodeToString())
+//				val document = cred.jsonObject["document"]!!
+//				bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString())!!
+//			}.getOrNull() ?: return null
+//			CredentialType.W3C_VCDM -> Json.encodeToString(uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credential.payload).asJson())
+//            CredentialType.OpenBadge303 -> Json.encodeToString(
+//                uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303.parseSerialized(credential.payload).asJson())
+			CredentialType.Unknown -> return null
 		}
 	}
 

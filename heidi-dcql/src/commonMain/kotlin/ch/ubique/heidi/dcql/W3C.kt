@@ -20,6 +20,7 @@ under the License.
 
 package ch.ubique.heidi.dcql
 
+/*
 import ch.ubique.heidi.credentials.W3C.Companion.W3C_FORMATS
 import ch.ubique.heidi.credentials.*
 import uniffi.heidi_credentials_rust.*
@@ -55,3 +56,4 @@ fun W3C.getVpToken(
         overrideDisclosures
     )
 }
+*/

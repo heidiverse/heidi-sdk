@@ -385,8 +385,8 @@ open class EaaIssuanceProcess(
                             credentialType = when (credConfig?.format) {
                                 "dc+sd-jwt", "vc+sd-jwt" -> CredentialType.SdJwt
                                 "mso_mdoc" -> CredentialType.Mdoc
-                                "zkp_vc" -> CredentialType.BbsTermwise
-                                "jwt_vc_json" -> CredentialType.W3C_VCDM
+//                                "zkp_vc" -> CredentialType.BbsTermwise
+//                                "jwt_vc_json" -> CredentialType.W3C_VCDM
                                 else -> CredentialType.Unknown
                             }
                         )
@@ -399,8 +399,8 @@ open class EaaIssuanceProcess(
                             credentialType = when (credConfig?.format) {
                                 "dc+sd-jwt", "vc+sd-jwt" -> CredentialType.SdJwt
                                 "mso_mdoc" -> CredentialType.Mdoc
-                                "zkp_vc" -> CredentialType.BbsTermwise
-                                "jwt_vc_json" -> CredentialType.W3C_VCDM
+//                                "zkp_vc" -> CredentialType.BbsTermwise
+//                                "jwt_vc_json" -> CredentialType.W3C_VCDM
                                 else -> CredentialType.Unknown
                             }
                         )

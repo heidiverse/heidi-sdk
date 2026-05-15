@@ -21,7 +21,7 @@ under the License.
 package ch.ubique.heidi.wallet.process.refresh.eaa
 
 import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.W3C
+//import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
 import ch.ubique.heidi.credentials.models.credential.CredentialType
@@ -245,15 +245,15 @@ class EaaRefreshProcess(
 		val docType = when (credentialType) {
 			CredentialType.SdJwt -> SdJwt.parse(credential.credential.getPayload()).getMetadata().vct
 			CredentialType.Mdoc -> MdocUtils.getDocType(credentialPayload)
-			CredentialType.BbsTermwise -> kotlin.runCatching {
-				val cred = Json.parseToJsonElement(base64UrlDecode(credentialPayload).decodeToString())
-				val document = cred.jsonObject["document"]!!
-				val bbs = Json.parseToJsonElement( bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString()) ?: "{}")
-				bbs.jsonObject["https://www.w3.org/2018/credentials#credentialSubject"]!!.jsonObject["@id"]!!.jsonPrimitive.content
-
-			}.getOrNull() ?: return null
-			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
-            CredentialType.OpenBadge303 -> W3C.OpenBadge303.parseSerialized(credentialPayload).docType
+//			CredentialType.BbsTermwise -> kotlin.runCatching {
+//				val cred = Json.parseToJsonElement(base64UrlDecode(credentialPayload).decodeToString())
+//				val document = cred.jsonObject["document"]!!
+//				val bbs = Json.parseToJsonElement( bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString()) ?: "{}")
+//				bbs.jsonObject["https://www.w3.org/2018/credentials#credentialSubject"]!!.jsonObject["@id"]!!.jsonPrimitive.content
+//
+//			}.getOrNull() ?: return null
+//			CredentialType.W3C_VCDM -> uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credentialPayload).docType
+//            CredentialType.OpenBadge303 -> uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303.parseSerialized(credentialPayload).docType
             CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null

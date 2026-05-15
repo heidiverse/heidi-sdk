@@ -86,9 +86,9 @@ class FallbackIdentityMapper(
 				root.entries.firstOrNull { it.key.contains(".") }
 					?.let { root[it.key] as? JsonObject } ?: root
 			}
-			CredentialType.BbsTermwise -> root
-			CredentialType.W3C_VCDM -> root
-            CredentialType.OpenBadge303 -> root
+//			CredentialType.BbsTermwise -> root
+//			CredentialType.W3C_VCDM -> root
+//            CredentialType.OpenBadge303 -> root
             CredentialType.Unknown -> root
 		}
 

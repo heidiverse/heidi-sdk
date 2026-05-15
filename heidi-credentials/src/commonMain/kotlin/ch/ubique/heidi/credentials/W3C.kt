@@ -17,9 +17,9 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
  */
-
 package ch.ubique.heidi.credentials
 
+/*
 import ch.ubique.heidi.credentials.sdjwt.SdJwtVcSignatureResolver
 import ch.ubique.heidi.util.extensions.asObject
 import ch.ubique.heidi.util.extensions.asString
@@ -208,3 +208,4 @@ sealed class W3C {
         }
     }
 }
+*/

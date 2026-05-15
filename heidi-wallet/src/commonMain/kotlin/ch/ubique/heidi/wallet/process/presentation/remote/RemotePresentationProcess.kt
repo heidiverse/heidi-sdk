@@ -533,7 +533,7 @@ class RemotePresentationProcess(
 						val identity = identityRepository.getById(cred.identityId)
 						val isRefreshable = identity?.tokens?.refreshToken != null
 						val isClaimBound = cred.decodeMetadata()?.keyMaterial is KeyMaterial.Local.ClaimBased
-						if (!isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
+						if (!isClaimBound && isRefreshable /*&& cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise*/) {
 							credentialsRepository.useCredential(cred.id)
 						}
 
@@ -565,7 +565,7 @@ class RemotePresentationProcess(
 						val identity = identityRepository.getById(cred.identityId)
 						val isRefreshable = identity?.tokens?.refreshToken != null
 						val isClaimBound = cred.decodeMetadata()?.keyMaterial is KeyMaterial.Local.ClaimBased
-						if (!isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
+						if (!isClaimBound && isRefreshable /*&& cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise*/) {
 							Logger.debug("UBSM: setting credential as used ${cred.id}")
 							credentialsRepository.useCredential(cred.id)
 						} else {

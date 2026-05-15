@@ -20,6 +20,7 @@ under the License.
 
 package ch.ubique.heidi.credentials
 
+/*
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.BbsBuilderObject
 import uniffi.heidi_credentials_rust.BbsClaimBasedPresentationRust
@@ -123,3 +124,4 @@ class BbsClaimBasedPresentation(val inner: BbsClaimBasedPresentationRust) {
     fun verify() =
         inner.verify(2U)
 }
+*/

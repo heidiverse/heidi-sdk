@@ -41,8 +41,8 @@ curve25519-dalek = { version = "=4.1.2", features = [
     "digest",
 ], optional = true }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-openssl-sys = { version = "0.9.111", features = ["vendored"] }
+[target.'cfg(any(target_os = "android"))'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

@@ -20,6 +20,7 @@ under the License.
 
 package ch.ubique.heidi.dcql
 
+/*
 import ch.ubique.heidi.credentials.Bbs
 import ch.ubique.heidi.credentials.Bbs.Companion.BBS_TERMWISE_FORMATS
 import ch.ubique.heidi.credentials.SdJwtErrors
@@ -213,3 +214,4 @@ fun bbsCombinedClaimBasedProof(
         ))
     }
 }
+*/

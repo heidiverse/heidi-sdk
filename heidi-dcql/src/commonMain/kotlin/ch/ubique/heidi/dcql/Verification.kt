@@ -20,11 +20,11 @@ under the License.
 
 package ch.ubique.heidi.dcql
 
-import ch.ubique.heidi.credentials.Bbs
-import ch.ubique.heidi.credentials.BbsPresentation
+//import ch.ubique.heidi.credentials.Bbs
+//import ch.ubique.heidi.credentials.BbsPresentation
 import ch.ubique.heidi.credentials.Mdoc
 import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.W3C
+//import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.get
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.toClaimsPointer
@@ -34,7 +34,7 @@ import ch.ubique.heidi.util.extensions.get
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.PointerPart
-import uniffi.heidi_credentials_rust.verifySecuredDocumentString
+// import uniffi.heidi_credentials_rust.verifySecuredDocumentString
 import uniffi.heidi_crypto_rust.base64UrlDecode
 import uniffi.heidi_crypto_rust.base64UrlEncode
 import uniffi.heidi_dcql_rust.ClaimsQuery
@@ -258,42 +258,42 @@ private fun checkMetaOpenBadges(
 
 private fun getCredentialType(vpToken: String, expectedFormat: String): Result<CredentialType> {
     // BBS term-wise has unique formats
-    if (Bbs.BBS_TERMWISE_FORMATS.contains(expectedFormat))
-        return Result.success(CredentialType.BbsTermwise)
+//    if (Bbs.BBS_TERMWISE_FORMATS.contains(expectedFormat))
+//        return Result.success(CredentialType.BbsTermwise)
 
     // Mdoc has unique formats
     if (Mdoc.MDOC_FORMATS.contains(expectedFormat))
         return Result.success(CredentialType.Mdoc)
 
     // SD-JWT and W3C have overlapping formats
-    if (SdJwt.SD_JWT_FORMATS.contains(expectedFormat)
-        && W3C.W3C_FORMATS.contains(expectedFormat)
-    ) {
-        // If parsing one credential fails, its the other format
-        val sdJwt = runCatching { SdJwt.parse(vpToken) }.getOrElse {
-            return Result.success(CredentialType.W3C_VCDM)
-        }
-        val w3c = runCatching { W3C.parse(vpToken) }.getOrElse {
-            return Result.success(CredentialType.SdJwt)
-        }
-
-        // Otherwise, try to distinguish the formats using a heuristic:
-        // "Pure" SD-JWT credentials should not have a "@context" property
-        return if (w3c.asJson()["@context"] !is Value.Null) {
-            Result.success(CredentialType.W3C_VCDM)
-        } else {
-            Result.success(CredentialType.SdJwt)
-        }
-    }
+//    if (SdJwt.SD_JWT_FORMATS.contains(expectedFormat)
+//        && W3C.W3C_FORMATS.contains(expectedFormat)
+//    ) {
+//        // If parsing one credential fails, its the other format
+//        val sdJwt = runCatching { SdJwt.parse(vpToken) }.getOrElse {
+//            return Result.success(CredentialType.W3C_VCDM)
+//        }
+//        val w3c = runCatching { W3C.parse(vpToken) }.getOrElse {
+//            return Result.success(CredentialType.SdJwt)
+//        }
+//
+//        // Otherwise, try to distinguish the formats using a heuristic:
+//        // "Pure" SD-JWT credentials should not have a "@context" property
+//        return if (w3c.asJson()["@context"] !is Value.Null) {
+//            Result.success(CredentialType.W3C_VCDM)
+//        } else {
+//            Result.success(CredentialType.SdJwt)
+//        }
+//    }
 
     if (SdJwt.SD_JWT_FORMATS.contains(expectedFormat))
         return Result.success(CredentialType.SdJwt)
 
-    if (W3C.W3C_FORMATS.contains(expectedFormat))
-        return Result.success(CredentialType.W3C_VCDM)
-
-    if (W3C.OpenBadge303.OPEN_BADGE_FORMATS.contains(expectedFormat))
-        return Result.success(CredentialType.OpenBadge303)
+//    if (W3C.W3C_FORMATS.contains(expectedFormat))
+//        return Result.success(CredentialType.W3C_VCDM)
+//
+//    if (W3C.OpenBadge303.OPEN_BADGE_FORMATS.contains(expectedFormat))
+//        return Result.success(CredentialType.OpenBadge303)
 
     return Result.failure(UnknownCredentialQueryFormatException(expectedFormat))
 }
@@ -347,60 +347,60 @@ private fun checkCredentialQuery(
             ).map { result }
         }
 
-        CredentialType.BbsTermwise -> {
-            val result = runCatching {
-                checkVpToken(CredentialType.BbsTermwise, vpToken, query.id)
-            }.getOrElse { return Result.failure(it) }
-            val bbs = BbsPresentation.parse(vpToken)
+//        CredentialType.BbsTermwise -> {
+//            val result = runCatching {
+//                checkVpToken(CredentialType.BbsTermwise, vpToken, query.id)
+//            }.getOrElse { return Result.failure(it) }
+//            val bbs = BbsPresentation.parse(vpToken)
+//
+//            query.meta?.let {
+//                checkMetaBbs(it, bbs.vcTypes()).exceptionOrNull()
+//                    ?.let { e -> return Result.failure(e) }
+//            }
+//
+//            checkCredentialQuery(
+//                query,
+//                bbs.claims(),
+//                bbs.getOriginalNumClaims(),
+//                bbs.getNumDisclosed()
+//            ).map { result }
+//        }
 
-            query.meta?.let {
-                checkMetaBbs(it, bbs.vcTypes()).exceptionOrNull()
-                    ?.let { e -> return Result.failure(e) }
-            }
+//        CredentialType.W3C_VCDM -> {
+//            val result = runCatching {
+//                checkVpToken(CredentialType.W3C_VCDM, vpToken, query.id)
+//            }.getOrElse { return Result.failure(it) }
+//            val w3c = W3C.parse(vpToken)
+//
+//            query.meta?.let {
+//                checkMetaW3C(it).exceptionOrNull()?.let { e -> return Result.failure(e) }
+//            }
+//
+//            checkCredentialQuery(
+//                query, w3c.asJson(), w3c.getOriginalNumClaims(), w3c.getNumDisclosed()
+//            ).map { result }
+//        }
 
-            checkCredentialQuery(
-                query,
-                bbs.claims(),
-                bbs.getOriginalNumClaims(),
-                bbs.getNumDisclosed()
-            ).map { result }
-        }
-
-        CredentialType.W3C_VCDM -> {
-            val result = runCatching {
-                checkVpToken(CredentialType.W3C_VCDM, vpToken, query.id)
-            }.getOrElse { return Result.failure(it) }
-            val w3c = W3C.parse(vpToken)
-
-            query.meta?.let {
-                checkMetaW3C(it).exceptionOrNull()?.let { e -> return Result.failure(e) }
-            }
-
-            checkCredentialQuery(
-                query, w3c.asJson(), w3c.getOriginalNumClaims(), w3c.getNumDisclosed()
-            ).map { result }
-        }
-
-        CredentialType.OpenBadge303 -> {
-            val result = runCatching {
-                checkVpToken(CredentialType.OpenBadge303, vpToken, query.id)
-            }.getOrElse { return Result.failure(it) }
-            val vpJson = Json.decodeFromString<Value>(vpToken)
-            val vcJson = vpJson["verifiableCredential"][0]
-
-            query.meta?.let {
-                val types = vcJson["type"]
-                    .asArray()
-                    ?.mapNotNull { t -> t.asString() }
-                    ?: listOf()
-
-                checkMetaOpenBadges(it, types).exceptionOrNull()?.let { e -> return Result.failure(e) }
-            }
-
-            checkCredentialQuery(
-                query, vcJson, 0, 0
-            ).map { result }
-        }
+//        CredentialType.OpenBadge303 -> {
+//            val result = runCatching {
+//                checkVpToken(CredentialType.OpenBadge303, vpToken, query.id)
+//            }.getOrElse { return Result.failure(it) }
+//            val vpJson = Json.decodeFromString<Value>(vpToken)
+//            val vcJson = vpJson["verifiableCredential"][0]
+//
+//            query.meta?.let {
+//                val types = vcJson["type"]
+//                    .asArray()
+//                    ?.mapNotNull { t -> t.asString() }
+//                    ?: listOf()
+//
+//                checkMetaOpenBadges(it, types).exceptionOrNull()?.let { e -> return Result.failure(e) }
+//            }
+//
+//            checkCredentialQuery(
+//                query, vcJson, 0, 0
+//            ).map { result }
+//        }
 
         CredentialType.Unknown -> Result.failure(UnknownCredentialQueryFormatException(query.format))
     }

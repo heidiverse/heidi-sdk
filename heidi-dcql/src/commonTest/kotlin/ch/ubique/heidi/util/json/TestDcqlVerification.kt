@@ -22,7 +22,7 @@ package ch.ubique.heidi.util.json
 
 import ch.ubique.heidi.credentials.Mdoc
 import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.W3C
+// import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.toClaimsPointer
 import ch.ubique.heidi.dcql.ClaimHasNoValueException
@@ -109,18 +109,18 @@ class TestDcqlVerification {
                     "type" to Value.String("mdoc"),
                     "content" to Value.String(vpToken)
                 )
-                CredentialType.BbsTermwise -> mapOf(
-                    "type" to Value.String("bbs-termwise"),
-                    "content" to Value.String(vpToken)
-                )
-                CredentialType.W3C_VCDM -> mapOf(
-                    "type" to Value.String("w3c"),
-                    "content" to Value.String(vpToken)
-                )
-                CredentialType.OpenBadge303 -> mapOf(
-                    "type" to Value.String("ldp_vc"),
-                    "content" to Value.String(vpToken)
-                )
+//                CredentialType.BbsTermwise -> mapOf(
+//                    "type" to Value.String("bbs-termwise"),
+//                    "content" to Value.String(vpToken)
+//                )
+//                CredentialType.W3C_VCDM -> mapOf(
+//                    "type" to Value.String("w3c"),
+//                    "content" to Value.String(vpToken)
+//                )
+//                CredentialType.OpenBadge303 -> mapOf(
+//                    "type" to Value.String("ldp_vc"),
+//                    "content" to Value.String(vpToken)
+//                )
                 else -> emptyMap<String, Value>()
             }
         })
@@ -167,16 +167,16 @@ class TestDcqlVerification {
         ).getOrNull()!!
     }
 
-    private fun createW3C(
-        claims: String,
-        disclosures: List<List<String>>
-    ): W3C = W3C.SdJwt.create(
-        claims = Json.decodeFromString<Value>(claims),
-        disclosures = disclosures.map { it.toClaimsPointer()!! },
-        keyId = keyId,
-        key = issuerSigner,
-        pubKeyJwk = deviceKeyJwk,
-    )!!
+//    private fun createW3C(
+//        claims: String,
+//        disclosures: List<List<String>>
+//    ): W3C = W3C.SdJwt.create(
+//        claims = Json.decodeFromString<Value>(claims),
+//        disclosures = disclosures.map { it.toClaimsPointer()!! },
+//        keyId = keyId,
+//        key = issuerSigner,
+//        pubKeyJwk = deviceKeyJwk,
+//    )!!
 
     private fun createPresentation(
         query: CredentialQuery,
@@ -209,29 +209,29 @@ class TestDcqlVerification {
             ).getOrNull()!!
     )
 
-    private fun createPresentation(
-        query: CredentialQuery,
-        credential: W3C,
-        disclosures: List<List<String>>? = null,
-    ): DcqlPresentation = mapOf(
-        query.id to credential
-            .getVpToken(
-                query,
-                audience,
-                null,
-                null,
-                nonce,
-                keyBindingKey,
-                overrideDisclosures = disclosures?.map { it.toClaimsPointer()!!.path }
-            ).getOrNull()!!
-    )
+//    private fun createPresentation(
+//        query: CredentialQuery,
+//        credential: W3C,
+//        disclosures: List<List<String>>? = null,
+//    ): DcqlPresentation = mapOf(
+//        query.id to credential
+//            .getVpToken(
+//                query,
+//                audience,
+//                null,
+//                null,
+//                nonce,
+//                keyBindingKey,
+//                overrideDisclosures = disclosures?.map { it.toClaimsPointer()!!.path }
+//            ).getOrNull()!!
+//    )
 
-    private fun createPresentation(
-        query: CredentialQuery,
-        credential: W3C.OpenBadge303,
-    ): DcqlPresentation = mapOf(
-        query.id to credential.asVerifiablePresentation().getOrThrow()
-    )
+//    private fun createPresentation(
+//        query: CredentialQuery,
+//        credential: W3C.OpenBadge303,
+//    ): DcqlPresentation = mapOf(
+//        query.id to credential.asVerifiablePresentation().getOrThrow()
+//    )
 
     @Test
     fun testVerifySdJwtQueryWithClaims() {
@@ -1627,7 +1627,7 @@ class TestDcqlVerification {
     }
 
     /////////////// W3C ////////////////
-
+    /*
     @Test
     fun testVerifyW3CQueryWithClaims() {
         val w3c = createW3C(
@@ -2278,9 +2278,9 @@ class TestDcqlVerification {
             verify(query, dcqlPresentation).getOrThrow()
         }
     }
-
+    */
     /////////// OPEN BADGES //////////////
-
+    /*
     @Test
     fun testOpenBadgeVerification() = runBlocking {
         val credential = W3C.OpenBadge303.parse(Base64.decode(
@@ -2388,10 +2388,10 @@ class TestDcqlVerification {
             verify(query, dcqlPresentation).getOrThrow()
         }
     }
-
+    */
 
     /////////////// MIXED ////////////////
-
+    /*
     @Test
     fun testVerifySetQueryMixed() {
         val sdJwt = createSdJwk(
@@ -2561,4 +2561,5 @@ class TestDcqlVerification {
             )
         )
     }
+     */
 }

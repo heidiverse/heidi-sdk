@@ -23,12 +23,12 @@ package ch.ubique.heidi.credentials.models.credential
 enum class CredentialType {
 	SdJwt,
 	Mdoc,
-	BbsTermwise,
-	W3C_VCDM,
-    OpenBadge303,
+//	BbsTermwise,
+//	W3C_VCDM,
+//    OpenBadge303,
 	Unknown;
 
 	companion object {
-		val SUPPORTED = setOf(SdJwt, Mdoc, BbsTermwise, W3C_VCDM, OpenBadge303)
+		val SUPPORTED = setOf(SdJwt, Mdoc, /*BbsTermwise, W3C_VCDM, OpenBadge303*/)
 	}
 }

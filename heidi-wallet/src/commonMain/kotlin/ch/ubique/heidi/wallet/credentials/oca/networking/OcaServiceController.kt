@@ -21,7 +21,7 @@ under the License.
 package ch.ubique.heidi.wallet.credentials.oca.networking
 
 import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.W3C
+//import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.wallet.credentials.format.mdoc.MdocUtils
@@ -67,10 +67,10 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 			CredentialType.SdJwt -> uniffi.heidi_wallet_rust.SdJwt((credential.credential as CredentialFormat.SdJwt).v1).getJson() ?: return null
 			//TODO: improve the mdocAsJsonRepresentation
 			CredentialType.Mdoc -> mdocAsJsonRepresentation((credential.credential as CredentialFormat.Mdoc).v1) ?: return null
-			CredentialType.BbsTermwise -> return null
-			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse((credential.credential as CredentialFormat.W3c).v1).asJson())
-            CredentialType.OpenBadge303 -> Json.encodeToString(W3C.OpenBadge303.parse(
-                Base64.UrlSafe.decode((credential.credential as CredentialFormat.OpenBadge).v1)).asJson())
+//			CredentialType.W3C_VCDM -> Json.encodeToString(uniffi.heidi_wallet_rust.CredentialType.W3C.parse((credential.credential as CredentialFormat.W3c).v1).asJson())
+//            CredentialType.OpenBadge303 -> Json.encodeToString(
+//				uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303.parse(
+//                Base64.UrlSafe.decode((credential.credential as CredentialFormat.OpenBadge).v1)).asJson())
             CredentialType.Unknown -> return null
 		}
 
@@ -85,10 +85,10 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 		val docType = when (credentialType) {
 			CredentialType.SdJwt -> SdJwt.parse(credentialPayload).getMetadata().vct
 			CredentialType.Mdoc -> MdocUtils.getDocType(credentialPayload)
-			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
-			CredentialType.BbsTermwise -> return null
-            CredentialType.OpenBadge303 -> W3C.OpenBadge303
-                .parse(Base64.UrlSafe.decode(credentialPayload)).docType
+//			CredentialType.W3C_VCDM -> uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credentialPayload).docType
+//			CredentialType.BbsTermwise -> return null
+//            CredentialType.OpenBadge303 -> uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303
+//                .parse(Base64.UrlSafe.decode(credentialPayload)).docType
             CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null

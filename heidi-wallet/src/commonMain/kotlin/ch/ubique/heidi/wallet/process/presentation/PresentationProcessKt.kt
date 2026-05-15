@@ -24,12 +24,12 @@ import ch.ubique.heidi.credentials.Mdoc
 import ch.ubique.heidi.credentials.SdJwt
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.metadata.KeyAssurance
-import ch.ubique.heidi.credentials.Bbs
-import ch.ubique.heidi.credentials.W3C
+//import ch.ubique.heidi.credentials.Bbs
+//import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
-import ch.ubique.heidi.dcql.bbsCombinedClaimBasedProof
+//import ch.ubique.heidi.dcql.bbsCombinedClaimBasedProof
 import ch.ubique.heidi.dcql.getVpToken
 import ch.ubique.heidi.presentation.model.DocumentDigest
 import ch.ubique.heidi.presentation.model.OID4VPVersion
@@ -67,7 +67,7 @@ import ch.ubique.heidi.wallet.process.presentation.models.TransactionDataWrapper
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import uniffi.heidi_credentials_rust.SignatureCreator
-import uniffi.heidi_credentials_rust.w3cCredentialAsJson
+//import uniffi.heidi_credentials_rust.w3cCredentialAsJson
 import uniffi.heidi_dcql_rust.ClaimsQuery
 import uniffi.heidi_dcql_rust.CredentialQuery
 import uniffi.heidi_dcql_rust.CredentialSetOption
@@ -341,14 +341,16 @@ class PresentationProcessKt private constructor(
             // TODO: We need to improve this after refactoring
             val tmpList = credentials.map {
                 when (identityMap[it.payload]?.second) {
-                    CredentialType.OpenBadge303 -> W3C.OpenBadge303.parseSerialized(it.payload).originalString
+//                    CredentialType.OpenBadge303 -> uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303.parseSerialized(it.payload).originalString
                     else -> it.payload
                 }
             }
             val result = selectCredentialsWithInfo(dcqlQuery, tmpList)
 
             // Prioritize ZKP proofs for claim-based credentials
-            val (setOptions, zkpOptions) = prioritizeBbsClaimBasedProofs(dcqlQuery, result.setOptions)
+            val setOptions = result.setOptions
+            val zkpOptions = null
+//            val (setOptions, zkpOptions) = prioritizeBbsClaimBasedProofs(dcqlQuery, result.setOptions)
 
             this.dcqlMismatchInfo = DcqlMismatchInfo(
                 query = dcqlQuery,
@@ -374,15 +376,15 @@ class PresentationProcessKt private constructor(
                                             when (it.credential) {
                                                 is Credential.MdocCredential -> (it.credential as Credential.MdocCredential).v1.originalMdoc == c.payload
                                                 is Credential.SdJwtCredential -> (it.credential as Credential.SdJwtCredential).v1.originalSdjwt == c.payload
-                                                is Credential.BbsCredential -> (it.credential as Credential.BbsCredential).v1.originalBbs == c.payload
-                                                is Credential.W3cCredential -> (it.credential as Credential.W3cCredential).v1.originalSdjwt == c.payload
-                                                is Credential.OpenBadge303Credential -> {
-                                                    val vc = runCatching { W3C.OpenBadge303.parseSerialized(c.payload) }
-                                                        .getOrNull() ?: return@firstOrNull false
-                                                    val a = (it.credential as Credential.OpenBadge303Credential).v1
-                                                    val b = vc.asW3CCredential()
-                                                    (it.credential as Credential.OpenBadge303Credential).v1 == vc.asW3CCredential()
-                                                }
+//                                                is Credential.BbsCredential -> (it.credential as Credential.BbsCredential).v1.originalBbs == c.payload
+//                                                is Credential.W3cCredential -> (it.credential as Credential.W3cCredential).v1.originalSdjwt == c.payload
+//                                                is Credential.OpenBadge303Credential -> {
+//                                                    val vc = runCatching { uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303.parseSerialized(c.payload) }
+//                                                        .getOrNull() ?: return@firstOrNull false
+//                                                    val a = (it.credential as Credential.OpenBadge303Credential).v1
+//                                                    val b = vc.asW3CCredential()
+//                                                    (it.credential as Credential.OpenBadge303Credential).v1 == vc.asW3CCredential()
+//                                                }
                                             }
                                         }
                                         if (c == null) {
@@ -428,67 +430,67 @@ class PresentationProcessKt private constructor(
         }
     }
 
-    fun prioritizeBbsClaimBasedProofs(
-        dcqlQuery: DcqlQuery,
-        setOptions: List<CredentialSetOption>
-    ): Pair<List<CredentialSetOption>, ZkpOptions?> {
-        // We need to present exactly two credentials
-        if (setOptions.size != 2) {
-            return Pair(setOptions, null)
-        }
-
-        val (first, second) = Pair(setOptions[0], setOptions[1])
-        val (q1, q2) = Pair(dcqlQuery.credentials?.find { q ->
-            first.setOptions.flatMap { ops -> ops.map { o -> o.id } }.contains(q.id)
-                    && q.format == "bbs-termwise"
-        }, dcqlQuery.credentials?.find { q ->
-            second.setOptions.flatMap { ops -> ops.map { o -> o.id } }.contains(q.id)
-                    && q.format == "bbs-termwise"
-        })
-
-        val overlappingClaims = q1?.claims?.filter { c1 ->
-            q2?.claims?.find { c2 -> c1.path == c2.path } != null
-        } ?: listOf()
-        // They must have at least some overlapping claims
-        if (overlappingClaims.isEmpty()) {
-            return Pair(setOptions, null)
-        }
-
-        val req = Pair(q1?.requireCryptographicHolderBinding, q2?.requireCryptographicHolderBinding)
-        // Exactly one of the credentials must prove device binding
-        if (req != Pair(true, false)
-            && req != Pair(false, true)) {
-            return Pair(setOptions, null)
-        }
-        if (q1 == null || q2 == null) {
-            return Pair(setOptions, null)
-        }
-
-        val zkBridgeQuery = if (q1.requireCryptographicHolderBinding == true) {
-            q1
-        } else {
-            q2
-        }
-
-        val firstBbs = first.setOptions.firstNotNullOf {
-            it.find { o -> (o.options.any { opt -> opt.credential is Credential.BbsCredential }) }
-        }
-        val firstOptions = firstBbs.options.filter { it.credential is Credential.BbsCredential }
-        val secondBbs = second.setOptions.firstNotNullOf {
-            it.find { o -> (o.options.any { opt -> opt.credential is Credential.BbsCredential }) }
-        }
-        val secondOptions = secondBbs.options.filter { it.credential is Credential.BbsCredential }
-
-        bbsPresentTwo = true
-        val zkpOptions = ZkpOptions(
-            equalityProofClaims = overlappingClaims
-        )
-
-        return Pair(listOf(
-            CredentialSetOption(first.purpose, listOf(listOf(firstBbs.copy(options = firstOptions)))),
-            CredentialSetOption(second.purpose, listOf(listOf(secondBbs.copy(options = secondOptions))))
-        ), zkpOptions)
-    }
+//    fun prioritizeBbsClaimBasedProofs(
+//        dcqlQuery: DcqlQuery,
+//        setOptions: List<CredentialSetOption>
+//    ): Pair<List<CredentialSetOption>, ZkpOptions?> {
+//        // We need to present exactly two credentials
+//        if (setOptions.size != 2) {
+//            return Pair(setOptions, null)
+//        }
+//
+//        val (first, second) = Pair(setOptions[0], setOptions[1])
+//        val (q1, q2) = Pair(dcqlQuery.credentials?.find { q ->
+//            first.setOptions.flatMap { ops -> ops.map { o -> o.id } }.contains(q.id)
+//                    && q.format == "bbs-termwise"
+//        }, dcqlQuery.credentials?.find { q ->
+//            second.setOptions.flatMap { ops -> ops.map { o -> o.id } }.contains(q.id)
+//                    && q.format == "bbs-termwise"
+//        })
+//
+//        val overlappingClaims = q1?.claims?.filter { c1 ->
+//            q2?.claims?.find { c2 -> c1.path == c2.path } != null
+//        } ?: listOf()
+//        // They must have at least some overlapping claims
+//        if (overlappingClaims.isEmpty()) {
+//            return Pair(setOptions, null)
+//        }
+//
+//        val req = Pair(q1?.requireCryptographicHolderBinding, q2?.requireCryptographicHolderBinding)
+//        // Exactly one of the credentials must prove device binding
+//        if (req != Pair(true, false)
+//            && req != Pair(false, true)) {
+//            return Pair(setOptions, null)
+//        }
+//        if (q1 == null || q2 == null) {
+//            return Pair(setOptions, null)
+//        }
+//
+//        val zkBridgeQuery = if (q1.requireCryptographicHolderBinding == true) {
+//            q1
+//        } else {
+//            q2
+//        }
+//
+//        val firstBbs = first.setOptions.firstNotNullOf {
+//            it.find { o -> (o.options.any { opt -> opt.credential is Credential.BbsCredential }) }
+//        }
+//        val firstOptions = firstBbs.options.filter { it.credential is Credential.BbsCredential }
+//        val secondBbs = second.setOptions.firstNotNullOf {
+//            it.find { o -> (o.options.any { opt -> opt.credential is Credential.BbsCredential }) }
+//        }
+//        val secondOptions = secondBbs.options.filter { it.credential is Credential.BbsCredential }
+//
+//        bbsPresentTwo = true
+//        val zkpOptions = ZkpOptions(
+//            equalityProofClaims = overlappingClaims
+//        )
+//
+//        return Pair(listOf(
+//            CredentialSetOption(first.purpose, listOf(listOf(firstBbs.copy(options = firstOptions)))),
+//            CredentialSetOption(second.purpose, listOf(listOf(secondBbs.copy(options = secondOptions))))
+//        ), zkpOptions)
+//    }
 
     fun putPin(credRepresentative: String, pin: String) {
         val d = this.stateData.getOrPut(credRepresentative) { Value.Object(mutableMapOf()) }
@@ -665,76 +667,76 @@ class PresentationProcessKt private constructor(
             }
 
             if (bbsPresentTwo && this.authRequest?.dcqlQuery != null) {
-                val (rep1, rep2) = Pair(this.stateData.entries.elementAt(0), this.stateData.entries.elementAt(1))
-                val (c1, c2) = Pair<VerifiableCredential, VerifiableCredential>(
-                    rep1.value["credential"].transform()
-                        ?: return PresentationWorkflow.Error(code = "Invalid verifiable credential"),
-                    rep2.value["credential"].transform()
-                        ?: return PresentationWorkflow.Error(code = "Invalid verifiable credential")
-                )
-                val query = authRequest.dcqlQuery
-                val (cQuery1, cQuery2) = Pair(
-                    query?.credentials?.first { it.id == rep1.key }
-                        ?: return PresentationWorkflow.Error(code = "CredentialQuery not found"),
-                    query.credentials?.first { it.id == rep2.key }
-                        ?: return PresentationWorkflow.Error(code = "CredentialQuery not found")
-                )
-
-                // The "ID" credential is the one that required device binding
-                val (id, other) = if (cQuery1.requireCryptographicHolderBinding == true) {
-                    Pair(Triple(c1, cQuery1, rep1), Triple(c2, cQuery2, rep2))
-                } else {
-                    if (cQuery2.requireCryptographicHolderBinding != true)
-                        return PresentationWorkflow.Error(code = "One credential query must require cryptographic holder binding")
-                    Pair(Triple(c2, cQuery2, rep2), Triple(c1, cQuery1, rep1))
-                }
-
-                val cIdMeta = id.first.decodeMetadata()
-                    ?: return PresentationWorkflow.Error("Failed to decode credential metadata")
-                val pin = id.third.value["pin"].asString()
-                val frostBlob = id.third.value["frostBlob"].asString()
-                val passphrase = id.third.value["passphrase"].asString()
-
-                val nativeSigner = signingProvider.getNativeSigner(
-                    keyMaterial = cIdMeta.keyMaterial,
-                    pin = pin,
-                    frostBlob = frostBlob,
-                    passphrase = passphrase,
-                    email = email
-                ) ?: return PresentationWorkflow.Error(code = "Couldn't retrieve native signer")
-
-                val signer = Signer(nativeSigner)
-
-                val publicKey = nativeSigner.publicKey()
-                val message = nonce.encodeToByteArray()
-                val signature = signer.sign(message)
-
-                val vpToken = bbsCombinedClaimBasedProof(
-                    vc1 = Bbs.parse(id.first.payload),
-                    q1 = id.second,
-
-                    deviceBindingPk = publicKey,
-                    message = sha256Rs(message),
-                    messageSignature = signature,
-                    clientId = audience,
-                    nonce = nonce,
-
-                    vc2 = Bbs.parse(other.first.payload),
-                    q2 = other.second,
-
-                    issuerPk = "zUC711y7V85xqmn7UidKFf5kwC3RWjB9CTsqEWjk81Yqs1TQW73oSawsQxCU3mdziXmbyrEPs2GFkXqvojqYiWz9JyXHaMjh7bR3XYPJTXgU9FZHDEWMarUAWiRBYu5ZenGmvyn",
-                    issuerId = "did:example:issuer0",
-                    issuerKeyId = "did:example:issuer0#bls12_381-g2-pub001",
-                )
-
-                val theToken = vpToken.getOrElse {
-                    return PresentationWorkflow.Error("Proof failed: ${it.message}")
-                }
-                val innerObject = combinedVpToken.asObject()?.toMutableMap()
-                    ?: return PresentationWorkflow.Error("VP Token has wrong format")
-                innerObject.put(rep1.key, Value.String(theToken))
-                innerObject.put(rep2.key, Value.String(theToken))
-                combinedVpToken = Value.Object(innerObject)
+//                val (rep1, rep2) = Pair(this.stateData.entries.elementAt(0), this.stateData.entries.elementAt(1))
+//                val (c1, c2) = Pair<VerifiableCredential, VerifiableCredential>(
+//                    rep1.value["credential"].transform()
+//                        ?: return PresentationWorkflow.Error(code = "Invalid verifiable credential"),
+//                    rep2.value["credential"].transform()
+//                        ?: return PresentationWorkflow.Error(code = "Invalid verifiable credential")
+//                )
+//                val query = authRequest.dcqlQuery
+//                val (cQuery1, cQuery2) = Pair(
+//                    query?.credentials?.first { it.id == rep1.key }
+//                        ?: return PresentationWorkflow.Error(code = "CredentialQuery not found"),
+//                    query.credentials?.first { it.id == rep2.key }
+//                        ?: return PresentationWorkflow.Error(code = "CredentialQuery not found")
+//                )
+//
+//                // The "ID" credential is the one that required device binding
+//                val (id, other) = if (cQuery1.requireCryptographicHolderBinding == true) {
+//                    Pair(Triple(c1, cQuery1, rep1), Triple(c2, cQuery2, rep2))
+//                } else {
+//                    if (cQuery2.requireCryptographicHolderBinding != true)
+//                        return PresentationWorkflow.Error(code = "One credential query must require cryptographic holder binding")
+//                    Pair(Triple(c2, cQuery2, rep2), Triple(c1, cQuery1, rep1))
+//                }
+//
+//                val cIdMeta = id.first.decodeMetadata()
+//                    ?: return PresentationWorkflow.Error("Failed to decode credential metadata")
+//                val pin = id.third.value["pin"].asString()
+//                val frostBlob = id.third.value["frostBlob"].asString()
+//                val passphrase = id.third.value["passphrase"].asString()
+//
+//                val nativeSigner = signingProvider.getNativeSigner(
+//                    keyMaterial = cIdMeta.keyMaterial,
+//                    pin = pin,
+//                    frostBlob = frostBlob,
+//                    passphrase = passphrase,
+//                    email = email
+//                ) ?: return PresentationWorkflow.Error(code = "Couldn't retrieve native signer")
+//
+//                val signer = Signer(nativeSigner)
+//
+//                val publicKey = nativeSigner.publicKey()
+//                val message = nonce.encodeToByteArray()
+//                val signature = signer.sign(message)
+//
+//                val vpToken = bbsCombinedClaimBasedProof(
+//                    vc1 = Bbs.parse(id.first.payload),
+//                    q1 = id.second,
+//
+//                    deviceBindingPk = publicKey,
+//                    message = sha256Rs(message),
+//                    messageSignature = signature,
+//                    clientId = audience,
+//                    nonce = nonce,
+//
+//                    vc2 = Bbs.parse(other.first.payload),
+//                    q2 = other.second,
+//
+//                    issuerPk = "zUC711y7V85xqmn7UidKFf5kwC3RWjB9CTsqEWjk81Yqs1TQW73oSawsQxCU3mdziXmbyrEPs2GFkXqvojqYiWz9JyXHaMjh7bR3XYPJTXgU9FZHDEWMarUAWiRBYu5ZenGmvyn",
+//                    issuerId = "did:example:issuer0",
+//                    issuerKeyId = "did:example:issuer0#bls12_381-g2-pub001",
+//                )
+//
+//                val theToken = vpToken.getOrElse {
+//                    return PresentationWorkflow.Error("Proof failed: ${it.message}")
+//                }
+//                val innerObject = combinedVpToken.asObject()?.toMutableMap()
+//                    ?: return PresentationWorkflow.Error("VP Token has wrong format")
+//                innerObject.put(rep1.key, Value.String(theToken))
+//                innerObject.put(rep2.key, Value.String(theToken))
+//                combinedVpToken = Value.Object(innerObject)
             } else {
                 for (rep in this.stateData) {
                     val passphrase = rep.value["passphrase"].asString()
@@ -787,38 +789,38 @@ class PresentationProcessKt private constructor(
                                     Signer(nativeSigner)
                                 )
                             }
-                            CredentialType.BbsTermwise -> {
-                                val signer = nativeSigner?.let { Signer(nativeSigner) }
-
-                                val publicKey = nativeSigner?.publicKey()
-                                val message = nonce.encodeToByteArray()
-                                val signature = signer?.sign(message)
-
-                                // TODO: Get issuer stuff from credential metadata
-                                Logger("ZKP").warn("----> before proof")
-                                Bbs.parse(c.payload).getVpToken(
-                                    credentialQuery,
-                                    issuerPk = "zUC711y7V85xqmn7UidKFf5kwC3RWjB9CTsqEWjk81Yqs1TQW73oSawsQxCU3mdziXmbyrEPs2GFkXqvojqYiWz9JyXHaMjh7bR3XYPJTXgU9FZHDEWMarUAWiRBYu5ZenGmvyn",
-                                    issuerId = "did:example:issuer0",
-                                    issuerKeyId = "did:example:issuer0#bls12_381-g2-pub001",
-                                    deviceBindingPk = publicKey,
-                                    message = sha256Rs(message),
-                                    messageSignature = signature,
-                                    clientId = audience,
-                                    nonce = nonce,
-                                )
-                            }
-                            CredentialType.W3C_VCDM -> W3C.parse(c.payload).getVpToken(
-                                credentialQuery,
-                                audience,
-                                transactionData,
-                                authRequest.transactionData?.specVersion(),
-                                nonce,
-                                nativeSigner?.let { Signer(nativeSigner) }
-                            )
-                            CredentialType.OpenBadge303 -> W3C.OpenBadge303
-                                .parseSerialized(c.payload)
-                                .asVerifiablePresentation()
+//                            CredentialType.BbsTermwise -> {
+//                                val signer = nativeSigner?.let { Signer(nativeSigner) }
+//
+//                                val publicKey = nativeSigner?.publicKey()
+//                                val message = nonce.encodeToByteArray()
+//                                val signature = signer?.sign(message)
+//
+//                                // TODO: Get issuer stuff from credential metadata
+//                                Logger("ZKP").warn("----> before proof")
+//                                Bbs.parse(c.payload).getVpToken(
+//                                    credentialQuery,
+//                                    issuerPk = "zUC711y7V85xqmn7UidKFf5kwC3RWjB9CTsqEWjk81Yqs1TQW73oSawsQxCU3mdziXmbyrEPs2GFkXqvojqYiWz9JyXHaMjh7bR3XYPJTXgU9FZHDEWMarUAWiRBYu5ZenGmvyn",
+//                                    issuerId = "did:example:issuer0",
+//                                    issuerKeyId = "did:example:issuer0#bls12_381-g2-pub001",
+//                                    deviceBindingPk = publicKey,
+//                                    message = sha256Rs(message),
+//                                    messageSignature = signature,
+//                                    clientId = audience,
+//                                    nonce = nonce,
+//                                )
+//                            }
+//                            CredentialType.W3C_VCDM -> uniffi.heidi_wallet_rust.CredentialType.W3C.parse(c.payload).getVpToken(
+//                                credentialQuery,
+//                                audience,
+//                                transactionData,
+//                                authRequest.transactionData?.specVersion(),
+//                                nonce,
+//                                nativeSigner?.let { Signer(nativeSigner) }
+//                            )
+//                            CredentialType.OpenBadge303 -> uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303
+//                                .parseSerialized(c.payload)
+//                                .asVerifiablePresentation()
                             CredentialType.Unknown -> Result.success(null)
                         }
                         Logger("ZKP").warn("----> after proof")

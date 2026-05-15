@@ -20,9 +20,9 @@ under the License.
 
 package ch.ubique.heidi.wallet.process.issuance
 
-import ch.ubique.heidi.credentials.Bbs
+//import ch.ubique.heidi.credentials.Bbs
 import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.W3C
+//import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.identity.DeferredIdentity
@@ -53,7 +53,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import uniffi.heidi_crypto_rust.base64UrlDecode
 import uniffi.heidi_wallet_rust.Credential
 import uniffi.heidi_wallet_rust.CredentialFormat
-import uniffi.heidi_wallet_rust.bbsJson
+//import uniffi.heidi_wallet_rust.bbsJson
 import kotlin.io.encoding.Base64
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -145,17 +145,17 @@ abstract class IssuanceProcess(
 		val docType = when (credentialType) {
 			CredentialType.SdJwt -> SdJwt.parse(credential.credential.getPayload()).getMetadata().vct
 			CredentialType.Mdoc -> MdocUtils.getDocType(credentialPayload)
-			CredentialType.BbsTermwise -> runCatching {
-				// TODO: Get Issuer Id / Public Key / ... Metadata
-				val cred = Json.parseToJsonElement(base64UrlDecode(credentialPayload).decodeToString())
-				val document = cred.jsonObject["document"]!!
-				val bbs = Json.parseToJsonElement( bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString()) ?: "{}")
-				bbs.jsonObject["https://www.w3.org/2018/credentials#credentialSubject"]!!.jsonObject["@id"]!!.jsonPrimitive.content
-			}.getOrNull() ?: return null
-			CredentialType.W3C_VCDM -> W3C.parse(credential.credential.getPayload()).docType
-            CredentialType.OpenBadge303 -> W3C.OpenBadge303
-                .parseSerialized(credential.credential.getPayload())
-                .docType
+//			CredentialType.BbsTermwise -> runCatching {
+//				// TODO: Get Issuer Id / Public Key / ... Metadata
+//				val cred = Json.parseToJsonElement(base64UrlDecode(credentialPayload).decodeToString())
+//				val document = cred.jsonObject["document"]!!
+//				val bbs = Json.parseToJsonElement( bbsJson(base64UrlDecode(document.jsonPrimitive.content).decodeToString()) ?: "{}")
+//				bbs.jsonObject["https://www.w3.org/2018/credentials#credentialSubject"]!!.jsonObject["@id"]!!.jsonPrimitive.content
+//			}.getOrNull() ?: return null
+//			CredentialType.W3C_VCDM -> uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credential.credential.getPayload()).docType
+//            CredentialType.OpenBadge303 -> uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303
+//                .parseSerialized(credential.credential.getPayload())
+//                .docType
 			CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null
@@ -212,10 +212,10 @@ abstract class IssuanceProcess(
 		val docType = when (credentialType) {
 			CredentialType.SdJwt -> SdJwt.parse(credentialPayload).getMetadata().vct
 			CredentialType.Mdoc -> MdocUtils.getDocType(credentialPayload)
-			CredentialType.BbsTermwise -> return null
-			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
-            CredentialType.OpenBadge303 -> W3C.OpenBadge303
-                .parse(Base64.UrlSafe.decode(credentialPayload)).docType
+//			CredentialType.BbsTermwise -> return null
+//			CredentialType.W3C_VCDM -> uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credentialPayload).docType
+//            CredentialType.OpenBadge303 -> uniffi.heidi_wallet_rust.CredentialType.W3C.OpenBadge303
+//                .parse(Base64.UrlSafe.decode(credentialPayload)).docType
             CredentialType.Unknown -> {
 				// Don't insert this credential if it's an unknown type
 				return null
@@ -237,12 +237,14 @@ abstract class IssuanceProcess(
 			}
 			is CredentialFormat.Mdoc -> return null
 			is CredentialFormat.BbsTermWise -> {
-				val bbs = Bbs.parse(credential.credential.getPayload()).body()
-				bbs["http://schema.org/ocaUrl"].asString()
+//				val bbs = Bbs.parse(credential.credential.getPayload()).body()
+//				bbs["http://schema.org/ocaUrl"].asString()
+				return null
 			}
 			is CredentialFormat.W3c -> {
-				val cred = W3C.parse(credential.credential.getPayload())
-				cred.asJson()["render"]["oca"].asString()
+//				val cred = uniffi.heidi_wallet_rust.CredentialType.W3C.parse(credential.credential.getPayload())
+//				cred.asJson()["render"]["oca"].asString()
+				return null
 			}
             is CredentialFormat.OpenBadge -> return null
 		}

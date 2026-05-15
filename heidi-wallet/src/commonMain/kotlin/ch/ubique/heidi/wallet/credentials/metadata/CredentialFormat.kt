@@ -27,8 +27,9 @@ inline fun CredentialFormat.asMetadataFormat() : CredentialType {
 	return when(this) {
 		is CredentialFormat.Mdoc -> CredentialType.Mdoc
 		is CredentialFormat.SdJwt -> CredentialType.SdJwt
-		is CredentialFormat.BbsTermWise -> CredentialType.BbsTermwise
-		is CredentialFormat.W3c -> CredentialType.W3C_VCDM
-        is CredentialFormat.OpenBadge -> CredentialType.OpenBadge303
+//		is CredentialFormat.BbsTermWise -> CredentialType.BbsTermwise
+//		is CredentialFormat.W3c -> CredentialType.W3C_VCDM
+//        is CredentialFormat.OpenBadge -> CredentialType.OpenBadge303
+		else -> CredentialType.Unknown
 	}
 }
