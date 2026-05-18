@@ -68,7 +68,6 @@ abstract class IssuanceProcess(
 	private val ocaServiceController: OcaServiceController,
 	private val json: Json,
 ) {
-
 	private val credentialOfferRepository = CredentialOfferRepository()
 	private val metadataRepository = MetadataRepository()
 
