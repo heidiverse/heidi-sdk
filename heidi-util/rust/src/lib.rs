@@ -44,29 +44,61 @@ impl Display for CborParseError {
     }
 }
 
+#[derive(uniffi::Error, Debug)]
+pub enum DeflateError {
+    BufferOverflow,
+    Other,
+}
+impl Display for DeflateError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
+}
+
+const MAX_SIZE: u64 = 32 * 1024 * 1024;
+
 #[uniffi::export]
 pub fn deflate(input: Vec<u8>) -> Vec<u8> {
+    deflate_upto_max_size(input, MAX_SIZE).unwrap_or_default()
+}
+#[uniffi::export]
+pub fn deflate_upto_max_size(input: Vec<u8>, max_size: u64) -> Result<Vec<u8>, DeflateError> {
     let mut zliber = ZlibDecoder::new(&input[..]);
     let mut output = vec![];
-    let _ = zliber.read_to_end(&mut output).unwrap();
-    output
+    let mut buf = vec![0; 32 * 1024];
+    loop {
+        match zliber.read(&mut buf) {
+            Ok(0) => {
+                break;
+            }
+            Ok(n) => {
+                output.extend_from_slice(&buf[..n]);
+                if output.len() > max_size as usize {
+                    return Err(DeflateError::BufferOverflow);
+                }
+            }
+            Err(_) => return Err(DeflateError::Other),
+        }
+    }
+
+    Ok(output)
 }
 #[uniffi::export]
 pub fn deflate_string(input: String) -> Vec<u8> {
     let Ok(input) = BASE64_URL_SAFE_NO_PAD.decode(&input) else {
         return vec![];
     };
-    let mut zliber = ZlibDecoder::new(&input[..]);
-    let mut output = vec![];
-    let _ = zliber.read_to_end(&mut output).unwrap();
-    output
+    deflate(input)
 }
 
 #[cfg(test)]
 mod test_deflate {
-    use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+    use std::io::{Read, Write};
 
-    use crate::deflate;
+    use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+    use flate2::{read::GzDecoder, write::ZlibEncoder, Compression};
+
+    use crate::{deflate, deflate_upto_max_size, DeflateError, MAX_SIZE};
 
     #[test]
     fn deflater() {
@@ -74,6 +106,24 @@ mod test_deflate {
         let lst = BASE64_URL_SAFE_NO_PAD.decode(lst).unwrap();
         let output = deflate(lst);
         assert!(!output.is_empty());
+    }
+    #[test]
+    fn test_zip_bomb() {
+        let zip_bomb = include_bytes!("../bomb.gz");
+        let mut gzdecoder = GzDecoder::new(&zip_bomb[..]);
+        let mut gz_bytes = vec![];
+        gzdecoder.read_to_end(&mut gz_bytes).unwrap();
+        let mut compressed = ZlibEncoder::new(vec![], Compression::best());
+        compressed.write_all(&gz_bytes[..]).unwrap();
+        let zlib_stream = compressed.finish().unwrap();
+        let output = deflate(zlib_stream.to_vec());
+        println!("{}", zlib_stream.len());
+        println!("{}", output.len());
+        assert!(output.len() <= 32 * 1024);
+        let output = deflate_upto_max_size(zlib_stream.to_vec(), MAX_SIZE)
+            .err()
+            .unwrap();
+        assert!(matches!(output, DeflateError::BufferOverflow));
     }
 }
 
