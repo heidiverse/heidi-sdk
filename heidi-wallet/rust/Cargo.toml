@@ -96,6 +96,10 @@ default = [
     "reqwest",
     "reqwest_cookies",
     "heidi-credentials-rust/bbs",
+    "heidi-credentials-rust/sdjwt",
+    "heidi-credentials-rust/w3c",
+    "heidi-credentials-rust/mdoc",
+    "heidi-credentials-rust/openbadges",
     "rdf-util",
     "next-gen-signatures",
 

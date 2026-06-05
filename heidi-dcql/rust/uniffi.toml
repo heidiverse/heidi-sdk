@@ -1,3 +1,6 @@
 generate_serializable_records = true
 generate_immutable_records = true
 import_pointer_from = ["uniffi.heidi_credentials_rust", "uniffi.heidi_util_rust"]
+skip_serializer_for = [
+    "DcqlMatchResponse",
+    "Credential", "CredentialOptions", "Disclosure", "CredentialSetOption", "SetOption"]
