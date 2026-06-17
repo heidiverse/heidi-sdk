@@ -1344,6 +1344,7 @@ mod issuance {
             dpop_signing_alg_values_supported: Option<Vec<String>>,
             token_endpoint: Option<String>,
             is_for_pre_authorized_code: bool,
+            allow_anonymous_request: bool,
         ) -> Result<IssuedCredentials, ApiError> {
             // Determine if authorization server supports DPoP or not
             let use_dpop = can_use_dpop(dpop_signing_alg_values_supported, self.auth_key.alg())?;
@@ -1389,7 +1390,11 @@ mod issuance {
 
                     get_access_token(
                         client.clone(),
-                        token_endpoint_with_client_id,
+                        if allow_anonymous_request {
+                            token_endpoint.clone()
+                        } else {
+                            token_endpoint_with_client_id
+                        },
                         TokenRequest::PreAuthorizedCode {
                             pre_authorized_code: pre_authorized_code.pre_authorized_code.clone(),
                             tx_code,
