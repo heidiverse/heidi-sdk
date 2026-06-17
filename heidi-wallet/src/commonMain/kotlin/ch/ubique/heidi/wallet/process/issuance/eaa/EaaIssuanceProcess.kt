@@ -349,7 +349,8 @@ open class EaaIssuanceProcess(
                 authorizationServerMetadata.dpopSigningAlgValuesSupported,
                 authorizationServerMetadata.tokenEndpoint,
                 // if the authorization code is null, we are in a preauthorized code flow
-                authorizationCode == null
+                authorizationCode == null,
+                authorizationServerMetadata.preAuthorizedGrandAnonymousAccessSupported ?: false
             )
 
             val tokens = Tokens.fromNative(credentials.tokens())
