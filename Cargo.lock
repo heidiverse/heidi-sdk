@@ -5713,7 +5713,7 @@ dependencies = [
 [[package]]
 name = "next-gen-signatures"
 version = "0.1.2"
-source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git#56ed7cfa1108b96a941f314e9f955c921e660047"
+source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service#56ed7cfa1108b96a941f314e9f955c921e660047"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
@@ -7162,7 +7162,7 @@ dependencies = [
 [[package]]
 name = "rdf-util"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git#56ed7cfa1108b96a941f314e9f955c921e660047"
+source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service#56ed7cfa1108b96a941f314e9f955c921e660047"
 dependencies = [
  "anyhow",
  "oxrdf",
@@ -11228,18 +11228,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "x509-cert"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1301e935010a701ae5f8655edc0ad17c44bad3ac5ce8c39185f75453b720ae94"
-dependencies = [
- "const-oid 0.9.6",
- "der 0.7.10",
- "spki 0.7.3",
- "tls_codec",
-]
-
-[[package]]
 name = "x509-parser"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11509,7 +11497,7 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
-source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git#56ed7cfa1108b96a941f314e9f955c921e660047"
+source = "git+https://github.com/UbiqueInnovation/sprind-next-gen-signing-service#56ed7cfa1108b96a941f314e9f955c921e660047"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
