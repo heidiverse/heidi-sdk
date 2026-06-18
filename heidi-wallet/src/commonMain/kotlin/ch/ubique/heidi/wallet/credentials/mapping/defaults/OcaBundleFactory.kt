@@ -49,7 +49,7 @@ import kotlinx.serialization.json.*
 internal object OcaBundleFactory {
 	val dateTimeRegex =
 		Regex("(\\d\\d\\d\\d[-.]\\d\\d[-.]\\d\\d|\\d\\d[-.]\\d\\d[-.]\\d\\d\\d\\d)(.?\\d\\d:\\d\\d((:\\d\\d(\\.\\d+)?)?(Z|[+-]\\d\\d:\\d\\d)?)?)?")
-	val hiddenProperties = listOf("/cnf", "/_sd", "/...", "/_sd_alg")
+	val hiddenProperties = listOf("cnf", "_sd", "...", "_sd_alg", "/status/status_list")
 
 	fun getBuiltInOcaType(vct: String): OcaType.BuiltIn? {
 		return when (vct) {
@@ -281,7 +281,7 @@ internal object OcaBundleFactory {
 	) {
 		for (entry in obj) {
 			val newPath = "$currentPath/${entry.key}"
-			if (hiddenProperties.contains(newPath)) {
+			if (hiddenProperties.contains(entry.key) ||hiddenProperties.contains(newPath)) {
 				continue
 			}
 			val innerObj = entry.value

@@ -28,6 +28,7 @@ import ch.ubique.heidi.wallet.credentials.format.mdoc.MdocUtils
 import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialType
+import ch.ubique.heidi.credentials.toJson
 import ch.ubique.heidi.wallet.credentials.metadata.asMetadataFormat
 import ch.ubique.heidi.wallet.resources.StringResourceProvider
 import io.ktor.client.HttpClient
@@ -64,7 +65,7 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 	suspend fun getOcaFromMetadata(locale: String, metadata: CredentialIssuerMetadataClaims?, credential: Credential, credentialMetadata: CredentialMetadata) : String? {
 		val credentialType = credential.credential.asMetadataFormat()
 		val jsonContent = when (credentialType) {
-			CredentialType.SdJwt -> uniffi.heidi_wallet_rust.SdJwt((credential.credential as CredentialFormat.SdJwt).v1).getJson() ?: return null
+			CredentialType.SdJwt -> SdJwt.parse((credential.credential as CredentialFormat.SdJwt).v1).toJson() ?: return null
 			//TODO: improve the mdocAsJsonRepresentation
 			CredentialType.Mdoc -> mdocAsJsonRepresentation((credential.credential as CredentialFormat.Mdoc).v1) ?: return null
 			CredentialType.BbsTermwise -> return null
