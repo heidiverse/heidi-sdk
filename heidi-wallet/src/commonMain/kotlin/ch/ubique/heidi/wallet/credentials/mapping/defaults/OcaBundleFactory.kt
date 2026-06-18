@@ -82,6 +82,7 @@ internal object OcaBundleFactory {
 		val attributeEncoding = mutableMapOf<String, Encoding>()
 		val obj = runCatching { Json.decodeFromString<JsonObject>(jsonContent) }.getOrNull() ?: return null
 		addKeysAndTypesForObject(obj, propertyType, attributeEncoding, "")
+		propertyType += "/address/formatted" to AttributeType.Text
 		val captureBase = CaptureBase(attributes = propertyType)
 		val credentialMetadata = metadata?.credentialConfigurationsSupported?.values?.firstOrNull {
 			when (it) {
@@ -114,10 +115,34 @@ internal object OcaBundleFactory {
 				"/exp" to stringResourceProvider.getString("id_valid_until"),
 			)
 		)
-		val attributeOrdering = propertyType.mapValues { it.key.length }
-
 		val credentialMetadataClusterOrderingOverlay =
 			getCredentialMetadataClusterOrderingOverlay(metadata, vct, locale, captureBaseSaid)
+
+		val mainGroupOrdering = mapOf(
+			"/given_name" to 1,
+			"/family_name" to 2,
+			"/birthdate" to 3,
+			"/birth_family_name" to 4,
+			"/place_of_birth/locality" to 5,
+			"/nationalities" to 6,
+		)
+		val addressGroupOrdering = mapOf(
+			"/address/formatted" to 1,
+			"/address/street_address" to 2,
+			"/address/house_number" to 3,
+			"/address/postal_code" to 4,
+			"/address/locality" to 5,
+			"/address/region" to 6,
+			"/address/country" to 7,
+		)
+		val attributeOrdering = propertyType.keys
+			.sorted()
+			.mapIndexed { index, key -> key to index }
+			.toMap()
+			.filterNot { (key, value) ->
+				mainGroupOrdering.containsKey(key)
+					|| addressGroupOrdering.containsKey(key)
+			}
 
 		val defaultClusterOrderingOverlay = ClusterOrderingOverlay(
 			clusterOrder = mapOf(
@@ -127,18 +152,8 @@ internal object OcaBundleFactory {
 			),
 			clusterLabels = emptyMap(),
 			attributeClusterOrder = mapOf(
-				"main" to mapOf(
-					"/given_name" to 1,
-					"/family_name" to 2,
-					"/birthdate" to 3,
-					"/birth_family_name" to 4,
-					"/place_of_birth/locality" to 5,
-					"/nationalities" to 6,
-
-					),
-				"address" to mapOf(
-					"/address/formatted" to 1,
-				),
+				"main" to mainGroupOrdering,
+				"address" to addressGroupOrdering,
 				"additional" to attributeOrdering,
 			),
 			captureBase = captureBaseSaid,
