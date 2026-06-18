@@ -103,11 +103,12 @@ class OcaServiceController(val client: HttpClient, val stringResourceProvider: S
 				else -> false
 			}
 		}
+		val display = credentialMetadata?.getDisplayMetadata()?.firstOrNull()
 		val backgroundImage = runCatching {
-			if (credentialMetadata?.display?.firstOrNull()?.backgroundImage?.uri?.startsWith("data:") == true) {
-				credentialMetadata.display?.firstOrNull()?.backgroundImage?.uri
+			if (display?.backgroundImage?.uri?.startsWith("data:") == true) {
+				display.backgroundImage?.uri
 			} else {
-				credentialMetadata?.display?.firstOrNull()?.backgroundImage?.uri?.let {
+				display?.backgroundImage?.uri?.let {
 					client.get(it).bodyAsBytes().encodeBase64()
 				}
 			}

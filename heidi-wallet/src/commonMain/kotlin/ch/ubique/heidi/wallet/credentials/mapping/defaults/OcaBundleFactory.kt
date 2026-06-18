@@ -24,6 +24,7 @@ import ch.ubique.heidi.issuance.extensions.getLocalizedLabel
 import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.issuance.metadata.data.CredentialMetadataClaim
+import ch.ubique.heidi.util.extensions.jsonPrimitiveOrNull
 import ch.ubique.heidi.visualization.oca.OcaType
 import ch.ubique.heidi.visualization.oca.model.CaptureBase
 import ch.ubique.heidi.visualization.oca.model.OcaBundleJson
@@ -91,10 +92,13 @@ internal object OcaBundleFactory {
 				else -> false
 			}
 		}
-		val cardTitle = credentialMetadata?.display?.firstOrNull()?.name ?: vct
-		var cardColor =
-			credentialMetadata?.display?.firstOrNull()?.backgroundColor?.replace("#", "")?.toLowerCasePreservingASCIIRules()
+		val display = credentialMetadata?.getDisplayMetadata()?.firstOrNull()
+		val cardTitle = display?.name ?: vct
+		var cardColor = display?.backgroundColor
+				?.replace("#", "")
+				?.toLowerCasePreservingASCIIRules()
 				?.hexToLong() ?: 0xFF000000
+		val backgroundImage = backgroundImage ?: display?.backgroundImage?.uri
 		// cardColor should not be transparent
 		if (cardColor.and(0xFF000000) == 0L) {
 			cardColor = cardColor.or(0xFF000000)
@@ -227,12 +231,12 @@ internal object OcaBundleFactory {
 		val allClusterNames: Set<String> =
 			claims.asSequence()
 				.filter { it.path.size > 1 }
-				.map { it.path.first() }
+				.map { it.path.firstNotNullOf { elem -> elem.jsonPrimitiveOrNull()?.content } }
 				.toSet()
 
 		claims.forEach { claim ->
 			if (claim.path.size > 1) {
-				val cluster = claim.path.first()
+				val cluster = claim.path.firstNotNullOf { elem -> elem.jsonPrimitiveOrNull()?.content }
 
 				if (cluster !in clusterFirstIndex) {
 					clusterFirstIndex[cluster] = clusterFirstIndex.size + 1
@@ -248,7 +252,7 @@ internal object OcaBundleFactory {
 
 		val additionalTopLevelKeys = claims.asSequence()
 			.filter { it.path.size == 1 }
-			.map { it.path.first() }
+			.map { it.path.firstNotNullOf { elem -> elem.jsonPrimitiveOrNull()?.content } }
 			.filter { it !in allClusterNames } // exclude cluster labels
 			.distinct()
 			.sorted() // deterministic order, no assumption on input order
@@ -269,7 +273,7 @@ internal object OcaBundleFactory {
 		}
 
 		val topLevelByName: Map<String, CredentialMetadataClaim> =
-			claims.filter { it.path.size == 1 }.associateBy { it.path.first() }
+			claims.filter { it.path.size == 1 }.associateBy { it.path.firstNotNullOf { elem -> elem.jsonPrimitiveOrNull()?.content } }
 
 		val clusterLabels: Map<String, String?> =
 			clusterFirstIndex.keys.associateWith { cluster ->
