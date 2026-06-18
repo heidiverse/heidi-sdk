@@ -40,6 +40,8 @@ import ch.ubique.heidi.visualization.oca.model.overlay.semantic.InformationOverl
 import ch.ubique.heidi.visualization.oca.model.overlay.semantic.LabelOverlay
 import ch.ubique.heidi.visualization.oca.model.overlay.transformation.TemplateOverlay
 import ch.ubique.heidi.visualization.stylejson.model.StyleJson
+import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory.dateTimeRegex
+import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory.hiddenProperties
 import ch.ubique.heidi.wallet.resources.StringResourceProvider
 import io.ktor.util.toLowerCasePreservingASCIIRules
 import kotlinx.coroutines.runBlocking
@@ -83,7 +85,18 @@ internal object OcaBundleFactory {
 		val attributeEncoding = mutableMapOf<String, Encoding>()
 		val obj = runCatching { Json.decodeFromString<JsonObject>(jsonContent) }.getOrNull() ?: return null
 		addKeysAndTypesForObject(obj, propertyType, attributeEncoding, "")
-		propertyType += "/address/formatted" to AttributeType.Text
+
+		val formattedAddressPaths = listOf(
+			"/address/street_address",
+			"/address/postal_code",
+			"/address/locality",
+			"/address/country"
+		)
+		val hasAddressInformation = formattedAddressPaths.all { propertyType.containsKey(it) }
+		if (hasAddressInformation) {
+			propertyType += "/address/formatted" to AttributeType.Text
+		}
+
 		val captureBase = CaptureBase(attributes = propertyType)
 		val credentialMetadata = metadata?.credentialConfigurationsSupported?.values?.firstOrNull {
 			when (it) {
@@ -139,6 +152,8 @@ internal object OcaBundleFactory {
 			"/address/region" to 6,
 			"/address/country" to 7,
 		)
+			// If the formatted address can be show, don't display the data twice
+			.filterKeys { key -> !hasAddressInformation || !formattedAddressPaths.contains(key) }
 		val attributeOrdering = propertyType.keys
 			.sorted()
 			.mapIndexed { index, key -> key to index }
