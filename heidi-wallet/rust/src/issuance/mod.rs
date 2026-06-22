@@ -36,6 +36,7 @@ mod issuance {
     use anyhow::{Context, anyhow};
     use heidi_credentials_rust::w3c::parse_w3c_sd_jwt;
     use heidi_util_rust::value::Value;
+    use http::header::CONTENT_LENGTH;
 
     use super::auth::{ClientAttestation, build_refresh_request};
     use super::metadata::MetadataFetcher;
@@ -2093,12 +2094,14 @@ mod issuance {
                 content_decryptor = None;
             }
             log_warn!("ISSUANCE", &format!("Cnonce: {:?}", token_response.c_nonce));
-            let c_nonce = if token_response.c_nonce.is_some() {
-                token_response.c_nonce.clone()
-            } else if let Some(nonce_endpoint) = credential_issuer_metadata.nonce_endpoint.clone() {
+            // Check nonce endpoint first to also make sure to get a fresh dpop nonce
+            let c_nonce = if let Some(nonce_endpoint) =
+                credential_issuer_metadata.nonce_endpoint.clone()
+            {
                 let nonce_response: serde_json::Value = self
                     .client
                     .post(nonce_endpoint)
+                    .header(CONTENT_LENGTH, 0) // Required for some issuers
                     .send()
                     .await?
                     .error_for_status()?
@@ -2112,6 +2115,8 @@ mod issuance {
                     return Err(anyhow!("no nonce returned from nonce endpoint").into());
                 };
                 Some(c_nonce.clone())
+            } else if token_response.c_nonce.is_some() {
+                token_response.c_nonce.clone()
             } else {
                 // No c_nonce from token (or credential) response (expected for issuer compliant with openid4vci draft version 14),
                 // nor nonce_endpoint (expected for issuer compliant with openid4vci draft version 15)
