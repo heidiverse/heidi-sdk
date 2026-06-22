@@ -779,7 +779,7 @@ class PresentationProcessKt private constructor(
                                 val responseUri = responseUri ?: redirectUri
                                     ?: return PresentationWorkflow.Error("No response uri")
 
-                                val jwkThumbprint = if (responseMode == "direct_post.jwt") {
+                                val jwkThumbprint = if (responseMode == "direct_post.jwt" || responseMode == "dc_api.jwt") {
                                     val jwks = clientMetadata["jwks"]["keys"]
                                     val key = JwkThumbprint.getEncryptionKey(jwks)
                                         ?: return PresentationWorkflow.Error("Encryption key not found")
