@@ -82,7 +82,7 @@ data class CredentialIssuerMetadataClaims(
 @Serializable
 data class CredentialMetadata(
 	@SerialName("display")
-	val display: List<Display>,
+	val display: List<Display>? = null,
 
 	@SerialName("claims")
 	val claims: List<CredentialMetadataClaim>? = null,
