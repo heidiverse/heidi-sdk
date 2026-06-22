@@ -25,6 +25,7 @@ import ch.ubique.heidi.credentials.SdJwt
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.metadata.KeyAssurance
 import ch.ubique.heidi.credentials.Bbs
+import ch.ubique.heidi.credentials.JwkThumbprint
 import ch.ubique.heidi.credentials.W3C
 import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialModel
@@ -53,7 +54,6 @@ import io.ktor.client.request.forms.submitForm
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.parameters
 import io.ktor.util.toLowerCasePreservingASCIIRules
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -67,9 +67,7 @@ import ch.ubique.heidi.wallet.process.presentation.models.TransactionDataWrapper
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import uniffi.heidi_credentials_rust.SignatureCreator
-import uniffi.heidi_credentials_rust.w3cCredentialAsJson
 import uniffi.heidi_dcql_rust.ClaimsQuery
-import uniffi.heidi_dcql_rust.CredentialQuery
 import uniffi.heidi_dcql_rust.CredentialSetOption
 import uniffi.heidi_dcql_rust.selectCredentialsWithInfo
 import uniffi.heidi_util_rust.encodeCbor
@@ -648,9 +646,12 @@ class PresentationProcessKt private constructor(
             val state = this.data.authorizationRequest["state"].asString()
             val nonce = this.data.authorizationRequest["nonce"].asString()
                 ?: return PresentationWorkflow.Error(code = "No nonce")
-            val audience = this.data.authorizationRequest["client_id"].asString() ?: this.origin
-            ?: return PresentationWorkflow.Error(code = "No client id")
+            val audience = this.data.authorizationRequest["client_id"].asString()
+                ?: this.origin
+                ?: return PresentationWorkflow.Error(code = "No client id")
+            val redirectUri = this.data.authorizationRequest["response_uri"].asString()
             val responseUri = this.data.authorizationRequest["response_uri"].asString()
+            val clientMetadata = this.data.authorizationRequest["client_metadata"]
             val responseMode = this.data.authorizationRequest["response_mode"].asString()
 
             class Signer(val s: NativeSigner) : SignatureCreator {
@@ -774,16 +775,30 @@ class PresentationProcessKt private constructor(
                                 if (responseMode == "direct_post") {
                                     mdocGeneratedNonce = ""
                                 }
-                                val responseUriHash =
-                                    sha256Rs(encodeCbor(listOf(responseUri, mdocGeneratedNonce).toCbor()))
-                                val clientIdHash =
-                                    sha256Rs(encodeCbor(listOf(audience, mdocGeneratedNonce).toCbor()))
                                 val nativeSigner = nativeSigner ?: return PresentationWorkflow.Error("mDoc cannot be claim bound")
+                                val responseUri = responseUri ?: redirectUri
+                                    ?: return PresentationWorkflow.Error("No response uri")
+
+                                val jwkThumbprint = if (responseMode == "direct_post.jwt") {
+                                    val jwks = clientMetadata["jwks"]["keys"]
+                                    val key = JwkThumbprint.getEncryptionKey(jwks)
+                                        ?: return PresentationWorkflow.Error("Encryption key not found")
+                                    runCatching { JwkThumbprint.thumbprint(key) }
+                                        .onFailure { e ->
+                                            Logger("MDOC").error("Failed to create jwk thumbprint: $e")
+                                        }
+                                        .getOrNull()
+                                        ?: return PresentationWorkflow.Error("Failed to create jwk thumbprint")
+                                } else {
+                                    null
+                                }
+
                                 Mdoc.parse(c.payload).getVpToken(
                                     credentialQuery,
-                                    clientIdHash,
-                                    responseUriHash,
-                                    nonce,
+                                    clientId = audience,
+                                    responseUri = responseUri,
+                                    nonce = nonce,
+                                    jwkThumbprint = jwkThumbprint,
                                     Signer(nativeSigner)
                                 )
                             }
@@ -945,7 +960,6 @@ class PresentationProcessKt private constructor(
                 )
             }
             val response = if (responseMode == "direct_post.jwt" || responseMode == "dc_api.jwt") {
-                val metadata = this.data.authorizationRequest["client_metadata"]
 //            val tokenValues = if(combinedVpToken is Value.String) { combinedVpToken.v1 } else { Json.encodeToString(combinedVpToken ) }
                 Logger("Presentation").warn("----> start encryption")
                 val encryptedToken = encryptSubmission(
@@ -954,7 +968,7 @@ class PresentationProcessKt private constructor(
                     mdocGeneratedNonce,
                     nonce.encodeToByteArray(),
                     state,
-                    metadata
+                    clientMetadata
                 )
                 Logger("Presentation").warn("----> end encryption")
                 state?.let {
