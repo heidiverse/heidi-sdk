@@ -188,6 +188,27 @@ class Mdoc(val mdoc: MdocRust) {
         return listOf(null, null, handover).toCbor()
     }
 
+    fun getSessionTranscript(
+        clientId: String,
+        nonce: String,
+        jwkThumbprint: ByteArray?,
+        responseUri: String,
+    ): Value {
+        val handoverInfoBytes = encodeCbor(listOf(
+            clientId,
+            nonce,
+            jwkThumbprint,
+            responseUri
+        ).toCbor())
+
+        val handover = listOf(
+            "OpenID4VPHandover",
+            sha256Rs(handoverInfoBytes)
+        ).toCbor()
+
+        return listOf(null, null, handover).toCbor()
+    }
+
     fun deviceSignature(
         signer: SignatureCreator,
         docType: String,

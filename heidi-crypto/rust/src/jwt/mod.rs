@@ -21,10 +21,13 @@ under the License.
 use std::str::FromStr;
 
 use crate::crypto::{
-    base64_url_decode,
+    base58btc_decode, base64_url_decode,
     x509::{X509Certificate, extract_certs},
 };
-use base64::{Engine, prelude::BASE64_STANDARD};
+use base64::{
+    Engine,
+    prelude::{BASE64_STANDARD, BASE64_URL_SAFE_NO_PAD},
+};
 use heidi_jwt::{
     Jwk, JwsHeader,
     jwt::{
@@ -34,6 +37,7 @@ use heidi_jwt::{
 };
 use heidi_util_rust::{log_error, log_warn, value::Value};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde_json::Map;
 
 #[uniffi::export]
 pub fn parse_encoded_jwt_header(jwt: String) -> Option<String> {
@@ -184,7 +188,48 @@ pub struct VerificationMethod {
     #[serde(rename = "type")]
     pub ty: String,
     #[serde(rename = "publicKeyJwk")]
-    pub public_key_jwk: Value,
+    pub public_key_jwk: Option<Value>,
+    #[serde(rename = "publicKeyBase58")]
+    pub public_key_base58: Option<String>,
+}
+
+impl VerificationMethod {
+    pub fn public_key(&self) -> Option<Jwk> {
+        match self.ty.as_str() {
+            "Ed25519VerificationKey2018" => {
+                let b58 = self.public_key_base58.as_ref()?;
+
+                let key_bytes = base58btc_decode(b58);
+
+                if key_bytes.len() != 32 {
+                    log_warn!("STUFF", "here1");
+                    return None;
+                }
+
+                let x_b64url = BASE64_URL_SAFE_NO_PAD.encode(key_bytes);
+
+                let mut map = Map::new();
+                map.insert(
+                    "kty".to_string(),
+                    serde_json::Value::String("OKP".to_string()),
+                );
+                map.insert(
+                    "crv".to_string(),
+                    serde_json::Value::String("Ed25519".to_string()),
+                );
+                map.insert("x".to_string(), serde_json::Value::String(x_b64url));
+
+                log_warn!("STUFF", &format!("here {:?}", Jwk::from_map(map.clone())));
+
+                Jwk::from_map(map).ok()
+            }
+            "JsonWebKey2020" => self.public_key_jwk.as_ref().and_then(|key| key.transform()),
+            _ => {
+                log_error!("DID", &format!("Unhandled key type: {}", self.ty));
+                None
+            }
+        }
+    }
 }
 
 #[uniffi::export]
@@ -227,7 +272,7 @@ pub fn validate_jwt_with_did_document(
         return false;
     };
 
-    let Some(jwk) = key.public_key_jwk.transform() else {
+    let Some(jwk) = key.public_key() else {
         log_error!("VALIDATER", "failed to transform to jwk");
         return false;
     };
@@ -325,7 +370,7 @@ pub fn validate_sd_jwt_with_did_document(
         return false;
     };
 
-    let Some(jwk) = key.public_key_jwk.transform() else {
+    let Some(jwk) = key.public_key() else {
         log_error!("VALIDATER", "failed to transform to jwk");
         return false;
     };

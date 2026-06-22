@@ -42,15 +42,21 @@ import uniffi.heidi_util_rust.encodeCbor
 
 fun Mdoc.getVpToken(
     query: CredentialQuery,
-    clientIdHash: ByteArray,
-    responseUriHash: ByteArray,
+    clientId: String,
+    responseUri: String,
     nonce: String,
+    jwkThumbprint: ByteArray?,
     signer: SignatureCreator,
 ): Result<String> {
     if (!MDOC_FORMATS.contains(query.format)) {
         return Result.failure(SdJwtErrors.InvalidFormat(query.format))
     }
-    val sessionTranscript = this.getSessionTranscript(clientIdHash, responseUriHash, nonce)
+    val sessionTranscript = this.getSessionTranscript(
+        clientId = clientId,
+        nonce = nonce,
+        jwkThumbprint = jwkThumbprint,
+        responseUri = responseUri,
+    )
     val coseSign1 = this.deviceSignature(signer, this.doctype()!!, sessionTranscript)
     val deviceNameSpacesBytes = encodeCbor(mapOf<String, String>().toCbor()).toCbor()
     var issuerSigned = this.mdoc.originalDecoded

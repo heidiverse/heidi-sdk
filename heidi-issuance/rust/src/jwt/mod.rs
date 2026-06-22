@@ -111,7 +111,7 @@ impl StatusListVerifier {
             return Err(StatusListError::InvalidSignature);
         };
 
-        let Some(jwk) = key.public_key_jwk.transform() else {
+        let Some(jwk) = key.public_key() else {
             log_error!("VALIDATER", "failed to transform to jwk");
             return Err(StatusListError::InvalidSignature);
         };

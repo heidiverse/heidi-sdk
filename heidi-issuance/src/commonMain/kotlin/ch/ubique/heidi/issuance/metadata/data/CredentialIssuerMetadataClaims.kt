@@ -82,7 +82,7 @@ data class CredentialIssuerMetadataClaims(
 @Serializable
 data class CredentialMetadata(
 	@SerialName("display")
-	val display: List<Display>,
+	val display: List<Display>? = null,
 
 	@SerialName("claims")
 	val claims: List<CredentialMetadataClaim>? = null,
@@ -91,7 +91,7 @@ data class CredentialMetadata(
 @Serializable
 data class CredentialMetadataClaim(
 	@SerialName("path")
-	val path: List<String>,
+	val path: List<JsonElement>,
 
 	@SerialName("display")
 	val display: List<Display>? = null,
@@ -166,6 +166,10 @@ sealed interface CredentialConfiguration {
 	val credentialSigningAlgValuesSupported: List<StringOrLong>?
 	val proofTypesSupported: Map<String, ProofType>?
 	val display: List<Display>?
+	val credentialMetadata: CredentialMetadata?
+
+	fun getDisplayMetadata(): List<Display>? =
+		credentialMetadata?.display ?: display
 
 	/**
 	 * ISO mDL credential format as described in https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-iso-mdl
@@ -189,6 +193,9 @@ sealed interface CredentialConfiguration {
 
 		@SerialName("display")
 		override val display: List<Display>? = null,
+
+		@SerialName("credential_metadata")
+		override val credentialMetadata: CredentialMetadata? = null,
 
 		@SerialName("doctype")
 		val doctype: String,
@@ -220,6 +227,9 @@ sealed interface CredentialConfiguration {
 		@SerialName("display")
 		override val display: List<Display>? = null,
 
+		@SerialName("credential_metadata")
+		override val credentialMetadata: CredentialMetadata? = null,
+
 		@SerialName("vct")
 		val vct: String,
 
@@ -246,6 +256,9 @@ sealed interface CredentialConfiguration {
 
 		@SerialName("display")
 		override val display: List<Display>? = null,
+
+		@SerialName("credential_metadata")
+		override val credentialMetadata: CredentialMetadata? = null,
 
 		@SerialName("claims")
 		val claims: JsonElement? = null,
@@ -276,8 +289,10 @@ sealed interface CredentialConfiguration {
 
 		@SerialName("display")
 		override val display: List<Display>? = null,
-	) : CredentialConfiguration
 
+		@SerialName("credential_metadata")
+		override val credentialMetadata: CredentialMetadata? = null,
+	) : CredentialConfiguration
 }
 
 @Serializable

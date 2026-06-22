@@ -24,6 +24,7 @@ import ch.ubique.heidi.issuance.extensions.getLocalizedLabel
 import ch.ubique.heidi.issuance.metadata.data.CredentialConfiguration
 import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadataClaims
 import ch.ubique.heidi.issuance.metadata.data.CredentialMetadataClaim
+import ch.ubique.heidi.util.extensions.jsonPrimitiveOrNull
 import ch.ubique.heidi.visualization.oca.OcaType
 import ch.ubique.heidi.visualization.oca.model.CaptureBase
 import ch.ubique.heidi.visualization.oca.model.OcaBundleJson
@@ -39,6 +40,8 @@ import ch.ubique.heidi.visualization.oca.model.overlay.semantic.InformationOverl
 import ch.ubique.heidi.visualization.oca.model.overlay.semantic.LabelOverlay
 import ch.ubique.heidi.visualization.oca.model.overlay.transformation.TemplateOverlay
 import ch.ubique.heidi.visualization.stylejson.model.StyleJson
+import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory.dateTimeRegex
+import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory.hiddenProperties
 import ch.ubique.heidi.wallet.resources.StringResourceProvider
 import io.ktor.util.toLowerCasePreservingASCIIRules
 import kotlinx.coroutines.runBlocking
@@ -49,7 +52,9 @@ import kotlinx.serialization.json.*
 internal object OcaBundleFactory {
 	val dateTimeRegex =
 		Regex("(\\d\\d\\d\\d[-.]\\d\\d[-.]\\d\\d|\\d\\d[-.]\\d\\d[-.]\\d\\d\\d\\d)(.?\\d\\d:\\d\\d((:\\d\\d(\\.\\d+)?)?(Z|[+-]\\d\\d:\\d\\d)?)?)?")
-	val hiddenProperties = listOf("/cnf", "/_sd", "/...", "/_sd_alg")
+	val hiddenProperties = listOf("cnf", "_sd", "...", "_sd_alg", "/status/status_list")
+
+	private const val DEFAULT_BACKGROUND_COLOR = 0xFFEFEFEF
 
 	fun getBuiltInOcaType(vct: String): OcaType.BuiltIn? {
 		return when (vct) {
@@ -82,6 +87,18 @@ internal object OcaBundleFactory {
 		val attributeEncoding = mutableMapOf<String, Encoding>()
 		val obj = runCatching { Json.decodeFromString<JsonObject>(jsonContent) }.getOrNull() ?: return null
 		addKeysAndTypesForObject(obj, propertyType, attributeEncoding, "")
+
+		val formattedAddressPaths = listOf(
+			"/address/street_address",
+			"/address/postal_code",
+			"/address/locality",
+			"/address/country"
+		)
+		val hasAddressInformation = formattedAddressPaths.all { propertyType.containsKey(it) }
+		if (hasAddressInformation) {
+			propertyType += "/address/formatted" to AttributeType.Text
+		}
+
 		val captureBase = CaptureBase(attributes = propertyType)
 		val credentialMetadata = metadata?.credentialConfigurationsSupported?.values?.firstOrNull {
 			when (it) {
@@ -90,10 +107,13 @@ internal object OcaBundleFactory {
 				else -> false
 			}
 		}
-		val cardTitle = credentialMetadata?.display?.firstOrNull()?.name ?: vct
-		var cardColor =
-			credentialMetadata?.display?.firstOrNull()?.backgroundColor?.replace("#", "")?.toLowerCasePreservingASCIIRules()
-				?.hexToLong() ?: 0xFF000000
+		val display = credentialMetadata?.getDisplayMetadata()?.firstOrNull()
+		val cardTitle = display?.name ?: vct
+		var cardColor = display?.backgroundColor
+				?.replace("#", "")
+				?.toLowerCasePreservingASCIIRules()
+				?.hexToLong() ?: DEFAULT_BACKGROUND_COLOR
+		val backgroundImage = backgroundImage ?: display?.backgroundImage?.uri
 		// cardColor should not be transparent
 		if (cardColor.and(0xFF000000) == 0L) {
 			cardColor = cardColor.or(0xFF000000)
@@ -114,10 +134,36 @@ internal object OcaBundleFactory {
 				"/exp" to stringResourceProvider.getString("id_valid_until"),
 			)
 		)
-		val attributeOrdering = propertyType.mapValues { it.key.length }
-
 		val credentialMetadataClusterOrderingOverlay =
 			getCredentialMetadataClusterOrderingOverlay(metadata, vct, locale, captureBaseSaid)
+
+		val mainGroupOrdering = mapOf(
+			"/given_name" to 1,
+			"/family_name" to 2,
+			"/birthdate" to 3,
+			"/birth_family_name" to 4,
+			"/place_of_birth/locality" to 5,
+			"/nationalities" to 6,
+		)
+		val addressGroupOrdering = mapOf(
+			"/address/formatted" to 1,
+			"/address/street_address" to 2,
+			"/address/house_number" to 3,
+			"/address/postal_code" to 4,
+			"/address/locality" to 5,
+			"/address/region" to 6,
+			"/address/country" to 7,
+		)
+			// If the formatted address can be show, don't display the data twice
+			.filterKeys { key -> !hasAddressInformation || !formattedAddressPaths.contains(key) }
+		val attributeOrdering = propertyType.keys
+			.sorted()
+			.mapIndexed { index, key -> key to index }
+			.toMap()
+			.filterNot { (key, value) ->
+				mainGroupOrdering.containsKey(key)
+					|| addressGroupOrdering.containsKey(key)
+			}
 
 		val defaultClusterOrderingOverlay = ClusterOrderingOverlay(
 			clusterOrder = mapOf(
@@ -127,18 +173,8 @@ internal object OcaBundleFactory {
 			),
 			clusterLabels = emptyMap(),
 			attributeClusterOrder = mapOf(
-				"main" to mapOf(
-					"/given_name" to 1,
-					"/family_name" to 2,
-					"/birthdate" to 3,
-					"/birth_family_name" to 4,
-					"/place_of_birth/locality" to 5,
-					"/nationalities" to 6,
-
-					),
-				"address" to mapOf(
-					"/address/formatted" to 1,
-				),
+				"main" to mainGroupOrdering,
+				"address" to addressGroupOrdering,
 				"additional" to attributeOrdering,
 			),
 			captureBase = captureBaseSaid,
@@ -180,7 +216,7 @@ internal object OcaBundleFactory {
 			UbiqueStyleJsonOverlay(
 				title = cardTitle,
 				subtitle = "",
-				cardColor = cardColor ?: 0xFFE1DEC2,
+				cardColor = cardColor,
 				textColor = TextShade.DARK,
 				backgroundCard = backgroundImage,
 				orderedProperties = emptyList(),
@@ -212,12 +248,12 @@ internal object OcaBundleFactory {
 		val allClusterNames: Set<String> =
 			claims.asSequence()
 				.filter { it.path.size > 1 }
-				.map { it.path.first() }
+				.map { it.path.firstNotNullOf { elem -> elem.jsonPrimitiveOrNull()?.content } }
 				.toSet()
 
 		claims.forEach { claim ->
 			if (claim.path.size > 1) {
-				val cluster = claim.path.first()
+				val cluster = claim.path.firstNotNullOf { elem -> elem.jsonPrimitiveOrNull()?.content }
 
 				if (cluster !in clusterFirstIndex) {
 					clusterFirstIndex[cluster] = clusterFirstIndex.size + 1
@@ -233,7 +269,7 @@ internal object OcaBundleFactory {
 
 		val additionalTopLevelKeys = claims.asSequence()
 			.filter { it.path.size == 1 }
-			.map { it.path.first() }
+			.map { it.path.firstNotNullOf { elem -> elem.jsonPrimitiveOrNull()?.content } }
 			.filter { it !in allClusterNames } // exclude cluster labels
 			.distinct()
 			.sorted() // deterministic order, no assumption on input order
@@ -254,7 +290,7 @@ internal object OcaBundleFactory {
 		}
 
 		val topLevelByName: Map<String, CredentialMetadataClaim> =
-			claims.filter { it.path.size == 1 }.associateBy { it.path.first() }
+			claims.filter { it.path.size == 1 }.associateBy { it.path.firstNotNullOf { elem -> elem.jsonPrimitiveOrNull()?.content } }
 
 		val clusterLabels: Map<String, String?> =
 			clusterFirstIndex.keys.associateWith { cluster ->
@@ -281,7 +317,7 @@ internal object OcaBundleFactory {
 	) {
 		for (entry in obj) {
 			val newPath = "$currentPath/${entry.key}"
-			if (hiddenProperties.contains(newPath)) {
+			if (hiddenProperties.contains(entry.key) ||hiddenProperties.contains(newPath)) {
 				continue
 			}
 			val innerObj = entry.value

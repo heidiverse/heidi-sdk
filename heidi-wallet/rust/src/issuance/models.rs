@@ -546,7 +546,7 @@ impl ProofBuilder {
             map.insert("alg".to_string(), JsonValue::String(signer.signer.alg()));
             map.insert(
                 "typ".to_string(),
-                JsonValue::String("openid4vc-proof+jwt".to_string()),
+                JsonValue::String("openid4vci-proof+jwt".to_string()),
             );
             map.insert(
                 "kid".to_string(),
@@ -689,11 +689,20 @@ impl ErrorAsCredentialErrorResponse for reqwest::Response {
         if let Err(err_status) = self.error_for_status_ref() {
             let status = self.status();
             if status.is_client_error() {
-                match self.json::<CredentialErrorResponse>().await {
+                let body = self.text().await.map_err(|e| CredentialErrorResponse {
+                    error: "no_credential_error_response".to_string(),
+                    error_description: Some(format!("Failed to read response body: {e}")),
+                    c_nonce: None,
+                    c_nonce_expires_in: None,
+                })?;
+
+                match serde_json::from_str::<CredentialErrorResponse>(&body) {
                     Ok(details) => Err(details),
                     Err(e) => Err(CredentialErrorResponse {
                         error: "no_credential_error_response".to_string(),
-                        error_description: Some(format!("{e}")),
+                        error_description: Some(format!(
+                            "Failed to parse response error: {e}\n\nResponse body: {body}"
+                        )),
                         c_nonce: None,
                         c_nonce_expires_in: None,
                     }),
