@@ -54,6 +54,8 @@ internal object OcaBundleFactory {
 		Regex("(\\d\\d\\d\\d[-.]\\d\\d[-.]\\d\\d|\\d\\d[-.]\\d\\d[-.]\\d\\d\\d\\d)(.?\\d\\d:\\d\\d((:\\d\\d(\\.\\d+)?)?(Z|[+-]\\d\\d:\\d\\d)?)?)?")
 	val hiddenProperties = listOf("cnf", "_sd", "...", "_sd_alg", "/status/status_list")
 
+	private const val DEFAULT_BACKGROUND_COLOR = 0xFFEFEFEF
+
 	fun getBuiltInOcaType(vct: String): OcaType.BuiltIn? {
 		return when (vct) {
 			"eu.europa.ec.eudi.pid.1",
@@ -110,7 +112,7 @@ internal object OcaBundleFactory {
 		var cardColor = display?.backgroundColor
 				?.replace("#", "")
 				?.toLowerCasePreservingASCIIRules()
-				?.hexToLong() ?: 0xFF000000
+				?.hexToLong() ?: DEFAULT_BACKGROUND_COLOR
 		val backgroundImage = backgroundImage ?: display?.backgroundImage?.uri
 		// cardColor should not be transparent
 		if (cardColor.and(0xFF000000) == 0L) {
@@ -214,7 +216,7 @@ internal object OcaBundleFactory {
 			UbiqueStyleJsonOverlay(
 				title = cardTitle,
 				subtitle = "",
-				cardColor = cardColor ?: 0xFFE1DEC2,
+				cardColor = cardColor,
 				textColor = TextShade.DARK,
 				backgroundCard = backgroundImage,
 				orderedProperties = emptyList(),
