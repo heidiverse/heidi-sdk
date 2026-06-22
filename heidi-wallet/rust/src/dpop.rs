@@ -20,12 +20,12 @@ under the License.
 //! Implement a reqwet middleware being able to handle DPoP. It should automatically
 //! retry requests using the fresh nonce returned from the failed response.
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{Context, anyhow, bail, ensure};
 use http::StatusCode;
 use models::Payload;
 use p256::{
-    ecdsa::{signature::Verifier, Signature, VerifyingKey},
     PublicKey,
+    ecdsa::{Signature, VerifyingKey, signature::Verifier},
 };
 use reqwest::header::HeaderName;
 use reqwest::{Request, Response};
@@ -34,7 +34,7 @@ use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::Digest;
 use task_local_extensions::Extensions;
 
@@ -471,6 +471,15 @@ impl Middleware for DpopAuth {
         extensions: &mut Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
+        if self
+            .nonce
+            .read()
+            .map(|nonce| nonce.is_none())
+            .unwrap_or(true)
+        {
+            return next.run(req, extensions).await;
+        }
+
         let request_clone = req.try_clone();
         let next_clone = next.clone();
 
@@ -569,17 +578,17 @@ impl Middleware for DpopWrapper {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
-    use super::{create_dpop, public_key_from_jwk, validate_dpop, DpopAuth};
+    use super::{DpopAuth, create_dpop, public_key_from_jwk, validate_dpop};
     use std::net::TcpListener;
     use std::sync::Arc;
 
     use crate::error::SigningError;
     use crate::issuance::helper::bytes_to_ec_jwk;
     use crate::signing::NativeSigner;
-    use did_key::{generate, KeyMaterial, P256KeyPair};
-    use p256::ecdsa::signature::Signer;
+    use did_key::{KeyMaterial, P256KeyPair, generate};
     use p256::ecdsa::SigningKey;
-    use p256::{ecdsa::VerifyingKey, PublicKey, SecretKey};
+    use p256::ecdsa::signature::Signer;
+    use p256::{PublicKey, SecretKey, ecdsa::VerifyingKey};
     use reqwest::Client;
     use reqwest_middleware::ClientBuilder;
     use serde_json::json;
