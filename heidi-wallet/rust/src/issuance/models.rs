@@ -546,7 +546,7 @@ impl ProofBuilder {
             map.insert("alg".to_string(), JsonValue::String(signer.signer.alg()));
             map.insert(
                 "typ".to_string(),
-                JsonValue::String("openid4vc-proof+jwt".to_string()),
+                JsonValue::String("openid4vci-proof+jwt".to_string()),
             );
             map.insert(
                 "kid".to_string(),
