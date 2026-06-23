@@ -34,10 +34,11 @@ import uniffi.heidi_crypto_rust.parseDidVerificationDocument
 import uniffi.heidi_crypto_rust.validateJwtWithDidDocument
 import uniffi.heidi_util_rust.Value
 
-class StaticDidWebTrustAnchorProvider : DidWebTrustAnchorProvider {
+class StaticDidWebTrustAnchorProvider(
+    private val trustedDomains: List<String> = listOf()
+) : DidWebTrustAnchorProvider {
     private val json = Json { ignoreUnknownKeys = true }
     private val httpClient = HttpClient()
-    private val trustedDomains = listOf<String>("itb.ilabs.ai")
 
     private fun resolveUrl(kid: String): Url? = runCatching {
         if (!kid.startsWith("did:web")) {
