@@ -389,52 +389,31 @@ class ViewModelFactory private constructor(
 					)
 				}
                 CredentialType.OpenBadge303 -> {
-                    val vc = possibleOpenBadge303 ?: return null
-                    val title = vc.name ?: "Open Badge Credential"
-                    val subtitle = vc.achievement["description"].asString()?.truncate(100) ?: ""
-                    val issuer = vc.issuerName ?: "Open Badge Issuer"
+					val vc = possibleOpenBadge303 ?: return null
+					val ocaType = OcaType.Reference("metadata://${vc.docType}")
 
-                    val signatureValid = if (vc.isSignatureValid()) {
-                        SignatureValidationState.VALID
-                    } else {
-                        SignatureValidationState.VALID
-                    }
+					val overrides = mapOf(
+						"~credentialImage" to AttributeValue.Image(
+							value = vc.pngBytes,
+							format = "image/png"
+						)
+					)
 
-                    val backgroundImage = vc.pngBytes?.let {
-                        LayoutCardImage.Base64(it)
-                    }
-
-                    val card = LayoutData.Card(
-                        credentialName = title,
-                        issuerName = issuer,
-                        title = title,
-                        subtitle = subtitle,
-                        textColor = TextShade.DARK,
-                        cardColor = 0xFFFFFFFF,
-                        backgroundImage = backgroundImage,
-                        overlays = null
-                    )
-
-                    IdentityUiModel.IdentityUiCredentialModel(
-                        id = identity.id,
-                        name = identity.name,
-                        card = card,
-                        title = title,
-                        subtitle = subtitle,
-                        signature = Signature(signatureValid, issuer),
-                        detailList = LayoutData.DetailList(emptyList()),
-                        hasEmergencyPass = false,
-                        hasOnlyEmergencyPass = false,
-                        credentials = identity.credentials,
-                        activities = activities,
-                        isPid = false,
-                        isUsable = true,
-                        isRevoked = isRevoked,
-                        isRefreshable = false,
-                        docType = "OpenBadge",
-                        frostBlob = identity.frostBlob,
-                        credentialUiModel = emptyList()
-                    )
+					return ocaIdentityMapper.mapIdentity(
+						ocaRepository = ocaRepository,
+						ocaType,
+						identity,
+						jsonContent,
+						activities,
+						identity.credentials,
+						attributeValueOverrides = overrides,
+					) ?: fallbackIdentityMapper.mapIdentity(
+						CredentialType.OpenBadge303,
+						identity,
+						jsonContent,
+						activities,
+						identity.credentials
+					)
 				}
                 CredentialType.Unknown -> null
 			}

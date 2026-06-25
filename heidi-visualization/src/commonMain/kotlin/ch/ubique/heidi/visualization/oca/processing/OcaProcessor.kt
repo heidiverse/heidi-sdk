@@ -68,7 +68,8 @@ class OcaProcessor(
 	userLanguage: String,
 	private val payload: String,
 	private val ocaBundle: OcaBundleJson,
-	val isBundleValid : Boolean = ocaBundle.verifyIntegrity()
+	val isBundleValid : Boolean = ocaBundle.verifyIntegrity(),
+	private val attributeValueOverrides: Map<AttributeName, AttributeValue<*>> = mapOf()
 ) {
 	private val payloadJson = Json.parseToJsonElement(payload)
 
@@ -120,13 +121,14 @@ class OcaProcessor(
 		val templateOverlay = getOverlay<TemplateOverlay>()
 		val encodingOverlay = getOverlay<CharacterEncodingOverlay>()
 		val formatOverlay = getOverlay<FormatOverlay>()
-		val attributeValue = resolveAttributeValue(
-			attributeName,
-			attributeType,
-			encodingOverlay?.getEncoding(attributeName) ?: Encoding.UTF_8,
-			formatOverlay?.getFormat(attributeName),
-			templateOverlay?.getTemplate(attributeName),
-		)
+		val attributeValue = attributeValueOverrides[attributeName]
+			?: resolveAttributeValue(
+				attributeName,
+				attributeType,
+				encodingOverlay?.getEncoding(attributeName) ?: Encoding.UTF_8,
+				formatOverlay?.getFormat(attributeName),
+				templateOverlay?.getTemplate(attributeName),
+			)
 
 		// Annotate attribute
 		val unitOverlay = getOverlay<UnitOverlay>()
@@ -219,6 +221,9 @@ class OcaProcessor(
 			AttributeType.DateTime -> {
 				if (format.equals("timestamp", ignoreCase = true)) {
 					val instant = Instant.fromSecondsOrMillis(rawValue.toLong())
+					AttributeValue.Timestamp(instant)
+				} else if (format.equals("instant", ignoreCase = true)) {
+					val instant = Instant.parse(rawValue)
 					AttributeValue.Timestamp(instant)
 				} else {
 					val sanitizedFormat = (format ?: "YYYY-MM-DDTHH:mm:ssZ").sanitizeDateTimePattern()

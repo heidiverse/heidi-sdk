@@ -32,6 +32,7 @@ import ch.ubique.heidi.visualization.oca.model.overlay.transformation.EntryCodeM
 import ch.ubique.heidi.visualization.oca.model.overlay.transformation.SubsetOverlay
 import ch.ubique.heidi.visualization.oca.model.overlay.transformation.TemplateOverlay
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonContentPolymorphicSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
@@ -43,7 +44,8 @@ internal object OverlaySerializer : JsonContentPolymorphicSerializer<Overlay>(Ov
 
 	override fun selectDeserializer(element: JsonElement): DeserializationStrategy<Overlay> {
 		val json = element.jsonObject
-		val type = json.getValue("type").jsonPrimitive.content
+		val type = json["type"]?.jsonPrimitive?.content
+			?: throw SerializationException("Overlay does not have a type")
 
 		val overlayName = typeRegex.matchEntire(type)?.groupValues?.get(1)
 			?: throw IllegalArgumentException("Overlay type does not conform to type spec: $type")
