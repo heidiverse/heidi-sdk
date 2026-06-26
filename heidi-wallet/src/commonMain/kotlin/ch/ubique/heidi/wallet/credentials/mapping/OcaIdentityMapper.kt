@@ -34,6 +34,7 @@ import ch.ubique.heidi.wallet.credentials.issuer.getDisplayName
 import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterialType
+import ch.ubique.heidi.visualization.oca.processing.AttributeValue
 import ch.ubique.heidi.wallet.credentials.oca.OcaRepository
 import ch.ubique.heidi.wallet.credentials.signature.Signature
 import ch.ubique.heidi.wallet.credentials.signature.SignatureValidationState
@@ -62,6 +63,7 @@ class OcaIdentityMapper(
 		payload: String,
 		activities: List<ActivityUiModel>,
 		credentials: List<CredentialModel>,
+		attributeValueOverrides: Map<String, AttributeValue<*>> = mapOf()
 	): IdentityUiModel.IdentityUiCredentialModel? {
 		val languageKey = stringResourceProvider.getString("language_key")
 
@@ -108,7 +110,12 @@ class OcaIdentityMapper(
 			}
         }
 
-		val processor = OcaProcessor(languageKey, payload, ocaBundle)
+		val processor = OcaProcessor(
+			languageKey,
+			payload,
+			ocaBundle,
+			attributeValueOverrides = attributeValueOverrides
+		)
 		val cardData = processor.process(LayoutType.CARD) as LayoutData.Card
 		val listData = processor.process(LayoutType.DETAIL_LIST) as LayoutData.DetailList
 

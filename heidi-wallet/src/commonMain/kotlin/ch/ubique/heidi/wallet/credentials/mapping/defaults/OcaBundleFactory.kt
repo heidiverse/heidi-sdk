@@ -40,8 +40,6 @@ import ch.ubique.heidi.visualization.oca.model.overlay.semantic.InformationOverl
 import ch.ubique.heidi.visualization.oca.model.overlay.semantic.LabelOverlay
 import ch.ubique.heidi.visualization.oca.model.overlay.transformation.TemplateOverlay
 import ch.ubique.heidi.visualization.stylejson.model.StyleJson
-import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory.dateTimeRegex
-import ch.ubique.heidi.wallet.credentials.mapping.defaults.OcaBundleFactory.hiddenProperties
 import ch.ubique.heidi.wallet.resources.StringResourceProvider
 import io.ktor.util.toLowerCasePreservingASCIIRules
 import kotlinx.coroutines.runBlocking
@@ -49,7 +47,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.*
 
-internal object OcaBundleFactory {
+object OcaBundleFactory {
 	val dateTimeRegex =
 		Regex("(\\d\\d\\d\\d[-.]\\d\\d[-.]\\d\\d|\\d\\d[-.]\\d\\d[-.]\\d\\d\\d\\d)(.?\\d\\d:\\d\\d((:\\d\\d(\\.\\d+)?)?(Z|[+-]\\d\\d:\\d\\d)?)?)?")
 	val hiddenProperties = listOf("cnf", "_sd", "...", "_sd_alg", "/status/status_list")
@@ -689,4 +687,136 @@ internal object OcaBundleFactory {
 		return OcaBundleJson(captureBase, overlays)
 	}
 
+	fun createOpenBadgeAchievementBundle(locale: String): OcaBundleJson {
+		val captureBaseSaid = SAID_HASH_PLACEHOLDER
+		val captureBase = CaptureBase(
+			attributes = mapOf(
+				"~credentialImage" to AttributeType.Binary,
+
+				"/name" to AttributeType.Text,
+				"/description" to AttributeType.Text,
+
+				"/credentialSubject/activityEndDate" to AttributeType.DateTime,
+				"/credentialSubject/activityStartDate" to AttributeType.DateTime,
+				"/credentialSubject/creditsEarned" to AttributeType.Numeric,
+				"/credentialSubject/licenseNumber" to AttributeType.Text,
+				"/credentialSubject/result/value" to AttributeType.Text,
+				"/credentialSubject/result/status" to AttributeType.Text,
+				"/credentialSubject/result/resultDescription" to AttributeType.Text,
+				"/credentialSubject/role" to AttributeType.Text,
+				"/credentialSubject/term" to AttributeType.Text,
+				"/credentialSubject/achievement/name" to AttributeType.Text,
+				"/credentialSubject/achievement/description" to AttributeType.Text,
+				"/credentialSubject/achievement/achievementType" to AttributeType.Text,
+				"/credentialSubject/achievement/resultDescription" to AttributeType.Text,
+				"/credentialSubject/achievement/specialization" to AttributeType.Text,
+
+				"/validFrom" to AttributeType.DateTime,
+				"/validUntil" to AttributeType.DateTime,
+			),
+			flaggedAttributes = listOf()
+		)
+
+		val overlays = listOf(
+			CharacterEncodingOverlay(
+				defaultCharacterEncoding = Encoding.UTF_8,
+				captureBase = captureBaseSaid,
+			),
+			FormatOverlay(
+				captureBase = captureBaseSaid,
+				attributeFormats = mapOf(
+					"~credentialImage" to "image/png",
+					"/validFrom" to "instant",
+					"/validUntil" to "instant",
+					"/credentialSubject/activityEndDate" to "instant",
+					"/credentialSubject/activityStartDate" to "instant",
+				)
+			),
+			LabelOverlay(
+				captureBase = captureBaseSaid,
+				attributeLabels = mapOf(),
+				attributeCategories = emptyList(),
+				categoryLabels = emptyMap(),
+				language = locale,
+			),
+			UbiqueStyleJsonOverlay(
+				captureBase = captureBaseSaid,
+				title = "{{ /name }}",
+				subtitle = "",
+				cardColor = 0xFFFFFFFF,
+				textColor = TextShade.DARK,
+				orderedProperties = listOf(
+					"/name",
+					"/description",
+
+					"/credentialSubject/activityEndDate",
+					"/credentialSubject/activityStartDate",
+					"/credentialSubject/creditsEarned",
+					"/credentialSubject/licenseNumber",
+					"/credentialSubject/result/value",
+					"/credentialSubject/result/status",
+					"/credentialSubject/result/resultDescription",
+					"/credentialSubject/role",
+					"/credentialSubject/term",
+					"/credentialSubject/achievement/name",
+					"/credentialSubject/achievement/description",
+					"/credentialSubject/achievement/achievementType",
+					"/credentialSubject/achievement/resultDescription",
+					"/credentialSubject/achievement/specialization",
+
+					"/validFrom",
+					"/validUntil",
+				),
+				language = locale,
+				frontOverlays = listOf(
+					StyleJson.StyleOverlay(
+						content = "~credentialImage",
+						contentType = StyleJson.StyleOverlay.OverlayContentType.Image,
+						position = StyleJson.StyleOverlay.OverlayPosition.Right,
+					)
+				)
+			),
+			ClusterOrderingOverlay(
+				captureBase = captureBaseSaid,
+				clusterOrder = mapOf(
+					"main" to 1,
+					"achievement" to 2,
+					"result" to 3,
+					"meta" to 4,
+				),
+				clusterLabels = emptyMap(),
+				attributeClusterOrder = mapOf(
+					"main" to mapOf(
+						"/name" to 1,
+						"/description" to 2,
+					),
+					"achievement" to mapOf(
+						"/credentialSubject/achievement/name" to 1,
+						"/credentialSubject/achievement/description" to 2,
+						"/credentialSubject/achievement/achievementType" to 3,
+						"/credentialSubject/achievement/resultDescription" to 4,
+						"/credentialSubject/achievement/specialization" to 5,
+					),
+					"result" to mapOf(
+						"/credentialSubject/result/value" to 1,
+						"/credentialSubject/result/status" to 2,
+						"/credentialSubject/result/resultDescription" to 3,
+					),
+					"meta" to mapOf(
+						"/validFrom" to 1,
+						"/validUntil" to 2,
+						"/credentialSubject/activityEndDate" to 3,
+						"/credentialSubject/activityStartDate" to 4,
+						"/credentialSubject/creditsEarned" to 5,
+						"/credentialSubject/licenseNumber" to 6,
+						"/credentialSubject/role" to 7,
+						"/credentialSubject/term" to 8,
+					)
+				),
+				language = locale,
+			)
+		)
+
+		return OcaBundleJson(captureBase, overlays)
+	}
 }
