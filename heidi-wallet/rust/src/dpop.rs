@@ -472,6 +472,7 @@ impl Middleware for DpopAuth {
         extensions: &mut Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
+        // if we have no nonce, we need to do the request first
         if self
             .nonce
             .read()
@@ -483,7 +484,9 @@ impl Middleware for DpopAuth {
             if let Some(req) = request_clone {
                 let r = next_clone.run(req, extensions).await?;
                 let nonce_update = self.update_nonce(&r);
-                if !nonce_update {
+                // if we had no dpop-nonce in the header, or the request was
+                // successful, return the response
+                if !nonce_update || !r.status().is_client_error() {
                     return Ok(r);
                 }
             } else {
