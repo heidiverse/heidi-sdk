@@ -389,17 +389,18 @@ impl DpopAuth {
 
 impl DpopAuth {
     /// Update the nonce used for authentication
-    fn update_nonce(&self, response: &Response) {
+    fn update_nonce(&self, response: &Response) -> bool {
         let Some(dpop_nonce) = response
             .headers()
             .get("dpop-nonce")
             .and_then(|a| a.to_str().ok())
         else {
-            return;
+            return false;
         };
         let _ = self.nonce.write().map(|mut a| {
             *a = Some(dpop_nonce.to_string());
         });
+        true
     }
     /// prepare the request to contain the correct headers for DPoP authentication
     fn prepare_dpop(&self, req: &mut Request) -> anyhow::Result<String> {
@@ -471,13 +472,26 @@ impl Middleware for DpopAuth {
         extensions: &mut Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
+        // if we have no nonce, we need to do the request first
         if self
             .nonce
             .read()
             .map(|nonce| nonce.is_none())
             .unwrap_or(true)
         {
-            return next.run(req, extensions).await;
+            let request_clone = req.try_clone();
+            let next_clone = next.clone();
+            if let Some(req) = request_clone {
+                let r = next_clone.run(req, extensions).await?;
+                let nonce_update = self.update_nonce(&r);
+                // if we had no dpop-nonce in the header, or the request was
+                // successful, return the response
+                if !nonce_update || !r.status().is_client_error() {
+                    return Ok(r);
+                }
+            } else {
+                return next_clone.run(req, extensions).await;
+            }
         }
 
         let request_clone = req.try_clone();
