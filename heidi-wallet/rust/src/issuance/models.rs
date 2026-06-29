@@ -479,7 +479,7 @@ pub mod credential_formats {
     pub const ZKP_VC: &str = "zkp_vc";
     pub const JWT_VC_JSON_LD: &str = "jwt_vc_json-ld";
     pub const LDP_VC: &str = "ldp_vc";
-    pub const OPEN_BADGE: &str = "open_badge";
+    pub const OPEN_BADGES: &str = "openbadges_vc";
 
     pub enum CredentialFormat {
         JwtVcJson,
@@ -490,7 +490,7 @@ pub mod credential_formats {
         ZkpVc,
         JwtVcJsonLd,
         LdpVc,
-        OpenBadge,
+        OpenBadges,
         Unknown,
     }
     impl From<&Value> for CredentialFormat {
@@ -506,7 +506,7 @@ pub mod credential_formats {
                 Some(ZKP_VC) => CredentialFormat::ZkpVc,
                 Some(JWT_VC_JSON_LD) => CredentialFormat::JwtVcJsonLd,
                 Some(LDP_VC) => CredentialFormat::LdpVc,
-                Some(OPEN_BADGE) => CredentialFormat::OpenBadge,
+                Some(OPEN_BADGES) => CredentialFormat::OpenBadges,
                 _ => CredentialFormat::Unknown,
             }
         }
