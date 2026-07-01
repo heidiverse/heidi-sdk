@@ -3588,6 +3588,8 @@ dependencies = [
  "tar",
  "uniffi",
  "unsigned-varint",
+ "ureq 3.3.0",
+ "whitespace-sifter",
  "x25519-dalek 2.0.1",
  "x448",
  "x509-parser",
