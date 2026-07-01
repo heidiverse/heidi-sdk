@@ -20,11 +20,10 @@ under the License.
 
 package ch.ubique.heidi.wallet.process.presentation.remote
 
-import ch.ubique.heidi.credentials.models.credential.CredentialMetadata
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
-import ch.ubique.heidi.credentials.models.metadata.KeyMaterialType
 import ch.ubique.heidi.dcql.toReadableString
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
 import ch.ubique.heidi.trust.TrustFrameworkController
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
@@ -33,7 +32,6 @@ import ch.ubique.heidi.util.log.Logger
 import ch.ubique.heidi.wallet.credentials.LocalizedKeyValue
 import ch.ubique.heidi.wallet.credentials.ViewModelFactory
 import ch.ubique.heidi.wallet.credentials.activity.ActivityRepository
-import ch.ubique.heidi.wallet.credentials.credential.CredentialStore
 import ch.ubique.heidi.wallet.credentials.credential.CredentialsRepository
 import ch.ubique.heidi.wallet.credentials.identity.IdentityRepository
 import ch.ubique.heidi.wallet.credentials.identity.IdentityUiModel
@@ -55,7 +53,6 @@ import ch.ubique.heidi.wallet.process.presentation.PresentationProcess
 import ch.ubique.heidi.wallet.process.presentation.PresentationProcessKt
 import io.ktor.client.HttpClient
 import io.ktor.http.Url
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import uniffi.heidi_wallet_rust.ApiException
 import uniffi.heidi_wallet_rust.GenericException
@@ -70,8 +67,6 @@ import ch.ubique.heidi.wallet.process.refresh.eaa.EaaRefreshProcessStep
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import ch.ubique.heidi.wallet.process.presentation.ErrorModel
-import uniffi.heidi_wallet_rust.Credential
-import uniffi.heidi_wallet_rust.KeyType
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -533,7 +528,12 @@ class RemotePresentationProcess(
 						val identity = identityRepository.getById(cred.identityId)
 						val isRefreshable = identity?.tokens?.refreshToken != null
 						val isClaimBound = cred.decodeMetadata()?.keyMaterial is KeyMaterial.Local.ClaimBased
-						if (!isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
+						val hasBatchIssuance = identity?.issuer?.credentialIssuerMetadata?.let {
+							runCatching { json.decodeFromString<CredentialIssuerMetadata>(it) }.getOrNull()?.let { meta ->
+								meta.claims.batchCredentialIssuance != null
+							} ?: false
+						} ?: false
+						if (hasBatchIssuance && !isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
 							credentialsRepository.useCredential(cred.id)
 						}
 
@@ -565,7 +565,12 @@ class RemotePresentationProcess(
 						val identity = identityRepository.getById(cred.identityId)
 						val isRefreshable = identity?.tokens?.refreshToken != null
 						val isClaimBound = cred.decodeMetadata()?.keyMaterial is KeyMaterial.Local.ClaimBased
-						if (!isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
+						val hasBatchIssuance = identity?.issuer?.credentialIssuerMetadata?.let {
+							runCatching { json.decodeFromString<CredentialIssuerMetadata>(it) }.getOrNull()?.let { meta ->
+								meta.claims.batchCredentialIssuance != null
+							} ?: false
+						} ?: false
+						if (hasBatchIssuance && !isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
 							Logger.debug("UBSM: setting credential as used ${cred.id}")
 							credentialsRepository.useCredential(cred.id)
 						} else {
