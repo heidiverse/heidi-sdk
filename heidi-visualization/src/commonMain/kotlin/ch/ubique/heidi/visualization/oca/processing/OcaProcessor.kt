@@ -223,8 +223,8 @@ class OcaProcessor(
 					val instant = Instant.fromSecondsOrMillis(rawValue.toLong())
 					AttributeValue.Timestamp(instant)
 				} else if (format.equals("instant", ignoreCase = true)) {
-					val instant = Instant.parse(rawValue)
-					AttributeValue.Timestamp(instant)
+					val instant = runCatching {  Instant.parse(rawValue) }.getOrNull()
+					instant?.let { AttributeValue.Timestamp(instant) } ?: AttributeValue.Raw(rawValue)
 				} else {
 					val sanitizedFormat = (format ?: "YYYY-MM-DDTHH:mm:ssZ").sanitizeDateTimePattern()
 					parseDateTime(rawValue, sanitizedFormat)?.let {
