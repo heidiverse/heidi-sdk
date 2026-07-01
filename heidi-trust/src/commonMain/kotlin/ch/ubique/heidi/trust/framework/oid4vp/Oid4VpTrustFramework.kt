@@ -244,7 +244,7 @@ class Oid4VpTrustFramework(
         // Filter credentials by their used-state according to includeUsedCredentials
         return documentProvider
             .getAllCredentials()
-            .filter { includeUsedCredentials || it.isUsed ==  false}
+            .filter { includeUsedCredentials || !it.isUsed }
     }
 
 }

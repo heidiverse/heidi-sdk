@@ -23,12 +23,12 @@ package ch.ubique.heidi.wallet.process.legacy.presentation
 import ch.ubique.heidi.credentials.models.credential.CredentialType
 import ch.ubique.heidi.credentials.models.metadata.KeyMaterial
 import ch.ubique.heidi.dcql.toReadableString
+import ch.ubique.heidi.issuance.metadata.data.CredentialIssuerMetadata
 import ch.ubique.heidi.proximity.ProximityProtocol
 import ch.ubique.heidi.proximity.documents.DocumentRequest
 import ch.ubique.heidi.proximity.wallet.ProximityWallet
 import ch.ubique.heidi.proximity.wallet.ProximityWalletState
 import ch.ubique.heidi.trust.framework.swiss.SWISS_TRUST_FRAMEWORK_ID
-import ch.ubique.heidi.trust.framework.swiss.SwissTrustFramework
 import ch.ubique.heidi.trust.framework.swiss.model.TrustData
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
@@ -60,7 +60,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.koin.dsl.module
 import uniffi.heidi_wallet_rust.AgentInfo
@@ -484,7 +483,12 @@ class LegacyPresentationController private constructor(
 						val identity = identityRepository.getById(cred.identityId)
 						val isRefreshable = identity?.tokens?.refreshToken != null
 						val isClaimBound = cred.decodeMetadata()?.keyMaterial is KeyMaterial.Local.ClaimBased
-						if (!isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
+						val hasBatchIssuance = identity?.issuer?.credentialIssuerMetadata?.let {
+							runCatching { json.decodeFromString<CredentialIssuerMetadata>(it) }.getOrNull()?.let { meta ->
+								meta.claims.batchCredentialIssuance != null
+							} ?: false
+						} ?: false
+						if (hasBatchIssuance && !isClaimBound && isRefreshable && cred.decodeMetadata()?.credentialType != CredentialType.BbsTermwise) {
 							credentialsRepository.useCredential(cred.id)
 						}
 

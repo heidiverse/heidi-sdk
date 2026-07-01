@@ -18,17 +18,17 @@ specific language governing permissions and limitations
 under the License.
  */
 
-use crate::crypto::{SignatureCreator, base64_url_decode, base64_url_encode};
+#[cfg(feature = "cert-builder")]
+use crate::crypto::SignatureCreator;
+use crate::crypto::base64_url_encode;
 use base64::Engine;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
-use oid_registry::{OidEntry, OidRegistry};
+use heidi_x509::{der_parser::oid, x509_parser};
+use oid_registry::{OID_KEY_TYPE_EC_PUBLIC_KEY, OidEntry, OidRegistry};
 use p256::NistP256;
-use p256::pkcs8::der::Encode;
-use p256::pkcs8::{DecodePublicKey, EncodePublicKey};
-use simple_x509::X509Builder;
+use p256::pkcs8::DecodePublicKey;
+#[cfg(feature = "cert-builder")]
 use std::sync::Arc;
-use x509_parser::der_parser::oid;
-use x509_parser::oid_registry::OID_KEY_TYPE_EC_PUBLIC_KEY;
 
 #[derive(uniffi::Record, Clone, Debug)]
 pub struct X509Certificate {
@@ -69,6 +69,7 @@ pub struct SubjectIdentifier {
 }
 
 #[uniffi::export]
+#[cfg(feature = "cert-builder")]
 /// Create certificate signed by signing key
 /// currently we only support p256 keys
 pub fn create_cert(
@@ -76,6 +77,11 @@ pub fn create_cert(
     pubkey: X509PublicKey,
     signer: Arc<dyn SignatureCreator>,
 ) -> Option<Vec<u8>> {
+    use crate::crypto::base64_url_decode;
+    use p256::pkcs8::EncodePublicKey;
+    use p256::pkcs8::der::Encode;
+    use simple_x509::X509Builder;
+
     let X509PublicKey::P256 { x, y } = pubkey else {
         return None;
     };
@@ -199,30 +205,17 @@ fn try_extract_p256_key(cert: &x509_parser::certificate::X509Certificate) -> X50
 
 #[uniffi::export]
 fn verify_chain(certs: Vec<X509Certificate>) -> bool {
-    // first certificate is the leaf certificate
-    let mut certs = certs;
-    let mut prev_cert = certs.pop();
-    while let Some(child_cert) = prev_cert {
-        prev_cert = certs.pop();
-        if let Some(parent_cert) = prev_cert.as_ref() {
-            let (_, child_cert) =
-                x509_parser::parse_x509_certificate(child_cert.original_cert.as_ref()).unwrap();
-            let (_, parent_cert) =
-                x509_parser::parse_x509_certificate(parent_cert.original_cert.as_ref()).unwrap();
-            let is_valid = parent_cert
-                .verify_signature(Some(child_cert.public_key()))
-                .is_ok();
-            if !is_valid {
-                return false;
-            }
-        }
-    }
-    true
+    let chain = certs
+        .into_iter()
+        .map(|a| a.original_cert)
+        .collect::<Vec<_>>();
+    heidi_x509::x509::verify_chain(chain)
 }
 
 #[cfg(test)]
 mod tests {
     use base64::Engine;
+    use heidi_x509::x509_parser;
 
     use crate::{base64_decode, jwt::get_x509_from_jwt};
 
