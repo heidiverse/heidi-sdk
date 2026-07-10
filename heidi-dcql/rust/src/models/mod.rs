@@ -31,29 +31,37 @@ use heidi_util_rust::value::Value;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
+#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record, PartialEq)]
 /// A DCQL Query (https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-digital-credentials-query-l)
 pub struct DcqlQuery {
     /// List of credential queries
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub credentials: Option<Vec<CredentialQuery>>,
     /// List of credential sets
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub credential_sets: Option<Vec<CredentialSetQuery>>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
+#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record, PartialEq)]
 /// Credential Query (https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-credential-query)
 pub struct CredentialQuery {
     pub id: String,
     pub format: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub multiple: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub meta: Option<Meta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub trusted_authorities: Option<Vec<TrustedAuthority>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub require_cryptographic_holder_binding: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub claims: Option<Vec<ClaimsQuery>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub claim_sets: Option<Vec<Vec<String>>>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Enum)]
+#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Enum, PartialEq)]
 #[serde(untagged)]
 pub enum Meta {
     IsoMdoc { doctype_value: String },
@@ -65,7 +73,7 @@ pub enum Meta {
     // Bbs { credential_types: Vec<String> },
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
+#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record, PartialEq)]
 pub struct TrustedAuthority {
     pub r#type: String,
     pub values: Vec<String>,
@@ -177,10 +185,12 @@ impl FromStr for Credential {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
+#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record, PartialEq)]
 pub struct ClaimsQuery {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub path: Pointer,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub values: Option<Vec<Value>>,
 }
 
@@ -190,13 +200,14 @@ impl ClaimsQuery {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record)]
+#[derive(Deserialize, Serialize, Debug, Clone, uniffi::Record, PartialEq)]
 /// Credential Set Query (https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#name-credential-set-query)
 pub struct CredentialSetQuery {
     pub options: Vec<Vec<String>>,
     #[serde(default = "default_required")]
     #[uniffi(default = true)]
     pub required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub purpose: Option<Value>,
 }
 
