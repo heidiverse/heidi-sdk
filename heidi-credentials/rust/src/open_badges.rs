@@ -145,6 +145,7 @@ mod tests {
     };
 
     #[tokio::test]
+    //TODO: fix signature stuff
     async fn test_create_open_badge_vc() {
         let data = W3CVerifiableCredential {
             context: vec![
@@ -171,6 +172,7 @@ mod tests {
             terms_of_use: None,
             evidence: None,
             embedded_proof: None,
+            extensions: HashMap::new()
         };
 
         let signer = Arc::new(SoftwareKeyPair::new());

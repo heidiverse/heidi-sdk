@@ -293,9 +293,17 @@ pub struct W3CVerifiableCredential {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "proof")]
     pub embedded_proof: Option<Value>,
+
+    /// Collect extensions into a separate map
+    #[serde(flatten)]
+    pub extensions: HashMap<String, Value>,
 }
 
 impl W3CVerifiableCredential {
+    pub fn get_extension(&self, extension_name: &str) -> Option<Value> {
+        let extension_key = format!("extensions:{extension_name}");
+        self.extensions.get(&extension_key).cloned()
+    }
     pub fn into_value(self) -> Value {
         serde_json::to_value(self).unwrap().into()
     }
