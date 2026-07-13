@@ -136,7 +136,7 @@ internal class GattClient(
 
         try {
             scanner = bluetoothManager.adapter.bluetoothLeScanner.also {
-				it?.startScan(listOf(filter), settings, scanCallback)
+                it.startScan(listOf(filter), settings, scanCallback)
             }
         } catch (e: Exception) {
             scannerListener?.onError(e.message ?: e.javaClass.simpleName)
