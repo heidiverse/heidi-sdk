@@ -1,7 +1,7 @@
 [versions]
 accompanist = "0.37.3"
-agp = "8.10.1"
-android-compileSdk = "36"
+agp = "9.2.1"
+android-compileSdk = "37"
 android-minSdk = "28"
 android-targetSdk = "34"
 android-ndk = "28.2.13676358"
