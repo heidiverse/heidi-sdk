@@ -58,4 +58,12 @@ pub fn generate_nonce(length: u64) -> String {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __rust_probestack() {}
 
+#[cfg(target_arch = "arm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __deregister_frame() {}
+
+#[cfg(target_arch = "arm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __register_frame() {}
+
 uniffi::setup_scaffolding!();

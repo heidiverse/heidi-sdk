@@ -141,4 +141,12 @@ pub fn decode_cbor(cbor: Vec<u8>) -> Result<Value, CborParseError> {
         .map_err(|_| CborParseError::NoCbor)
 }
 
+#[cfg(target_arch = "arm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __deregister_frame() {}
+
+#[cfg(target_arch = "arm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __register_frame() {}
+
 uniffi::setup_scaffolding!();
