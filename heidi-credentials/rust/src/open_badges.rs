@@ -132,6 +132,19 @@ pub fn parse_open_badges_303_credential_canonicalized(
     OpenBadges303Credential::parse_canonicalized(image_bytes)
 }
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn deserialize_open_badges_303_from_str(
+    badge: &str,
+) -> Result<OpenBadges303Credential, ParseError> {
+    serde_json::from_str::<OpenBadges303Credential>(badge)
+        .map_err(|e| ParseError::JsonLd(JsonLDParseError::Json(format!("{e}"))))
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+pub fn serialize_open_badges_303(badge: &OpenBadges303Credential) -> String {
+    serde_json::to_string(badge).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, sync::Arc};
@@ -172,7 +185,7 @@ mod tests {
             terms_of_use: None,
             evidence: None,
             embedded_proof: None,
-            extensions: HashMap::new()
+            extensions: None
         };
 
         let signer = Arc::new(SoftwareKeyPair::new());

@@ -25,8 +25,21 @@ import ch.ubique.heidi.util.extensions.asObject
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
 import ch.ubique.heidi.util.extensions.json
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.KeepGeneratedSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.descriptors.element
+import kotlinx.serialization.encoding.CompositeDecoder
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.encoding.decodeStructure
+import kotlinx.serialization.encoding.encodeStructure
 import kotlinx.serialization.json.Json
 import uniffi.heidi_credentials_rust.*
 import uniffi.heidi_crypto_rust.base64UrlEncode
@@ -117,7 +130,9 @@ sealed class W3C {
          * Helper class to store precomputed information such that we don't have to recompute it
          * again every time we load the credential.
          */
-        @Serializable
+        @OptIn(ExperimentalSerializationApi::class)
+		@Serializable(with = OpenBadgesSerializer::class)
+        @KeepGeneratedSerializer
         data class Data(
             val credential: OpenBadges303Credential,
 
@@ -211,8 +226,47 @@ sealed class W3C {
 
             }
 
-            fun parseSerialized(credential: String): OpenBadge303 =
-                OpenBadge303(Json.decodeFromString(credential))
+            fun parseSerialized(credential: String): OpenBadge303 {
+                val newFormat = runCatching { Json.decodeFromString(OpenBadge303.Data.serializer(), credential) }.getOrNull()
+                if (newFormat != null) {
+                    return OpenBadge303(newFormat)
+                }
+                return OpenBadge303(Json.decodeFromString(OpenBadge303.Data.generatedSerializer(), credential))
+            }
         }
     }
+}
+
+object OpenBadgesSerializer : KSerializer<W3C.OpenBadge303.Data> {
+    override val descriptor: SerialDescriptor
+        get() =  buildClassSerialDescriptor("ch.ubique.heidi.credentials.W3C.OpenBadge303.Data") {
+            // Specifies each property with its type and name with the element() function
+            element<String>("credential")
+            element<Boolean>("isValid")
+        }
+
+    override fun serialize(encoder: Encoder, value: W3C.OpenBadge303.Data) {
+        encoder.encodeStructure(descriptor) {
+            encodeStringElement(descriptor,0 , serializeOpenBadges303(value.credential))
+            encodeBooleanElement(descriptor, 1, value.isValid)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): W3C.OpenBadge303.Data {
+       return decoder.decodeStructure(descriptor) {
+           var credential : String = ""
+           var isValid = false
+           while (true) {
+               when(val index = decodeElementIndex(descriptor)) {
+                   0 -> credential = decodeStringElement(descriptor, 0)
+                   1 -> isValid = decodeBooleanElement(descriptor, 1)
+                   CompositeDecoder.DECODE_DONE -> break
+                   else -> error("Unexepected index: $index")
+               }
+           }
+           val c = deserializeOpenBadges303FromStr(credential)
+           W3C.OpenBadge303.Data(c, isValid)
+       }
+    }
+
 }

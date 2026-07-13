@@ -296,13 +296,16 @@ pub struct W3CVerifiableCredential {
 
     /// Collect extensions into a separate map
     #[serde(flatten)]
-    pub extensions: HashMap<String, Value>,
+    pub extensions: Option<HashMap<String, Value>>,
 }
 
 impl W3CVerifiableCredential {
     pub fn get_extension(&self, extension_name: &str) -> Option<Value> {
         let extension_key = format!("extensions:{extension_name}");
-        self.extensions.get(&extension_key).cloned()
+        self.extensions
+            .clone()
+            .map(|a| a.get(&extension_key).cloned())
+            .flatten()
     }
     pub fn into_value(self) -> Value {
         serde_json::to_value(self).unwrap().into()
