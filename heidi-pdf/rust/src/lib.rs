@@ -325,4 +325,12 @@ fn retry<T, E>(mut f: impl FnMut() -> Result<T, E>) -> Result<T, E> {
     }
 }
 
+#[cfg(target_arch = "arm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __deregister_frame() {}
+
+#[cfg(target_arch = "arm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __register_frame() {}
+
 uniffi::setup_scaffolding!();

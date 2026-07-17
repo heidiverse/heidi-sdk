@@ -58,4 +58,11 @@ pub fn generate_nonce(length: u64) -> String {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __rust_probestack() {}
 
+#[cfg(target_arch = "arm")]
+#[used]
+static _KEEP_EH_FRAME_STUBS: [unsafe extern "C" fn(); 2] = [
+    heidi_util_rust::__register_frame,
+    heidi_util_rust::__deregister_frame,
+];
+
 uniffi::setup_scaffolding!();

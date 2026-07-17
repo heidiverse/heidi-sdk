@@ -63,4 +63,11 @@ pub fn base64_decode(input: &str) -> Option<Vec<u8>> {
     return None;
 }
 
+#[cfg(target_arch = "arm")]
+#[used]
+static _KEEP_EH_FRAME_STUBS: [unsafe extern "C" fn(); 2] = [
+    heidi_util_rust::__register_frame,
+    heidi_util_rust::__deregister_frame,
+];
+
 uniffi::setup_scaffolding!();
