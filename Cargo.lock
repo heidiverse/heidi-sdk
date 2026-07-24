@@ -2638,7 +2638,7 @@ dependencies = [
 [[package]]
 name = "ecdsa_pops"
 version = "0.1.0"
-source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#c9bddf47b52e6a3d50ce347dc2298b4154055caf"
+source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#cf6e59dadde4b2a35f99d921a91d56ff00fb87b8"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -5988,7 +5988,7 @@ dependencies = [
 [[package]]
 name = "next-gen-signatures"
 version = "0.1.2"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#cf8c39a3256ec73d48a7f361453970dbeb791144"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#48ba386ffcd6f11a4e65dff0c950af353997186c"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
@@ -7256,7 +7256,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 [[package]]
 name = "r1csipa"
 version = "0.1.0"
-source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#c9bddf47b52e6a3d50ce347dc2298b4154055caf"
+source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#cf6e59dadde4b2a35f99d921a91d56ff00fb87b8"
 dependencies = [
  "ark-std",
  "bellpepper-core",
@@ -7505,7 +7505,7 @@ dependencies = [
 [[package]]
 name = "rdf-util"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#cf8c39a3256ec73d48a7f361453970dbeb791144"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#48ba386ffcd6f11a4e65dff0c950af353997186c"
 dependencies = [
  "anyhow",
  "oxrdf",
@@ -7977,7 +7977,7 @@ dependencies = [
 [[package]]
 name = "rok"
 version = "0.1.0"
-source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#c9bddf47b52e6a3d50ce347dc2298b4154055caf"
+source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#cf6e59dadde4b2a35f99d921a91d56ff00fb87b8"
 dependencies = [
  "ark-std",
  "bincode",
@@ -8095,7 +8095,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -11205,7 +11205,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -11924,7 +11924,7 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#cf8c39a3256ec73d48a7f361453970dbeb791144"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#48ba386ffcd6f11a4e65dff0c950af353997186c"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
