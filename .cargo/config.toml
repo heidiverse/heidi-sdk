@@ -1,0 +1,53 @@
+# Statically link the C++ runtime on Android.
+#
+# Why this exists:
+#   next-gen-signatures/zkp-util -> ecdsa_pops/r1csipa -> halo2curves
+#   (git zaverucha/signature-proof) -> pasta-msm, which is a NON-optional
+#   dependency there. pasta-msm's build.rs does `cc.cpp(true)` and compiles
+#   pippenger.cpp, and cc-rs defaults the Android C++ stdlib to `c++_shared`.
+#   That leaves `libheidi_wallet_rust.so` with a DT_NEEDED on libc++_shared.so,
+#   which nothing packages into the APK -> JNA dlopen fails at runtime with:
+#     library "libc++_shared.so" not found ... needed by libheidi_wallet_rust.so
+#
+# Verify after building:
+#   llvm-readelf -d <lib>.so | grep NEEDED     # libc++_shared.so must be absent
+
+# 1. Stop cc-rs from emitting `-lc++_shared`. An empty value makes cc-rs skip
+#    the C++ stdlib link flag entirely rather than substituting a default.
+#    `force` so a stray CXXSTDLIB in the environment can't silently win.
+[env]
+CXXSTDLIB_aarch64_linux_android   = { value = "", force = true }
+CXXSTDLIB_armv7_linux_androideabi = { value = "", force = true }
+CXXSTDLIB_x86_64_linux_android    = { value = "", force = true }
+CXXSTDLIB_i686_linux_android      = { value = "", force = true }
+
+# 2. Link the static C++ runtime instead.
+#
+#    Both libs are required: `-lc++_static` on its own leaves ~20 undefined
+#    symbols. Do NOT use `-static-libstdc++` here -- rustc drives the link
+#    through plain `clang` (not `clang++`), which ignores that flag with only
+#    an "argument unused" warning and produces a .so that links cleanly but
+#    fails at dlopen.
+#
+#    NOTE: a `RUSTFLAGS` env var overrides these wholesale. If libc++_shared
+#    ever reappears in DT_NEEDED, check for RUSTFLAGS in the environment/CI.
+
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-lc++_static", "-C", "link-arg=-lc++abi"]
+
+[target.armv7-linux-androideabi]
+rustflags = ["-C", "link-arg=-lc++_static", "-C", "link-arg=-lc++abi"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-lc++_static", "-C", "link-arg=-lc++abi"]
+
+[target.i686-linux-android]
+rustflags = ["-C", "link-arg=-lc++_static", "-C", "link-arg=-lc++abi"]
+
+# Optional hardening, deliberately left off for the first verification build so
+# only one variable changes. Once the build above is confirmed good, append
+#   "-C", "link-arg=-Wl,--no-undefined"
+# to each rustflags list. That turns a silent runtime dlopen failure into a
+# link error, and is what guards against the RUSTFLAGS clobbering noted above.
+# Untested against the full crate graph -- if Rust's std leaves any legitimately
+# undefined symbols on Android it will surface as a link error; drop it if so.

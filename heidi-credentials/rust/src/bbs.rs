@@ -27,7 +27,7 @@ use std::{
 };
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use heidi_util_rust::value::Value;
 use next_gen_signatures::crypto::zkp::{
     deserialize_public_key_uncompressed, deserialize_signature,
@@ -36,16 +36,16 @@ use num_bigint::BigUint;
 use rand_core::OsRng;
 use rdf_util::oxrdf::{Graph, GraphName};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use zkp_util::{
-    device_binding::{DeviceBindingPresentation, SecpFr},
+    device_binding::{DeviceBindingPresentationSigma, SecpFr},
     vc::{
-        presentation::{present, VerifiablePresentation},
+        VerifiableCredential,
+        presentation::{VerifiablePresentationSigma, present},
         requirements::{
             DeviceBindingRequirement, DeviceBindingVerificationParams, DiscloseRequirement,
             EqualClaimsRequirement, ProofRequirement,
         },
-        VerifiableCredential,
     },
 };
 
@@ -486,7 +486,7 @@ struct BbsPresentation {
 
 #[derive(uniffi::Object)]
 pub struct BbsPresentationRust {
-    presentation: VerifiablePresentation,
+    presentation: VerifiablePresentationSigma,
 }
 
 impl BbsPresentationRust {
@@ -510,7 +510,9 @@ pub fn bbs_presentation_get_claims(pres: &BbsPresentationRust) -> Value {
     serde_json::from_value(pres.claims().to_json()).unwrap()
 }
 
-pub fn parse_bbs_presentation(vp_token: String) -> Result<VerifiablePresentation, BbsParseError> {
+pub fn parse_bbs_presentation(
+    vp_token: String,
+) -> Result<VerifiablePresentationSigma, BbsParseError> {
     let json =
         String::from_utf8(BASE64_URL_SAFE_NO_PAD.decode(vp_token).map_err(|_| {
             BbsParseError::InvalidEncoding("vp_token not base64url encoded".into())
@@ -531,7 +533,7 @@ pub fn parse_bbs_presentation(vp_token: String) -> Result<VerifiablePresentation
 
     let device_binding = if let Some(db) = presentation.device_binding {
         Some(
-            DeviceBindingPresentation::deserialize_compressed(Cursor::new(
+            DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(
                 BASE64_URL_SAFE_NO_PAD.decode(db).map_err(|_| {
                     BbsParseError::InvalidEncoding("device_binding not base64url encoded".into())
                 })?,
@@ -542,7 +544,7 @@ pub fn parse_bbs_presentation(vp_token: String) -> Result<VerifiablePresentation
         None
     };
 
-    Ok(VerifiablePresentation {
+    Ok(VerifiablePresentationSigma {
         proof,
         device_binding,
     })
@@ -631,7 +633,7 @@ impl BbsPresentationRust {
 
 #[derive(uniffi::Object)]
 pub struct BbsClaimBasedPresentationRust {
-    presentation: VerifiablePresentation,
+    presentation: VerifiablePresentationSigma,
     db_message: Vec<u8>,
     db_secp_label: Vec<u8>,
     db_tom_label: Vec<u8>,

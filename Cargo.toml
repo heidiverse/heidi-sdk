@@ -40,6 +40,11 @@ ark-serialize = "0.4.2"
 josekit = { git = "https://github.com/heidiverse/josekit-rs.git", default-features = false, features = [
     "rustcrypto",
 ] }
+zkp-util = { git = "https://github.com/heidiverse/zk-bridge-services.git", branch = "feature/new-zkp" }
+rdf-util = { git = "https://github.com/heidiverse/zk-bridge-services.git", branch = "feature/new-zkp" }
+next-gen-signatures = { git = "https://github.com/heidiverse/zk-bridge-services.git", features = [
+    "zkp",
+], branch = "feature/new-zkp" }
 
 [profile.release]
 panic = "abort"

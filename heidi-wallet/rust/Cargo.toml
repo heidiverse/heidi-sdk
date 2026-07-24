@@ -61,10 +61,8 @@ http = "0.2.12"
 heidi-util-rust = { path = "../../heidi-util/rust", default-features = false }
 heidi-credentials-rust = { path = "../../heidi-credentials/rust", default-features = false }
 crunchy = "=0.2.2"
-rdf-util = { git = "https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git", optional = true }
-next-gen-signatures = { git = "https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git", features = [
-    "all",
-], optional = true }
+rdf-util = { workspace = true, optional = true }
+next-gen-signatures = { workspace = true, features = ["all"], optional = true }
 josekit.workspace = true
 heidi-jwt.workspace = true
 heidi-x509.workspace = true
