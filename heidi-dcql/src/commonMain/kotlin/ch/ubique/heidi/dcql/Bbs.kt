@@ -27,6 +27,7 @@ import ch.ubique.heidi.util.extensions.asObject
 import ch.ubique.heidi.util.extensions.get
 import uniffi.heidi_credentials_rust.BbsRust
 import uniffi.heidi_credentials_rust.ClaimBasedParams
+import uniffi.heidi_credentials_rust.DeviceBindingType
 import uniffi.heidi_credentials_rust.PointerPart
 import uniffi.heidi_credentials_rust.bbsDeriveClaimBasedProof
 import uniffi.heidi_credentials_rust.bbsGetBody
@@ -64,6 +65,7 @@ fun Bbs.getVpToken(
     messageSignature: ByteArray?,
     clientId: String,
     nonce: String,
+    deviceBindingType: DeviceBindingType,
 ): Result<String> {
     if (!BBS_TERMWISE_FORMATS.contains(query.format)) {
         return Result.failure(SdJwtErrors.InvalidFormat(query.format))
@@ -84,6 +86,7 @@ fun Bbs.getVpToken(
             commKeyTomLabel = "$clientId-$nonce-tom".encodeToByteArray(),
             commKeyBlsLabel = "$clientId-$nonce-bls".encodeToByteArray(),
             bppSetupLabel = "$clientId-$nonce-bpp".encodeToByteArray(),
+            type = deviceBindingType
         )
     }
 
@@ -165,6 +168,7 @@ fun bbsCombinedClaimBasedProof(
     messageSignature: ByteArray,
     clientId: String,
     nonce: String,
+    deviceBindingType: DeviceBindingType,
 
     vc2: Bbs,
     q2: CredentialQuery,
@@ -209,6 +213,7 @@ fun bbsCombinedClaimBasedProof(
             issuerPk = issuerPk,
             issuerId = issuerId,
             issuerKeyId = issuerKeyId,
+            deviceBindingType = deviceBindingType,
             stackSize = 8U * 1024U * 1024U,
         ))
     }

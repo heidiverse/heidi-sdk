@@ -2638,7 +2638,7 @@ dependencies = [
 [[package]]
 name = "ecdsa_pops"
 version = "0.1.0"
-source = "git+https://github.com/ubamrein/ecdsa_pops.git#59d68c18cdd084ebbe5d0873dc61770efb82682a"
+source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#c9bddf47b52e6a3d50ce347dc2298b4154055caf"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -5988,7 +5988,7 @@ dependencies = [
 [[package]]
 name = "next-gen-signatures"
 version = "0.1.2"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#bfd5f60e77b69b66df7b1acf83aeab26c3864cca"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#cf8c39a3256ec73d48a7f361453970dbeb791144"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
@@ -7256,7 +7256,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 [[package]]
 name = "r1csipa"
 version = "0.1.0"
-source = "git+https://github.com/ubamrein/ecdsa_pops.git#59d68c18cdd084ebbe5d0873dc61770efb82682a"
+source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#c9bddf47b52e6a3d50ce347dc2298b4154055caf"
 dependencies = [
  "ark-std",
  "bellpepper-core",
@@ -7505,7 +7505,7 @@ dependencies = [
 [[package]]
 name = "rdf-util"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#bfd5f60e77b69b66df7b1acf83aeab26c3864cca"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#cf8c39a3256ec73d48a7f361453970dbeb791144"
 dependencies = [
  "anyhow",
  "oxrdf",
@@ -7977,7 +7977,7 @@ dependencies = [
 [[package]]
 name = "rok"
 version = "0.1.0"
-source = "git+https://github.com/ubamrein/ecdsa_pops.git#59d68c18cdd084ebbe5d0873dc61770efb82682a"
+source = "git+https://github.com/lebedenko-ubique/ecdsa_pops.git#c9bddf47b52e6a3d50ce347dc2298b4154055caf"
 dependencies = [
  "ark-std",
  "bincode",
@@ -11924,7 +11924,7 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#bfd5f60e77b69b66df7b1acf83aeab26c3864cca"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#cf8c39a3256ec73d48a7f361453970dbeb791144"
 dependencies = [
  "anyhow",
  "ark-bls12-381",

@@ -34,14 +34,19 @@ use next_gen_signatures::crypto::zkp::{
 };
 use num_bigint::BigUint;
 use rand_core::OsRng;
-use rdf_util::oxrdf::{Graph, GraphName};
+use rdf_util::{
+    MultiGraph,
+    oxrdf::{Graph, GraphName},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
 use zkp_util::{
-    device_binding::{DeviceBindingPresentationSigma, SecpFr},
+    device_binding::{DeviceBindingPresentationNative, DeviceBindingPresentationSigma, SecpFr},
     vc::{
         VerifiableCredential,
-        presentation::{VerifiablePresentationSigma, present},
+        presentation::{
+            VerifiablePresentationNative, VerifiablePresentationSigma, present, present_native,
+        },
         requirements::{
             DeviceBindingRequirement, DeviceBindingVerificationParams, DiscloseRequirement,
             EqualClaimsRequirement, ProofRequirement,
@@ -176,15 +181,61 @@ pub fn decode_bbs(bbs: &str) -> Result<BbsRust, BbsParseError> {
     })
 }
 
+#[derive(Debug, Clone, uniffi::Enum, Serialize, Deserialize)]
+pub enum DeviceBindingType {
+    Sigma,
+    Native,
+}
+
 #[derive(Debug, Clone, uniffi::Object)]
 pub struct BbsBuilder {
     vc: VerifiableCredential,
     requirements: Vec<ProofRequirement>,
-    device_binding: Option<DeviceBindingRequirement>,
+    device_binding: Option<(DeviceBindingRequirement, DeviceBindingType)>,
     proving_keys: HashMap<String, String>,
     issuer_pk: String,
     issuer_id: String,
     issuer_key_id: String,
+}
+
+enum VpResult {
+    Sigma(VerifiablePresentationSigma),
+    Native(VerifiablePresentationNative),
+}
+
+impl VpResult {
+    fn proof(&self) -> &MultiGraph {
+        match self {
+            VpResult::Sigma(vp) => &vp.proof,
+            VpResult::Native(vp) => &vp.proof,
+        }
+    }
+
+    fn serialize_device_binding(&self) -> Result<Option<SerializedDeviceBinding>, BbsBuilderError> {
+        Ok(match self {
+            VpResult::Sigma(vp) => {
+                if let Some(db) = vp.device_binding.as_ref() {
+                    let mut bytes = Vec::<u8>::new();
+                    db.serialize_compressed(&mut bytes)
+                        .map_err(|e| BbsBuilderError::SerializationError(e.to_string()))?;
+                    Some(SerializedDeviceBinding::Typed {
+                        r#type: DeviceBindingType::Sigma,
+                        value: BASE64_URL_SAFE_NO_PAD.encode(bytes),
+                    })
+                } else {
+                    None
+                }
+            }
+            VpResult::Native(vp) => {
+                vp.device_binding
+                    .as_ref()
+                    .map(|db| SerializedDeviceBinding::Typed {
+                        r#type: DeviceBindingType::Native,
+                        value: BASE64_URL_SAFE_NO_PAD.encode(db.serialize()),
+                    })
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone, uniffi::Object)]
@@ -269,6 +320,7 @@ impl BbsBuilderObject {
         comm_key_tom_label: Vec<u8>,
         comm_key_bls_label: Vec<u8>,
         bpp_setup_label: Vec<u8>,
+        r#type: DeviceBindingType,
     ) -> Result<(), BbsBuilderError> {
         let mut inner = self.inner.lock().map_err(|_| BbsBuilderError::LockError)?;
 
@@ -280,7 +332,7 @@ impl BbsBuilderObject {
         let message_signature = deserialize_signature(&signature)
             .map_err(|e| BbsBuilderError::Anyhow(e.to_string()))?;
 
-        inner.device_binding = Some(DeviceBindingRequirement {
+        let req = DeviceBindingRequirement {
             public_key,
             message,
             message_signature,
@@ -288,7 +340,9 @@ impl BbsBuilderObject {
             comm_key_tom_label,
             comm_key_bls_label,
             bpp_setup_label,
-        });
+        };
+
+        inner.device_binding = Some((req, r#type));
 
         Ok(())
     }
@@ -310,31 +364,53 @@ impl BbsBuilderObject {
     pub fn build(self: Arc<Self>) -> Result<String, BbsBuilderError> {
         let inner = self.inner.lock().map_err(|_| BbsBuilderError::LockError)?;
 
-        let vp = present(
-            &mut OsRng,
-            inner.vc.clone(),
-            &inner.requirements,
-            inner.device_binding.clone(),
-            &inner.proving_keys,
-            &inner.issuer_pk,
-            &inner.issuer_id,
-            &inner.issuer_key_id,
-        )
-        .map_err(|e| BbsBuilderError::Anyhow(e.to_string()))?;
-
-        let db = if let Some(db) = vp.device_binding {
-            let mut bytes = Vec::<u8>::new();
-            db.serialize_compressed(&mut bytes)
-                .map_err(|e| BbsBuilderError::SerializationError(e.to_string()))?;
-            Some(BASE64_URL_SAFE_NO_PAD.encode(bytes))
-        } else {
-            None
+        let vp = match inner.device_binding.clone() {
+            None => VpResult::Sigma(
+                present(
+                    &mut OsRng,
+                    inner.vc.clone(),
+                    &inner.requirements,
+                    None,
+                    &inner.proving_keys,
+                    &inner.issuer_pk,
+                    &inner.issuer_id,
+                    &inner.issuer_key_id,
+                )
+                .map_err(|e| BbsBuilderError::Anyhow(e.to_string()))?,
+            ),
+            Some((req, DeviceBindingType::Sigma)) => VpResult::Sigma(
+                present(
+                    &mut OsRng,
+                    inner.vc.clone(),
+                    &inner.requirements,
+                    Some(req),
+                    &inner.proving_keys,
+                    &inner.issuer_pk,
+                    &inner.issuer_id,
+                    &inner.issuer_key_id,
+                )
+                .map_err(|e| BbsBuilderError::Anyhow(e.to_string()))?,
+            ),
+            Some((req, DeviceBindingType::Native)) => VpResult::Native(
+                present_native(
+                    &mut OsRng,
+                    inner.vc.clone(),
+                    &inner.requirements,
+                    Some(req),
+                    &inner.proving_keys,
+                    &inner.issuer_pk,
+                    &inner.issuer_id,
+                    &inner.issuer_key_id,
+                    None,
+                )
+                .map_err(|e| BbsBuilderError::Anyhow(e.to_string()))?,
+            ),
         };
 
         let vp_token = BASE64_URL_SAFE_NO_PAD.encode(
             json!({
-                "proof": BASE64_URL_SAFE_NO_PAD.encode(vp.proof.dataset().to_string()),
-                "device_binding": db
+                "proof": BASE64_URL_SAFE_NO_PAD.encode(vp.proof().dataset().to_string()),
+                "device_binding": vp.serialize_device_binding()?
             })
             .to_string(),
         );
@@ -361,6 +437,7 @@ pub struct ClaimBasedParams {
     pub issuer_id: String,
     pub issuer_key_id: String,
     pub stack_size: u32,
+    pub device_binding_type: DeviceBindingType,
 }
 
 #[uniffi::export]
@@ -382,6 +459,7 @@ pub fn bbs_derive_claim_based_proof(params: ClaimBasedParams) -> Result<String, 
         issuer_id,
         issuer_key_id,
         stack_size,
+        device_binding_type,
     } = params;
 
     let vc1 = VerifiableCredential::new(
@@ -419,7 +497,7 @@ pub fn bbs_derive_claim_based_proof(params: ClaimBasedParams) -> Result<String, 
     let message_signature =
         deserialize_signature(&signature).map_err(|e| BbsBuilderError::Anyhow(e.to_string()))?;
 
-    let db1 = Some(DeviceBindingRequirement {
+    let db1 = DeviceBindingRequirement {
         public_key,
         message,
         message_signature,
@@ -427,17 +505,17 @@ pub fn bbs_derive_claim_based_proof(params: ClaimBasedParams) -> Result<String, 
         comm_key_tom_label,
         comm_key_bls_label,
         bpp_setup_label,
-    });
+    };
 
     let handle = std::thread::Builder::new()
         .stack_size(stack_size as usize)
-        .spawn(move || {
-            zkp_util::vc::presentation::present_two(
+        .spawn(move || match device_binding_type {
+            DeviceBindingType::Sigma => zkp_util::vc::presentation::present_two(
                 &mut OsRng,
                 // first credential
                 vc1,
                 &req1,
-                db1,
+                Some(db1),
                 // second credential
                 vc2,
                 &req2,
@@ -448,7 +526,26 @@ pub fn bbs_derive_claim_based_proof(params: ClaimBasedParams) -> Result<String, 
                 &issuer_id,
                 &issuer_key_id,
             )
-            .map_err(|e| BbsBuilderError::Anyhow(e.to_string()))
+            .map(|result| VpResult::Sigma(result))
+            .map_err(|e| BbsBuilderError::Anyhow(e.to_string())),
+            DeviceBindingType::Native => zkp_util::vc::presentation::present_two_native(
+                &mut OsRng,
+                // first credential
+                vc1,
+                &req1,
+                Some((db1, None)),
+                // second credential
+                vc2,
+                &req2,
+                // equal claims proof
+                &claims_eq,
+                // common
+                &issuer_pk,
+                &issuer_id,
+                &issuer_key_id,
+            )
+            .map(|result| VpResult::Native(result))
+            .map_err(|e| BbsBuilderError::Anyhow(e.to_string())),
         })
         .map_err(|e| BbsBuilderError::ThreadError(e.to_string()))?;
 
@@ -456,20 +553,15 @@ pub fn bbs_derive_claim_based_proof(params: ClaimBasedParams) -> Result<String, 
         .join()
         .map_err(|e| BbsBuilderError::ThreadError(format!("{e:?}")))??;
 
-    let Some(db) = vp.device_binding else {
+    let Some(db) = vp.serialize_device_binding()? else {
         return Err(BbsBuilderError::Anyhow(
             "device binding missing in derived proof".into(),
         ));
     };
 
-    let mut bytes = Vec::<u8>::new();
-    db.serialize_compressed(&mut bytes)
-        .map_err(|e| BbsBuilderError::SerializationError(e.to_string()))?;
-    let db = BASE64_URL_SAFE_NO_PAD.encode(bytes);
-
     let vp_token = BASE64_URL_SAFE_NO_PAD.encode(
         json!({
-            "proof": BASE64_URL_SAFE_NO_PAD.encode(vp.proof.dataset().to_string()),
+            "proof": BASE64_URL_SAFE_NO_PAD.encode(vp.proof().dataset().to_string()),
             "device_binding": db
         })
         .to_string(),
@@ -481,24 +573,49 @@ pub fn bbs_derive_claim_based_proof(params: ClaimBasedParams) -> Result<String, 
 #[derive(Debug, Serialize, Deserialize)]
 struct BbsPresentation {
     pub proof: String,
-    pub device_binding: Option<String>,
+    pub device_binding: Option<SerializedDeviceBinding>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum SerializedDeviceBinding {
+    Typed {
+        r#type: DeviceBindingType,
+        value: String,
+    },
+    Legacy(String),
+}
+
+#[derive(Clone)]
+enum ParsedBbsPresentation {
+    Sigma(VerifiablePresentationSigma),
+    Native(VerifiablePresentationNative),
+}
+
+impl ParsedBbsPresentation {
+    fn proof(&self) -> &MultiGraph {
+        match self {
+            ParsedBbsPresentation::Sigma(vp) => &vp.proof,
+            ParsedBbsPresentation::Native(vp) => &vp.proof,
+        }
+    }
 }
 
 #[derive(uniffi::Object)]
 pub struct BbsPresentationRust {
-    presentation: VerifiablePresentationSigma,
+    presentation: ParsedBbsPresentation,
 }
 
 impl BbsPresentationRust {
     pub fn claims(&self) -> rdf_util::Value {
-        let proof = self.presentation.proof.to_value(GraphName::DefaultGraph);
+        let proof = self.presentation.proof().to_value(GraphName::DefaultGraph);
         proof["https://www.w3.org/2018/credentials#verifiableCredential"]
             ["https://www.w3.org/2018/credentials#credentialSubject"]
             .clone()
     }
 
     pub fn get_types(&self) -> rdf_util::Value {
-        let proof = self.presentation.proof.to_value(GraphName::DefaultGraph);
+        let proof = self.presentation.proof().to_value(GraphName::DefaultGraph);
         proof["https://www.w3.org/2018/credentials#verifiableCredential"]
             ["http://www.w3.org/1999/02/22-rdf-syntax-ns#type"]
             .clone()
@@ -510,9 +627,7 @@ pub fn bbs_presentation_get_claims(pres: &BbsPresentationRust) -> Value {
     serde_json::from_value(pres.claims().to_json()).unwrap()
 }
 
-pub fn parse_bbs_presentation(
-    vp_token: String,
-) -> Result<VerifiablePresentationSigma, BbsParseError> {
+fn parse_bbs_presentation(vp_token: String) -> Result<ParsedBbsPresentation, BbsParseError> {
     let json =
         String::from_utf8(BASE64_URL_SAFE_NO_PAD.decode(vp_token).map_err(|_| {
             BbsParseError::InvalidEncoding("vp_token not base64url encoded".into())
@@ -531,23 +646,53 @@ pub fn parse_bbs_presentation(
         )
         .map_err(|_| BbsParseError::InvalidProofContent)?;
 
-    let device_binding = if let Some(db) = presentation.device_binding {
-        Some(
-            DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(
-                BASE64_URL_SAFE_NO_PAD.decode(db).map_err(|_| {
+    return Ok(match presentation.device_binding {
+        Some(SerializedDeviceBinding::Legacy(value)) => {
+            let db = DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(
+                BASE64_URL_SAFE_NO_PAD.decode(value).map_err(|_| {
                     BbsParseError::InvalidEncoding("device_binding not base64url encoded".into())
                 })?,
             ))
-            .map_err(|_| BbsParseError::InvalidDeviceBindingContent)?,
-        )
-    } else {
-        None
-    };
+            .map_err(|_| BbsParseError::InvalidDeviceBindingContent)?;
 
-    Ok(VerifiablePresentationSigma {
-        proof,
-        device_binding,
-    })
+            ParsedBbsPresentation::Sigma(VerifiablePresentationSigma {
+                proof,
+                device_binding: Some(db),
+            })
+        }
+        Some(SerializedDeviceBinding::Typed { r#type, value }) => match r#type {
+            DeviceBindingType::Sigma => {
+                let db = DeviceBindingPresentationSigma::deserialize_compressed(Cursor::new(
+                    BASE64_URL_SAFE_NO_PAD.decode(value).map_err(|_| {
+                        BbsParseError::InvalidEncoding(
+                            "device_binding not base64url encoded".into(),
+                        )
+                    })?,
+                ))
+                .map_err(|_| BbsParseError::InvalidDeviceBindingContent)?;
+
+                ParsedBbsPresentation::Sigma(VerifiablePresentationSigma {
+                    proof,
+                    device_binding: Some(db),
+                })
+            }
+            DeviceBindingType::Native => {
+                let bytes = BASE64_URL_SAFE_NO_PAD.decode(value).map_err(|_| {
+                    BbsParseError::InvalidEncoding("device_binding not base64url encoded".into())
+                })?;
+                let db = DeviceBindingPresentationNative::deserialize(Cursor::new(bytes));
+
+                ParsedBbsPresentation::Native(VerifiablePresentationNative {
+                    proof,
+                    device_binding: Some(db),
+                })
+            }
+        },
+        None => ParsedBbsPresentation::Sigma(VerifiablePresentationSigma {
+            proof,
+            device_binding: None,
+        }),
+    });
 }
 
 #[uniffi::export]
@@ -574,34 +719,55 @@ impl BbsPresentationRust {
         let requirements = serde_json::from_str::<Vec<ProofRequirement>>(&definition)
             .map_err(|e| BbsParseError::InvalidDefinition(e.to_string()))?;
 
-        let result = zkp_util::vc::verification::verify(
-            &mut OsRng,
-            self.presentation.clone(),
-            &requirements,
-            Some(DeviceBindingVerificationParams {
-                message: SecpFr::from(BigUint::from_bytes_be(&db_message)),
-                comm_key_secp_label: db_secp_label,
-                comm_key_tom_label: db_tom_label,
-                comm_key_bls_label: db_bls_label,
-                bpp_setup_label: db_bpp_setup_label,
-            }),
-            verifying_keys,
-            issuer_pk,
-            issuer_id,
-            issuer_key_id,
-            1,
-        )
+        let result = match self.presentation.clone() {
+            ParsedBbsPresentation::Sigma(presentation) => zkp_util::vc::verification::verify(
+                &mut OsRng,
+                presentation,
+                &requirements,
+                Some(DeviceBindingVerificationParams {
+                    message: SecpFr::from(BigUint::from_bytes_be(&db_message)),
+                    comm_key_secp_label: db_secp_label,
+                    comm_key_tom_label: db_tom_label,
+                    comm_key_bls_label: db_bls_label,
+                    bpp_setup_label: db_bpp_setup_label,
+                }),
+                verifying_keys,
+                issuer_pk,
+                issuer_id,
+                issuer_key_id,
+                1,
+            ),
+            ParsedBbsPresentation::Native(presentation) => {
+                zkp_util::vc::verification::verify_native(
+                    &mut OsRng,
+                    presentation,
+                    &requirements,
+                    Some(DeviceBindingVerificationParams {
+                        message: SecpFr::from(BigUint::from_bytes_be(&db_message)),
+                        comm_key_secp_label: db_secp_label,
+                        comm_key_tom_label: db_tom_label,
+                        comm_key_bls_label: db_bls_label,
+                        bpp_setup_label: db_bpp_setup_label,
+                    }),
+                    verifying_keys,
+                    issuer_pk,
+                    issuer_id,
+                    issuer_key_id,
+                    1,
+                )
+            }
+        }
         .map_err(|e| BbsParseError::InvalidProof(e.to_string()))?;
 
         Ok(serde_json::from_value(result).unwrap())
     }
 
     pub fn get_num_original_claims(self: &Arc<Self>) -> i32 {
-        zkp_util::vc::utils::get_original_num_claims(&self.presentation.proof.dataset()) as i32
+        zkp_util::vc::utils::get_original_num_claims(&self.presentation.proof().dataset()) as i32
     }
 
     pub fn get_num_disclosed(self: &Arc<Self>) -> i32 {
-        zkp_util::vc::utils::get_num_disclosed_claims(&self.presentation.proof.dataset()) as i32
+        zkp_util::vc::utils::get_num_disclosed_claims(&self.presentation.proof().dataset()) as i32
     }
 
     pub fn get_vc_types(self: &Arc<Self>) -> Vec<String> {
@@ -633,7 +799,7 @@ impl BbsPresentationRust {
 
 #[derive(uniffi::Object)]
 pub struct BbsClaimBasedPresentationRust {
-    presentation: VerifiablePresentationSigma,
+    presentation: ParsedBbsPresentation,
     db_message: Vec<u8>,
     db_secp_label: Vec<u8>,
     db_tom_label: Vec<u8>,
@@ -719,23 +885,44 @@ impl BbsClaimBasedPresentationRust {
             .map_err(|_| BbsParseError::LockError)?
             .clone();
 
-        let result = zkp_util::vc::verification::verify(
-            &mut OsRng,
-            self.presentation.clone(),
-            &requirements,
-            Some(DeviceBindingVerificationParams {
-                message: SecpFr::from(BigUint::from_bytes_be(&self.db_message)),
-                comm_key_secp_label: self.db_secp_label.clone(),
-                comm_key_tom_label: self.db_tom_label.clone(),
-                comm_key_bls_label: self.db_bls_label.clone(),
-                bpp_setup_label: self.db_bpp_setup_label.clone(),
-            }),
-            &HashMap::new(),
-            &self.issuer_pk,
-            &self.issuer_id,
-            &self.issuer_key_id,
-            num_credentials as usize,
-        )
+        let result = match self.presentation.clone() {
+            ParsedBbsPresentation::Sigma(presentation) => zkp_util::vc::verification::verify(
+                &mut OsRng,
+                presentation,
+                &requirements,
+                Some(DeviceBindingVerificationParams {
+                    message: SecpFr::from(BigUint::from_bytes_be(&self.db_message)),
+                    comm_key_secp_label: self.db_secp_label.clone(),
+                    comm_key_tom_label: self.db_tom_label.clone(),
+                    comm_key_bls_label: self.db_bls_label.clone(),
+                    bpp_setup_label: self.db_bpp_setup_label.clone(),
+                }),
+                &HashMap::new(),
+                &self.issuer_pk,
+                &self.issuer_id,
+                &self.issuer_key_id,
+                num_credentials as usize,
+            ),
+            ParsedBbsPresentation::Native(presentation) => {
+                zkp_util::vc::verification::verify_native(
+                    &mut OsRng,
+                    presentation,
+                    &requirements,
+                    Some(DeviceBindingVerificationParams {
+                        message: SecpFr::from(BigUint::from_bytes_be(&self.db_message)),
+                        comm_key_secp_label: self.db_secp_label.clone(),
+                        comm_key_tom_label: self.db_tom_label.clone(),
+                        comm_key_bls_label: self.db_bls_label.clone(),
+                        bpp_setup_label: self.db_bpp_setup_label.clone(),
+                    }),
+                    &HashMap::new(),
+                    &self.issuer_pk,
+                    &self.issuer_id,
+                    &self.issuer_key_id,
+                    num_credentials as usize,
+                )
+            }
+        }
         .map_err(|e| BbsParseError::InvalidProof(e.to_string()))?;
 
         Ok(serde_json::from_value(result).unwrap())

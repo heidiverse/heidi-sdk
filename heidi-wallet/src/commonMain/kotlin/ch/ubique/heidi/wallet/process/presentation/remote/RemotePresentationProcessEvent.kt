@@ -22,6 +22,7 @@ package ch.ubique.heidi.wallet.process.presentation.remote
 
 import ch.ubique.heidi.wallet.credentials.presentation.CredentialSelectionUiModel
 import ch.ubique.heidi.wallet.process.ProcessEvent
+import uniffi.heidi_credentials_rust.DeviceBindingType
 
 sealed interface RemotePresentationProcessEvent : ProcessEvent {
 
@@ -33,6 +34,7 @@ sealed interface RemotePresentationProcessEvent : ProcessEvent {
 		val selectedId : String? = null,
 		val origin: String? = null,
 		val useLegacyVpToken: Boolean = false,
+		val zkpDeviceBindingType: DeviceBindingType = DeviceBindingType.SIGMA
 	) : RemotePresentationProcessEvent
 
 	data class PinEntered(

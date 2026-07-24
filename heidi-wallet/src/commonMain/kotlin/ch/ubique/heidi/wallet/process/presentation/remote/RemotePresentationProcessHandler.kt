@@ -112,6 +112,7 @@ class RemotePresentationProcessHandler(
 					inputEvent.selectedId,
 					inputEvent.origin,
 					inputEvent.useLegacyVpToken,
+					inputEvent.zkpDeviceBindingType,
 				)
 			}
 
