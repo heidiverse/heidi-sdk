@@ -723,7 +723,7 @@ class PresentationProcessKt private constructor(
                     messageSignature = signature,
                     clientId = audience,
                     nonce = nonce,
-                    deviceBindingType = DeviceBindingType.NATIVE,
+                    deviceBindingType = zkpDeviceBindingType,
 
                     vc2 = Bbs.parse(other.first.payload),
                     q2 = other.second,
@@ -826,7 +826,7 @@ class PresentationProcessKt private constructor(
                                     messageSignature = signature,
                                     clientId = audience,
                                     nonce = nonce,
-                                    deviceBindingType = DeviceBindingType.NATIVE,
+                                    deviceBindingType = zkpDeviceBindingType,
                                 )
                             }
                             CredentialType.W3C_VCDM -> W3C.parse(c.payload).getVpToken(
