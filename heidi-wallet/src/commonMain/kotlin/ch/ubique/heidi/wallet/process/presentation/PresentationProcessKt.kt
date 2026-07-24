@@ -66,6 +66,7 @@ import uniffi.heidi_util_rust.Value
 import ch.ubique.heidi.wallet.process.presentation.models.TransactionDataWrapper
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
+import uniffi.heidi_credentials_rust.DeviceBindingType
 import uniffi.heidi_credentials_rust.SignatureCreator
 import uniffi.heidi_dcql_rust.ClaimsQuery
 import uniffi.heidi_dcql_rust.CredentialSetOption
@@ -152,6 +153,7 @@ class PresentationProcessKt private constructor(
     private var dcqlMismatchInfo: DcqlMismatchInfo? = null,
     private var bbsPresentTwo: Boolean = false,
     private var useLegacyVpToken: Boolean = false,
+    private var zkpDeviceBindingType: DeviceBindingType = DeviceBindingType.SIGMA
 ) {
     companion object {
         suspend fun initialize(
@@ -160,6 +162,7 @@ class PresentationProcessKt private constructor(
             signingProvider: SigningProvider,
             origin: String? = null,
             useLegacyVpToken: Boolean = false,
+            zkpDeviceBindingType: DeviceBindingType = DeviceBindingType.SIGMA
         ): PresentationProcessKt {
             val result = parsePresentationOffer(blob)
             return PresentationProcessKt(
@@ -167,7 +170,8 @@ class PresentationProcessKt private constructor(
                 signingProvider,
                 result,
                 origin = origin,
-                useLegacyVpToken = useLegacyVpToken
+                useLegacyVpToken = useLegacyVpToken,
+                zkpDeviceBindingType = zkpDeviceBindingType
             )
         }
 
@@ -719,6 +723,7 @@ class PresentationProcessKt private constructor(
                     messageSignature = signature,
                     clientId = audience,
                     nonce = nonce,
+                    deviceBindingType = DeviceBindingType.NATIVE,
 
                     vc2 = Bbs.parse(other.first.payload),
                     q2 = other.second,
@@ -821,6 +826,7 @@ class PresentationProcessKt private constructor(
                                     messageSignature = signature,
                                     clientId = audience,
                                     nonce = nonce,
+                                    deviceBindingType = DeviceBindingType.NATIVE,
                                 )
                             }
                             CredentialType.W3C_VCDM -> W3C.parse(c.payload).getVpToken(
