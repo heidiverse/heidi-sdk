@@ -337,7 +337,13 @@ private fun Value.toJsonElement(strict: Boolean): JsonElement = when (this) {
     Value.Null -> JsonNull
     is Value.Number -> when (this.v1) {
         is JsonNumber.Integer -> JsonPrimitive(this.v1.v1)
-        is JsonNumber.Float -> JsonPrimitive(this.v1.v1)
+        // Json has no notation for NaN and the infinities, emitting them would produce output that
+        // cannot be parsed back
+        is JsonNumber.Float -> if (strict && !this.v1.v1.isFinite()) {
+            throw Exception("Cannot convert ${this.v1.v1} to canonical Json")
+        } else {
+            JsonPrimitive(this.v1.v1)
+        }
     }
     is Value.Object -> JsonObject(this.v1.mapValues { (_, value) -> value.toJsonElement(strict) })
     is Value.OrderedObject -> if (strict) {
@@ -364,11 +370,29 @@ private fun Value.toJsonElement(strict: Boolean): JsonElement = when (this) {
 
 fun Value.toJsonElement(): JsonElement = this.toJsonElement(strict = false)
 
-// Serializes the element according to the JSON Canonicalization Scheme (RFC 8785). String escaping
-// is delegated to kotlinx.serialization, whose escape table matches what RFC 8785 requires.
+// A value that survives a round trip through Long is an integer that Long can hold exactly, and
+// RFC 8785 wants those printed as plain digits. Everything else keeps whatever Double.toString()
+// produces.
+private fun Double.toCanonicalNumber(): String = when {
+    !this.isFinite() -> throw Exception("Cannot convert $this to canonical Json")
+    this == 0.0 -> "0" // also covers -0.0
+    this.toLong().toDouble() == this
+            && this < Long.MAX_VALUE.toDouble()
+            && this >= Long.MIN_VALUE.toDouble() -> this.toLong().toString()
+    else -> this.toString()
+}
+
+// Serializes the element in an almost RFC 8785 compliant way: object keys are sorted and strings are
+// escaped as the spec requires. Numbers are only partly compliant: integral values and zero are
+// handled, but anything in exponential notation might not be compliant.
 fun JsonElement.toCanonicalJson(): String = when (this) {
     JsonNull -> "null"
-    is JsonPrimitive -> if (this.isString) this.toString() else this.content
+    is JsonPrimitive -> when {
+        this.isString -> this.toString()
+        // Integers are emitted verbatim so that values beyond 2^53 keep their full precision
+        this.longOrNull != null -> this.content
+        else -> this.doubleOrNull?.toCanonicalNumber() ?: this.content
+    }
     is JsonArray -> this.joinToString(separator = ",", prefix = "[", postfix = "]") { it.toCanonicalJson() }
     is JsonObject -> this.entries
         // Keys are sorted by their raw UTF-16 code units, before escaping, as required by RFC 8785
