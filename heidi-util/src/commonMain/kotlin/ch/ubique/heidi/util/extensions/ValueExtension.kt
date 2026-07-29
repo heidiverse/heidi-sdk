@@ -328,6 +328,32 @@ fun Any?.toCbor() : Value {
     }
 }
 
+// Escapes a string according to the JSON Canonicalization Scheme (RFC 8785, section 3.2.2.2) and
+// wraps it in quotes. Only the characters JSON requires are escaped, everything else (including the
+// solidus and any non-ASCII character) is emitted literally as UTF-16.
+private fun String.toJsonString(): String {
+    val builder = StringBuilder(length + 2)
+    builder.append('"')
+    for (char in this) {
+        when (char) {
+            '"' -> builder.append("\\\"")
+            '\\' -> builder.append("\\\\")
+            '\b' -> builder.append("\\b")
+            '\u000C' -> builder.append("\\f") // Kotlin has no \f escape
+            '\n' -> builder.append("\\n")
+            '\r' -> builder.append("\\r")
+            '\t' -> builder.append("\\t")
+            else -> if (char < '\u0020') {
+                builder.append("\\u").append(char.code.toString(16).padStart(4, '0'))
+            } else {
+                builder.append(char)
+            }
+        }
+    }
+    builder.append('"')
+    return builder.toString()
+}
+
 fun Value.toCanonicalJson(): String = when (this) {
     is Value.Array -> this.v1.joinToString(separator = ",", prefix = "[", postfix = "]") { it.toCanonicalJson() }
     is Value.Boolean -> if (this.v1) "true" else "false"
@@ -338,10 +364,11 @@ fun Value.toCanonicalJson(): String = when (this) {
         is JsonNumber.Float -> this.v1.v1.toString()
     }
     is Value.Object -> this.v1.entries
+        // Keys are sorted by their raw UTF-16 code units, before escaping, as required by RFC 8785
         .sortedBy { it.key }
-        .joinToString(separator = ",", prefix = "{", postfix = "}") { "\"${it.key}\":${it.value.toCanonicalJson()}"}
+        .joinToString(separator = ",", prefix = "{", postfix = "}") { "${it.key.toJsonString()}:${it.value.toCanonicalJson()}"}
     is Value.OrderedObject -> throw Exception("Cannot convert OrderedObject to canonical Json")
-    is Value.String -> "\"${this.v1}\""
+    is Value.String -> this.v1.toJsonString()
     is Tag -> throw Exception("Cannot convert Tag to canonical Json")
 }
 
