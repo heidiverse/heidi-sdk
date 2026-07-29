@@ -7,7 +7,6 @@ import ch.ubique.heidi.util.extensions.asObject
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.fromJsonElement
 import ch.ubique.heidi.util.extensions.get
-import ch.ubique.heidi.util.extensions.safeTransform
 import ch.ubique.heidi.util.extensions.transform
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -87,7 +86,7 @@ sealed interface DidLogEntry {
                 versionTime = obj["versionTime"]?.asString()?.let {
                     Instant.Companion.parse(it)
                 } ?: throw ResolveException("VersionTime is not a String"),
-                parameters = obj["parameters"]?.safeTransform<Parameters>()
+                parameters = obj["parameters"]?.transform<Parameters>()
                     ?: throw ResolveException("Couldn't parse parameters"),
                 state = obj["state"] ?: throw ResolveException("Did Log entry doesn't have a state"),
                 proofs = obj["proof"]?.transform<List<Value>>()?.map { Pair(

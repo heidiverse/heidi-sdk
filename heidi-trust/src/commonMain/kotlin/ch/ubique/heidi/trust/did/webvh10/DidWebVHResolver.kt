@@ -11,7 +11,7 @@ import ch.ubique.heidi.trust.did.models.WitnessParam
 import ch.ubique.heidi.trust.did.models.WitnessProof
 import ch.ubique.heidi.util.extensions.asString
 import ch.ubique.heidi.util.extensions.get
-import ch.ubique.heidi.util.extensions.safeTransform
+import ch.ubique.heidi.util.extensions.transform
 import uniffi.heidi_crypto_rust.EdDsaPublicKey
 import uniffi.heidi_util_rust.Value
 import kotlin.time.Clock
@@ -38,7 +38,7 @@ data class DidWebVHResolver(val entries: List<DidLogEntry>) : DidResolver {
             ?: throw ResolveException("First entry must have an SCID")
         var prerotation = false
         var nextKeyHashes = listOf<String>()
-        var witnessParam: WitnessParam? = entries.first().parameters.witness?.safeTransform()
+        var witnessParam: WitnessParam? = entries.first().parameters.witness?.transform()
 
 
         for ((i, entry) in entries.withIndex()) {
@@ -128,7 +128,7 @@ data class DidWebVHResolver(val entries: List<DidLogEntry>) : DidResolver {
                 throw ResolveException("Witnesses were not satisfied: ${entry.versionId}")
 
             if (entry.parameters.witness != null)
-                witnessParam = entry.parameters.witness.safeTransform()
+                witnessParam = entry.parameters.witness.transform()
         }
 
         return latest

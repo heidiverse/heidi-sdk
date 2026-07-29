@@ -20,8 +20,10 @@ under the License.
 
 package ch.ubique.heidi.util.extensions
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonUnquotedLiteral
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -62,15 +64,7 @@ inline fun <reified T> T.toValue() : Value {
 
 inline fun <reified T> Value.transform() : T? {
     return try {
-        json.decodeFromJsonElement(json.encodeToJsonElement(this))
-    } catch (ex: Exception) {
-        null
-    }
-}
-
-inline fun <reified T> Value.safeTransform() : T? {
-    return try {
-        json.decodeFromString(this.toCanonicalJson())
+        json.decodeFromJsonElement(this.toJsonElement())
     } catch (ex: Exception) {
         null
     }
@@ -328,49 +322,61 @@ fun Any?.toCbor() : Value {
     }
 }
 
-// Escapes a string according to the JSON Canonicalization Scheme (RFC 8785, section 3.2.2.2) and
-// wraps it in quotes. Only the characters JSON requires are escaped, everything else (including the
-// solidus and any non-ASCII character) is emitted literally as UTF-16.
-private fun String.toJsonString(): String {
-    val builder = StringBuilder(length + 2)
-    builder.append('"')
-    for (char in this) {
-        when (char) {
-            '"' -> builder.append("\\\"")
-            '\\' -> builder.append("\\\\")
-            '\b' -> builder.append("\\b")
-            '\u000C' -> builder.append("\\f") // Kotlin has no \f escape
-            '\n' -> builder.append("\\n")
-            '\r' -> builder.append("\\r")
-            '\t' -> builder.append("\\t")
-            else -> if (char < '\u0020') {
-                builder.append("\\u").append(char.code.toString(16).padStart(4, '0'))
-            } else {
-                builder.append(char)
-            }
-        }
+// Converts the value into its Json representation. The CBOR only types (Bytes, Tag and
+// OrderedObject) have no canonical Json counterpart: in strict mode they are rejected, otherwise
+// they are mapped to the shape that best preserves their content.
+@OptIn(ExperimentalSerializationApi::class)
+private fun Value.toJsonElement(strict: Boolean): JsonElement = when (this) {
+    is Value.Array -> JsonArray(this.v1.map { it.toJsonElement(strict) })
+    is Value.Boolean -> JsonPrimitive(this.v1)
+    is Value.Bytes -> if (strict) {
+        throw Exception("Cannot convert Bytes to canonical Json")
+    } else {
+        JsonArray(this.v1.map { JsonPrimitive(it) })
     }
-    builder.append('"')
-    return builder.toString()
+    Value.Null -> JsonNull
+    is Value.Number -> when (this.v1) {
+        is JsonNumber.Integer -> JsonPrimitive(this.v1.v1)
+        is JsonNumber.Float -> JsonPrimitive(this.v1.v1)
+    }
+    is Value.Object -> JsonObject(this.v1.mapValues { (_, value) -> value.toJsonElement(strict) })
+    is Value.OrderedObject -> if (strict) {
+        throw Exception("Cannot convert OrderedObject to canonical Json")
+    } else {
+        // Only maps keyed by strings have an object representation, anything else (CBOR allows
+        // arbitrary keys) has none and is rejected
+        JsonObject(this.v1.entries.associate { entry ->
+            val key = entry.key.asString() ?: throw Exception("Cannot convert OrderedObject with non string keys to Json")
+            key to entry.value.toJsonElement(strict)
+        })
+    }
+    is Value.String -> JsonPrimitive(this.v1)
+    is Tag -> if (strict) {
+        throw Exception("Cannot convert Tag to canonical Json")
+    } else {
+        JsonObject(mapOf(
+            // The tag is an unsigned 64 bit number and does not fit into any JsonPrimitive overload
+            "tag" to JsonUnquotedLiteral(this.tag.toString()),
+            "value" to JsonArray(this.value.map { it.toJsonElement(strict) }),
+        ))
+    }
 }
 
-fun Value.toCanonicalJson(): String = when (this) {
-    is Value.Array -> this.v1.joinToString(separator = ",", prefix = "[", postfix = "]") { it.toCanonicalJson() }
-    is Value.Boolean -> if (this.v1) "true" else "false"
-    is Value.Bytes -> throw Exception("Cannot convert Bytes to canonical Json")
-    Value.Null -> "null"
-    is Value.Number -> when (this.v1) {
-        is JsonNumber.Integer -> this.v1.v1.toString()
-        is JsonNumber.Float -> this.v1.v1.toString()
-    }
-    is Value.Object -> this.v1.entries
+fun Value.toJsonElement(): JsonElement = this.toJsonElement(strict = false)
+
+// Serializes the element according to the JSON Canonicalization Scheme (RFC 8785). String escaping
+// is delegated to kotlinx.serialization, whose escape table matches what RFC 8785 requires.
+fun JsonElement.toCanonicalJson(): String = when (this) {
+    JsonNull -> "null"
+    is JsonPrimitive -> if (this.isString) this.toString() else this.content
+    is JsonArray -> this.joinToString(separator = ",", prefix = "[", postfix = "]") { it.toCanonicalJson() }
+    is JsonObject -> this.entries
         // Keys are sorted by their raw UTF-16 code units, before escaping, as required by RFC 8785
         .sortedBy { it.key }
-        .joinToString(separator = ",", prefix = "{", postfix = "}") { "${it.key.toJsonString()}:${it.value.toCanonicalJson()}"}
-    is Value.OrderedObject -> throw Exception("Cannot convert OrderedObject to canonical Json")
-    is Value.String -> this.v1.toJsonString()
-    is Tag -> throw Exception("Cannot convert Tag to canonical Json")
+        .joinToString(separator = ",", prefix = "{", postfix = "}") { "${JsonPrimitive(it.key)}:${it.value.toCanonicalJson()}" }
 }
+
+fun Value.toCanonicalJson(): String = this.toJsonElement(strict = true).toCanonicalJson()
 
 // NOTE: This function is preferred over directly deserializing into Value
 //       class when the Json contains "null" elements. Null elements cannot

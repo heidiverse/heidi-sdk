@@ -25,6 +25,8 @@ import ch.ubique.heidi.util.extensions.isSame
 import ch.ubique.heidi.util.extensions.toCanonicalJson
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonPrimitive
 import uniffi.heidi_util_rust.JsonNumber
 import uniffi.heidi_util_rust.MapEntry
 import uniffi.heidi_util_rust.OrderedMap
@@ -45,6 +47,10 @@ class ToCanonicalJsonTest {
 	private fun obj(vararg entries: Pair<String, Value>): Value = Value.Object(mapOf(*entries))
 
 	private fun str(value: String): Value = Value.String(value)
+
+	private fun num(value: Long): Value = Value.Number(JsonNumber.Integer(value))
+
+	private fun num(value: Double): Value = Value.Number(JsonNumber.Float(value))
 
 	// region basics
 
@@ -264,6 +270,110 @@ class ToCanonicalJsonTest {
 		val twice = Value.fromJsonElement(Json.decodeFromString<JsonElement>(once)).toCanonicalJson()
 
 		assertEquals(once, twice)
+	}
+
+	// endregion
+
+	// region numbers
+
+	@Test
+	fun integersAreSerializedVerbatim() {
+		assertEquals("0", num(0L).toCanonicalJson())
+		assertEquals("1", num(1L).toCanonicalJson())
+		assertEquals("-1", num(-1L).toCanonicalJson())
+		// Integers keep full precision, even beyond what a Double could represent exactly
+		assertEquals("9007199254740993", num(9007199254740993L).toCanonicalJson()) // 2^53 + 1
+		assertEquals("9223372036854775807", num(Long.MAX_VALUE).toCanonicalJson())
+		assertEquals("-9223372036854775808", num(Long.MIN_VALUE).toCanonicalJson())
+	}
+
+	@Test
+	fun integralDoublesDropTheFractionalPart() {
+		assertEquals("1", num(1.0).toCanonicalJson())
+		assertEquals("-1", num(-1.0).toCanonicalJson())
+		assertEquals("0", num(0.0).toCanonicalJson())
+		assertEquals("100", num(100.0).toCanonicalJson())
+		assertEquals("9007199254740992", num(9007199254740992.0).toCanonicalJson()) // 2^53
+	}
+
+	@Test
+	fun negativeZeroIsSerializedAsZero() {
+		assertEquals("0", num(-0.0).toCanonicalJson())
+	}
+
+	@Test
+	fun fractionalDoubles() {
+		assertEquals("1.5", num(1.5).toCanonicalJson())
+		assertEquals("0.5", num(0.5).toCanonicalJson())
+		assertEquals("-2.25", num(-2.25).toCanonicalJson())
+		assertEquals("333333333.3333333", num(333333333.33333329).toCanonicalJson())
+	}
+
+	@Test
+	fun shortestRoundTrippingRepresentationIsUsed() {
+		assertEquals("0.1", num(0.1).toCanonicalJson())
+		assertEquals("0.30000000000000004", num(0.1 + 0.2).toCanonicalJson())
+		assertEquals("2.220446049250313e-16", num(2.220446049250313e-16).toCanonicalJson())
+	}
+
+	@Test
+	fun plainNotationBelowTheExponentialThresholds() {
+		// ES6 only switches to exponential notation from 1e21 upwards and below 1e-6,
+		// unlike Double.toString which switches at 1e7 and 1e-3.
+		assertEquals("10000000", num(1e7).toCanonicalJson())
+		assertEquals("100000000000000000000", num(1e20).toCanonicalJson())
+		assertEquals("0.0001", num(1e-4).toCanonicalJson())
+		assertEquals("0.000001", num(1e-6).toCanonicalJson())
+	}
+
+	@Test
+	fun exponentialNotationForLargeValues() {
+		assertEquals("1e+21", num(1e21).toCanonicalJson())
+		assertEquals("1e+22", num(1e22).toCanonicalJson())
+		assertEquals("1e+23", num(1e23).toCanonicalJson())
+		assertEquals("1.7976931348623157e+308", num(Double.MAX_VALUE).toCanonicalJson())
+	}
+
+	@Test
+	fun exponentialNotationForSmallValues() {
+		assertEquals("1e-7", num(1e-7).toCanonicalJson())
+		assertEquals("5e-324", num(Double.MIN_VALUE).toCanonicalJson())
+	}
+
+	@Test
+	fun nonFiniteNumbersAreRejected() {
+		// JSON has no notation for these, "NaN" / "Infinity" would not be parseable
+		assertFailsWith<Exception> { num(Double.NaN).toCanonicalJson() }
+		assertFailsWith<Exception> { num(Double.POSITIVE_INFINITY).toCanonicalJson() }
+		assertFailsWith<Exception> { num(Double.NEGATIVE_INFINITY).toCanonicalJson() }
+	}
+
+	@Test
+	fun integerAndDoubleOfTheSameValueAgree() {
+		// "1" is parsed into an Integer and "1.0" into a Float, both must canonicalize identically
+		assertEquals("1", parse("1").toCanonicalJson())
+		assertEquals("1", parse("1.0").toCanonicalJson())
+	}
+
+	@Test
+	fun numbersInsideStructures() {
+		val value = obj(
+			"a" to Value.Array(listOf(num(1.0), num(1e21), num(-0.0))),
+			"b" to num(2L),
+		)
+
+		assertEquals("{\"a\":[1,1e+21,0],\"b\":2}", value.toCanonicalJson())
+	}
+
+	@Test
+	fun canonicalNumbersCanBeParsedBack() {
+		val values = listOf(1.0, -1.0, 0.5, 1e7, 1e20, 1e21, 1e23, 1e-6, 1e-7, Double.MAX_VALUE, Double.MIN_VALUE)
+
+		for (value in values) {
+			val canonical = num(value).toCanonicalJson()
+			val reparsed = Json.decodeFromString<JsonElement>(canonical)
+			assertEquals(value, reparsed.jsonPrimitive.double, "round trip changed $value (canonical: $canonical)")
+		}
 	}
 
 	// endregion
