@@ -36,7 +36,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use sha2::Digest;
-use task_local_extensions::Extensions;
 
 use crate::{
     crypto::{b64url_decode_bytes, b64url_encode_bytes},
@@ -469,7 +468,7 @@ impl Middleware for DpopAuth {
     async fn handle(
         &self,
         mut req: Request,
-        extensions: &mut Extensions,
+        extensions: &mut http::Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
         // if we have no nonce, we need to do the request first
@@ -582,7 +581,7 @@ impl Middleware for DpopWrapper {
     async fn handle(
         &self,
         req: Request,
-        extensions: &mut Extensions,
+        extensions: &mut http::Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
         self.0.handle(req, extensions, next).await
