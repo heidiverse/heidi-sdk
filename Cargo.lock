@@ -6100,7 +6100,7 @@ dependencies = [
 [[package]]
 name = "next-gen-signatures"
 version = "0.1.2"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#f3e4be51db76d7a22f80dc9d6a57ced9fb20b6c4"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#488103cf61fdf4114e3ef8f5f8937a09513d1ec1"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
@@ -7625,7 +7625,7 @@ dependencies = [
 [[package]]
 name = "rdf-util"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#f3e4be51db76d7a22f80dc9d6a57ced9fb20b6c4"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#488103cf61fdf4114e3ef8f5f8937a09513d1ec1"
 dependencies = [
  "anyhow",
  "oxrdf",
@@ -11975,7 +11975,7 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
-source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#f3e4be51db76d7a22f80dc9d6a57ced9fb20b6c4"
+source = "git+https://github.com/heidiverse/zk-bridge-services.git?branch=feature%2Fnew-zkp#488103cf61fdf4114e3ef8f5f8937a09513d1ec1"
 dependencies = [
  "anyhow",
  "ark-bls12-381",
