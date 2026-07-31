@@ -19,12 +19,12 @@ under the License.
  */
 
 use monostate::MustBe;
-use reqwest::header::HeaderMap;
 use reqwest::Url;
+use reqwest::header::HeaderMap;
 use reqwest_middleware::{ClientWithMiddleware, RequestBuilder};
 use serde::Serialize;
 
-use crate::{issuance::models::PushedAuthorizationRequest, ApiError};
+use crate::{ApiError, issuance::models::PushedAuthorizationRequest};
 
 pub struct ClientAttestation {
     pub client_attestation: String,

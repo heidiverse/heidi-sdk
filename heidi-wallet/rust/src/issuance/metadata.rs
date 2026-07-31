@@ -21,14 +21,14 @@ under the License.
 //! This module contains structs/methods to fetch metadata from OID4VCI endpoints.
 
 use crate::{
+    ApiError,
     issuance::models::{
         AuthorizationRequestReference, AuthorizationServerMetadata, CredentialIssuerMetadata,
         PushedAuthorizationRequest, TokenRequest, TokenResponse,
     },
-    ApiError,
 };
 
-use super::auth::{build_pushed_authorization_request, ClientAttestation};
+use super::auth::{ClientAttestation, build_pushed_authorization_request};
 
 use reqwest::Url;
 use reqwest_middleware::ClientWithMiddleware;

@@ -27,7 +27,7 @@ next-gen-signatures = { workspace = true, optional = true }
 rand_core.workspace = true
 ark-serialize.workspace = true
 num-bigint = "0.4.6"
-json-ld = { version = "0.21.2", features = ["reqwest"] }
+json-ld = { version = "0.21.4", features = ["reqwest"] }
 iref = "3.2.2"
 mime = "0.3.17"
 json-syntax = "0.12.5"

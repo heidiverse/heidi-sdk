@@ -20,7 +20,7 @@ under the License.
 
 //! Helper functions for the wallet.
 #![deny(clippy::unwrap_used, clippy::expect_used)]
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::AtomicBool};
 
 pub use crate::error::ApiError;
 #[cfg(all(feature = "reqwest", feature = "oid4vp", feature = "uniffi"))]
@@ -88,7 +88,7 @@ pub fn get_reqwest_client() -> ClientBuilder {
     }
     #[cfg(feature = "uniffi")]
     if UNSAFE_TLS.load(std::sync::atomic::Ordering::Relaxed) {
-        client_builder = client_builder.danger_accept_invalid_certs(true);
+        client_builder = client_builder.tls_danger_accept_invalid_certs(true);
     }
     #[cfg(feature = "uniffi")]
     if let Ok(guard) = PROXY.lock() {
