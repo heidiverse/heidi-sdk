@@ -63,7 +63,7 @@ impl Backuper {
     pub fn new(oidc_settings: Arc<OidcSettings>, base_url: String, email: String) -> Self {
         use crate::get_reqwest_client;
 
-        let cookie_store = Arc::new(CookieStoreMutex::new(CookieStore::new()));
+        let cookie_store = Arc::new(CookieStoreMutex::new(CookieStore::new(None)));
         Self {
             client: get_reqwest_client()
                 .cookie_provider(cookie_store.clone())
@@ -93,7 +93,7 @@ impl Backuper {
         use crate::get_reqwest_client;
 
         let cookie_store: Arc<CookieStoreMutex> =
-            Arc::new(CookieStoreMutex::new(CookieStore::new()));
+            Arc::new(CookieStoreMutex::new(CookieStore::new(None)));
         Self {
             client: get_reqwest_client()
                 .cookie_provider(cookie_store.clone())

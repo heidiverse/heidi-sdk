@@ -33,6 +33,7 @@ use reqwest_middleware::{Middleware, Next};
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use task_local_extensions::Extensions;
 
 use serde_json::{Value, json};
 use sha2::Digest;
@@ -468,7 +469,7 @@ impl Middleware for DpopAuth {
     async fn handle(
         &self,
         mut req: Request,
-        extensions: &mut http::Extensions,
+        extensions: &mut Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
         // if we have no nonce, we need to do the request first
@@ -478,6 +479,8 @@ impl Middleware for DpopAuth {
             .map(|nonce| nonce.is_none())
             .unwrap_or(true)
         {
+            // replaces authorization header
+            let _ = self.prepare_dpop(&mut req);
             let request_clone = req.try_clone();
             let next_clone = next.clone();
             if let Some(req) = request_clone {
@@ -581,7 +584,7 @@ impl Middleware for DpopWrapper {
     async fn handle(
         &self,
         req: Request,
-        extensions: &mut http::Extensions,
+        extensions: &mut Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
         self.0.handle(req, extensions, next).await

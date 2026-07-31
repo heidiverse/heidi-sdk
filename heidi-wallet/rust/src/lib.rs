@@ -88,7 +88,7 @@ pub fn get_reqwest_client() -> ClientBuilder {
     }
     #[cfg(feature = "uniffi")]
     if UNSAFE_TLS.load(std::sync::atomic::Ordering::Relaxed) {
-        client_builder = client_builder.tls_danger_accept_invalid_certs(true);
+        client_builder = client_builder.danger_accept_invalid_certs(true);
     }
     #[cfg(feature = "uniffi")]
     if let Ok(guard) = PROXY.lock() {
