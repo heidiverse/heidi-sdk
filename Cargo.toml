@@ -51,3 +51,7 @@ panic = "abort"
 
 [profile.dev]
 panic = "abort"
+
+[patch."https://github.com/zaverucha/signature-proof"]
+# patches signature-proof to not enable pasta curves
+halo2curves = { git = "https://github.com/heidiverse/signature-proof.git" }
