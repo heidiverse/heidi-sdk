@@ -46,11 +46,7 @@ next-gen-signatures = { git = "https://github.com/heidiverse/zk-bridge-services.
     "zkp",
 ] }
 
-[profile.release]
-panic = "abort"
-
 [profile.dev]
-panic = "abort"
 debug = false
 
 [patch."https://github.com/zaverucha/signature-proof"]
