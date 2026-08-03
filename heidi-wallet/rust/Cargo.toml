@@ -15,9 +15,9 @@ did-key = "0.2.1"
 
 rand.workspace = true
 rand_core.workspace = true
-reqwest = { features = ["cookies"], optional = true, workspace = true }
+reqwest = { features = ["cookies"], default-features = false,  optional = true, workspace = true }
 reqwest-middleware = { version = "0.2", optional = true }
-reqwest-retry = { version = "0.3.0", optional = true }
+reqwest-retry = { version = "0.3", optional = true }
 sdjwt = { version = "0.7.3", git = "https://github.com/UbiqueInnovation/sd-jwt.git", branch = "feature/qes" }
 #sdjwt = {  path = "../../../sd-jwt" }
 serde_json.workspace = true
@@ -61,10 +61,8 @@ http = "0.2.12"
 heidi-util-rust = { path = "../../heidi-util/rust", default-features = false }
 heidi-credentials-rust = { path = "../../heidi-credentials/rust", default-features = false }
 crunchy = "=0.2.2"
-rdf-util = { git = "https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git", optional = true }
-next-gen-signatures = { git = "https://github.com/UbiqueInnovation/sprind-next-gen-signing-service.git", features = [
-    "all",
-], optional = true }
+rdf-util = { workspace = true, optional = true }
+next-gen-signatures = { workspace = true, features = ["all"], optional = true }
 josekit.workspace = true
 heidi-jwt.workspace = true
 heidi-x509.workspace = true

@@ -67,6 +67,7 @@ import ch.ubique.heidi.wallet.process.refresh.eaa.EaaRefreshProcessStep
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import ch.ubique.heidi.wallet.process.presentation.ErrorModel
+import uniffi.heidi_credentials_rust.DeviceBindingType
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
@@ -99,9 +100,10 @@ class RemotePresentationProcess(
 		selectedId: String? = null,
 		origin: String? = null,
 		useLegacyVpToken: Boolean = false,
+		zkpDeviceBindingType: DeviceBindingType = DeviceBindingType.SIGMA,
 	): RemotePresentationProcessStep {
 		return try {
-			presentationProcess = PresentationProcessKt.initialize(qrCodeData, client, signingProvider, origin = origin, useLegacyVpToken = useLegacyVpToken)
+			presentationProcess = PresentationProcessKt.initialize(qrCodeData, client, signingProvider, origin = origin, useLegacyVpToken = useLegacyVpToken, zkpDeviceBindingType = zkpDeviceBindingType)
 			initializeMetadata(qrCodeData, origin, presentationProcess.authRequest!!, presentationProcess.data?.originalJwt).getOrThrow()
 			this.presentationScope = presentationScope
 			this.authSession = authSession

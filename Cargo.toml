@@ -27,8 +27,8 @@ libc = "0.2"
 tokio = { version = "1.38.0" }
 reqwest = { version = "0.11", default-features = false, features = [
     "rustls-tls",
-    "cookies",
-    "json",
+     "cookies",
+     "json",
 ] }
 heidi-x509 = { git = "https://github.com/heidiverse/heidi-x509.git" }
 heidi-jwt = { git = "https://github.com/heidiverse/heidi-jwt", tag = "v0.2.0" }
@@ -40,9 +40,15 @@ ark-serialize = "0.4.2"
 josekit = { git = "https://github.com/heidiverse/josekit-rs.git", default-features = false, features = [
     "rustcrypto",
 ] }
-
-[profile.release]
-panic = "abort"
+zkp-util = { git = "https://github.com/heidiverse/zk-bridge-services.git"}
+rdf-util = { git = "https://github.com/heidiverse/zk-bridge-services.git" }
+next-gen-signatures = { git = "https://github.com/heidiverse/zk-bridge-services.git", features = [
+    "zkp",
+] }
 
 [profile.dev]
-panic = "abort"
+debug = false
+
+[patch."https://github.com/zaverucha/signature-proof"]
+# patches signature-proof to not enable pasta curves
+halo2curves = { git = "https://github.com/heidiverse/signature-proof.git" }

@@ -20,7 +20,7 @@ under the License.
 
 //! Helper functions for the wallet.
 #![deny(clippy::unwrap_used, clippy::expect_used)]
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::AtomicBool};
 
 pub use crate::error::ApiError;
 #[cfg(all(feature = "reqwest", feature = "oid4vp", feature = "uniffi"))]

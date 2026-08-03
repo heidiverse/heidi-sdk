@@ -33,10 +33,10 @@ use reqwest_middleware::{Middleware, Next};
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use task_local_extensions::Extensions;
 
 use serde_json::{Value, json};
 use sha2::Digest;
-use task_local_extensions::Extensions;
 
 use crate::{
     crypto::{b64url_decode_bytes, b64url_encode_bytes},
@@ -479,6 +479,8 @@ impl Middleware for DpopAuth {
             .map(|nonce| nonce.is_none())
             .unwrap_or(true)
         {
+            // replaces authorization header
+            let _ = self.prepare_dpop(&mut req);
             let request_clone = req.try_clone();
             let next_clone = next.clone();
             if let Some(req) = request_clone {

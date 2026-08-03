@@ -22,18 +22,18 @@ under the License.
 //! It handles OAUTH, and everything needed for loading, creating
 //! and deleting the backup files.
 
+use crate::ApiError;
 use crate::error::BackendError;
 use crate::error::BackupApiError;
 use crate::issuance::OidcSettings;
 use crate::lock;
-use crate::ApiError;
-use reqwest::redirect::Policy;
 use reqwest::Client;
 use reqwest::Url;
+use reqwest::redirect::Policy;
 use reqwest_cookie_store::CookieStore;
 use reqwest_cookie_store::CookieStoreMutex;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
