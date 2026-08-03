@@ -19,6 +19,7 @@ under the License.
  */
 package org.kapunsdk.sample.wallet.feature.scanner
 
+import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -156,8 +157,8 @@ private fun QrScannerOverlay(
 						error,
 						center.x,
 						center.y - qrWindowSize / 2 - bottomOffset - errorSpacing,
-						android.graphics.Paint().apply {
-							textAlign = android.graphics.Paint.Align.CENTER
+						Paint().apply {
+							textAlign = Paint.Align.CENTER
 							textSize = regularFontSize.toPx()
 							color = Color.Red.toArgb()
 						}
