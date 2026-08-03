@@ -99,7 +99,7 @@ class BluetoothViewModel(
 		}
 
 		override fun onError(error: ProximityError) {
-			bluetoothLogMutable.update { it.plus(error) }
+			bluetoothLogMutable.update { it.plus(error.toString()) }
 		}
 	}
 
