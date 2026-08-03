@@ -148,33 +148,10 @@ uniffi {
         libs.versions.uniffi.bindgen.get()
     )
     generateFromLibrary()
-//    generateFromLibrary {
-//        config.set(project.projectDir.resolve("uniffi.toml"))
-//    }
 }
 
 cargo {
     packageDirectory = layout.projectDirectory.dir("rust")
-//    builds.android {
-//        variants.forEach {
-//            if(it.rustTarget == RustAndroidTarget.Arm64) {
-//                debug.profile = CargoProfile.Dev
-//            } else {
-//                debug.profile = CargoProfile.Release
-//            }
-//        }
-//    }
-//    builds.desktop {
-//        debug.profile = CargoProfile.Release
-//    }
-//    builds.appleMobile {
-//        debug.profile = CargoProfile.Release
-//    }
-
-//    builds.jvm {
-//        // Build JVM only for the current host platform
-//        jvm = (rustTarget == RustHost.current.rustTarget)
-//    }
 }
 
 compose.resources {

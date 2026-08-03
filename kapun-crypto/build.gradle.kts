@@ -94,21 +94,6 @@ uniffi {
 
 cargo {
 	packageDirectory = layout.projectDirectory.dir("rust")
-//	builds.android {
-//		variants.forEach {
-//			if(it.rustTarget == RustAndroidTarget.Arm64) {
-//				debug.profile = CargoProfile.Dev
-//			} else {
-//				debug.profile = CargoProfile.Release
-//			}
-//		}
-//	}
-//	builds.desktop {
-//		debug.profile = CargoProfile.Release
-//	}
-//	builds.appleMobile {
-//		debug.profile = CargoProfile.Release
-//	}
 }
 
 mavenPublishing {

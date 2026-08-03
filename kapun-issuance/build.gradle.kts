@@ -103,15 +103,6 @@ uniffi {
 
 cargo {
 	packageDirectory = layout.projectDirectory.dir("rust")
-//	builds.android {
-//		debug.profile = CargoProfile.Dev
-//	}
-//	builds.desktop {
-//		debug.profile = CargoProfile.Release
-//	}
-//	builds.appleMobile {
-//		debug.profile = CargoProfile.Release
-//	}
 }
 
 mavenPublishing {
