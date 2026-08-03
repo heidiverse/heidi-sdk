@@ -27,12 +27,12 @@ import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import org.kapunsdk.wallet.KapunDatabase
 import org.kapunsdk.wallet.database.SqliteDriverFactory
 
-internal class AndroidSqliteDriverFactory(private val context: Context) : SqliteDriverFactory {
+internal class AndroidSqliteDriverFactory(private val context: Context, override var databaseNameOverride: String? = null) : SqliteDriverFactory {
 
 	override fun createDriver(): SqlDriver = AndroidSqliteDriver(
 		schema = KapunDatabase.Schema,
 		context = context,
-		name = SqliteDriverFactory.DATABASE_NAME,
+		name = databaseNameOverride ?: SqliteDriverFactory.DATABASE_NAME,
 		callback = object : AndroidSqliteDriver.Callback(
 			schema = KapunDatabase.Schema,
 			callbacks = SqliteDriverFactory.migrations,

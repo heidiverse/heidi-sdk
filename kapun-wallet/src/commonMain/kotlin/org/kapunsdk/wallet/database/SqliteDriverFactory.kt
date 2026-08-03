@@ -25,12 +25,13 @@ import org.kapunsdk.wallet.database.migrations.V1To2RenameKeyMaterialClassDiscri
 internal interface SqliteDriverFactory {
 
 	companion object {
-		const val DATABASE_NAME = "kapun_database.sqlite"
+		val DATABASE_NAME = "kapun_database.sqlite"
 
 		val migrations = arrayOf(
 			V1To2RenameKeyMaterialClassDiscriminator,
 		)
 	}
+	var databaseNameOverride : String?
 
 	fun createDriver(): SqlDriver
 }

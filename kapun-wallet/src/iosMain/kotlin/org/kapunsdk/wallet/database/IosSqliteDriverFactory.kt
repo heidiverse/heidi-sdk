@@ -31,11 +31,11 @@ import org.kapunsdk.wallet.database.SqliteDriverFactory
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLIsExcludedFromBackupKey
 
-internal class IosSqliteDriverFactory : SqliteDriverFactory {
+internal class IosSqliteDriverFactory(override var databaseNameOverride: String? = null) : SqliteDriverFactory {
 
 	@OptIn(ExperimentalForeignApi::class)
 	override fun createDriver(): SqlDriver {
-		val fileName = SqliteDriverFactory.DATABASE_NAME
+		val fileName = databaseNameOverride ?: SqliteDriverFactory.DATABASE_NAME
 		val driver = NativeSqliteDriver(
 			KapunDatabase.Schema,
 			fileName,
