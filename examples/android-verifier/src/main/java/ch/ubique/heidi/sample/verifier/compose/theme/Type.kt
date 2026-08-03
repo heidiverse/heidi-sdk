@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.compose.theme
+package org.kapunsdk.sample.verifier.compose.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

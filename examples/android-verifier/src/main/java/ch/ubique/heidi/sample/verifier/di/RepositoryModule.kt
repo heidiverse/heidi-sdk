@@ -17,9 +17,9 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.di
+package org.kapunsdk.sample.verifier.di
 
-import ch.ubique.heidi.sample.verifier.feature.network.VerifierRepository
+import org.kapunsdk.sample.verifier.feature.network.VerifierRepository
 import org.koin.dsl.module
 
 val repositoryModule = module {

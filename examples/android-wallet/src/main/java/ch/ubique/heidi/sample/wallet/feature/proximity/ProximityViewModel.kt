@@ -17,19 +17,19 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet.feature.proximity
+package org.kapunsdk.sample.wallet.feature.proximity
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.toClaimsPointer
-import ch.ubique.heidi.dcql.getVpToken
-import ch.ubique.heidi.presentation.request.PresentationRequest
-import ch.ubique.heidi.proximity.ProximityProtocol
-import ch.ubique.heidi.proximity.documents.DocumentRequest
-import ch.ubique.heidi.proximity.wallet.ProximityWallet
-import ch.ubique.heidi.proximity.wallet.ProximityWalletState
-import ch.ubique.heidi.util.extensions.toCbor
+import org.kapunsdk.credentials.SdJwt
+import org.kapunsdk.credentials.toClaimsPointer
+import org.kapunsdk.getVpToken
+import org.kapunsdk.presentation.request.PresentationRequest
+import org.kapunsdk.proximity.ProximityProtocol
+import org.kapunsdk.proximity.documents.DocumentRequest
+import org.kapunsdk.proximity.wallet.ProximityWallet
+import org.kapunsdk.proximity.wallet.ProximityWalletState
+import org.kapunsdk.util.extensions.toCbor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,12 +38,12 @@ import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
-import uniffi.heidi_credentials_rust.SignatureCreator
-import uniffi.heidi_crypto_rust.SoftwareKeyPair
-import uniffi.heidi_crypto_rust.base64UrlDecode
-import uniffi.heidi_crypto_rust.parseEncodedJwtPayload
-import uniffi.heidi_dcql_rust.DcqlQuery
-import uniffi.heidi_util_rust.Value
+import uniffi.kapun_credentials_rust.SignatureCreator
+import uniffi.kapun_crypto_rust.SoftwareKeyPair
+import uniffi.kapun_crypto_rust.base64UrlDecode
+import uniffi.kapun_crypto_rust.parseEncodedJwtPayload
+import uniffi.kapun_dcql_rust.DcqlQuery
+import uniffi.kapun_util_rust.Value
 import kotlin.String
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid

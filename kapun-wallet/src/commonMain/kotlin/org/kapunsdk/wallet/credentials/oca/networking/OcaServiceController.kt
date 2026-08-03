@@ -1,0 +1,120 @@
+/* Copyright 2025 Ubique Innovation AG
+
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+ */
+
+package org.kapunsdk.wallet.credentials.oca.networking
+
+import org.kapunsdk.credentials.SdJwt
+import org.kapunsdk.credentials.W3C
+import org.kapunsdk.issuance.metadata.data.CredentialConfiguration
+import org.kapunsdk.issuance.metadata.data.CredentialIssuerMetadataClaims
+import org.kapunsdk.wallet.credentials.format.mdoc.MdocUtils
+import org.kapunsdk.wallet.credentials.mapping.defaults.OcaBundleFactory
+import org.kapunsdk.credentials.models.credential.CredentialMetadata
+import org.kapunsdk.credentials.models.credential.CredentialType
+import org.kapunsdk.credentials.toJson
+import org.kapunsdk.wallet.credentials.metadata.asMetadataFormat
+import org.kapunsdk.wallet.resources.StringResourceProvider
+import io.ktor.client.HttpClient
+import io.ktor.http.Url
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsBytes
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
+import io.ktor.util.encodeBase64
+import kotlinx.serialization.json.Json
+import org.koin.core.module.dsl.singleOf
+import org.koin.dsl.module
+import uniffi.kapun_wallet_rust.Credential
+import uniffi.kapun_wallet_rust.CredentialFormat
+import uniffi.kapun_wallet_rust.mdocAsJsonRepresentation
+import kotlin.io.encoding.Base64
+
+class OcaServiceController(val client: HttpClient, val stringResourceProvider: StringResourceProvider, val json: Json) {
+	companion object {
+		val koinModule = module {
+			singleOf(::OcaServiceController)
+		}
+	}
+
+	suspend fun getOcaBundleForUrl(url: String): String = client.get(url) {
+		header(HttpHeaders.CacheControl, null)
+	}.bodyAsText()
+
+	suspend fun getDataFromUrl(url: String): String {
+		return client.get(Url(url.trim('"'))).bodyAsText()
+	}
+
+	suspend fun getOcaFromMetadata(locale: String, metadata: CredentialIssuerMetadataClaims?, credential: Credential, credentialMetadata: CredentialMetadata) : String? {
+		val credentialType = credential.credential.asMetadataFormat()
+		val jsonContent = when (credentialType) {
+			CredentialType.SdJwt -> SdJwt.parse((credential.credential as CredentialFormat.SdJwt).v1).toJson() ?: return null
+			//TODO: improve the mdocAsJsonRepresentation
+			CredentialType.Mdoc -> mdocAsJsonRepresentation((credential.credential as CredentialFormat.Mdoc).v1) ?: return null
+			CredentialType.BbsTermwise -> return null
+			CredentialType.W3C_VCDM -> Json.encodeToString(W3C.parse((credential.credential as CredentialFormat.W3c).v1).asJson())
+            CredentialType.OpenBadge303 -> Json.encodeToString(W3C.OpenBadge303.parse(
+                Base64.UrlSafe.decode((credential.credential as CredentialFormat.OpenBadge).v1)).asJson())
+            CredentialType.Unknown -> return null
+		}
+
+		val credentialPayload = when(credential.credential) {
+			is CredentialFormat.Mdoc -> credential.credential.v1
+			is CredentialFormat.SdJwt -> credential.credential.v1
+			is CredentialFormat.BbsTermWise -> return null
+			is CredentialFormat.W3c -> credential.credential.v1
+            is CredentialFormat.OpenBadge -> credential.credential.v1
+		}
+
+		val docType = when (credentialType) {
+			CredentialType.SdJwt -> SdJwt.parse(credentialPayload).getMetadata().vct
+			CredentialType.Mdoc -> MdocUtils.getDocType(credentialPayload)
+			CredentialType.W3C_VCDM -> W3C.parse(credentialPayload).docType
+			CredentialType.BbsTermwise -> return null
+            CredentialType.OpenBadge303 -> W3C.OpenBadge303
+                .parse(Base64.UrlSafe.decode(credentialPayload)).docType
+            CredentialType.Unknown -> {
+				// Don't insert this credential if it's an unknown type
+				return null
+			}
+		}
+
+		val credentialMetadata = metadata?.credentialConfigurationsSupported?.values?.firstOrNull {
+			when(it) {
+				is CredentialConfiguration.Mdoc -> it.doctype == docType
+				is CredentialConfiguration.SdJwt -> it.vct == docType
+				else -> false
+			}
+		}
+		val display = credentialMetadata?.getDisplayMetadata()?.firstOrNull()
+		val backgroundImage = runCatching {
+			if (display?.backgroundImage?.uri?.startsWith("data:") == true) {
+				display.backgroundImage?.uri
+			} else {
+				display?.backgroundImage?.uri?.let {
+					client.get(it).bodyAsBytes().encodeBase64()
+				}
+			}
+		}.getOrNull()
+
+		val bundle = OcaBundleFactory.createOcaFromDisplayMetadata(locale, stringResourceProvider, backgroundImage, metadata, docType, jsonContent)
+		return json.encodeToString(bundle)
+	}
+}

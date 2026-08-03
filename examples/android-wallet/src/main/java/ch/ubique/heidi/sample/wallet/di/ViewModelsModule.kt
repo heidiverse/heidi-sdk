@@ -17,10 +17,10 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet.di
+package org.kapunsdk.sample.wallet.di
 
-import ch.ubique.heidi.sample.wallet.feature.proximity.ProximityViewModel
-import ch.ubique.heidi.sample.wallet.feature.scanner.QrScannerViewModel
+import org.kapunsdk.sample.wallet.feature.proximity.ProximityViewModel
+import org.kapunsdk.sample.wallet.feature.scanner.QrScannerViewModel
 import org.koin.dsl.module
 
 fun viewModelsModule() = module {

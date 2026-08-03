@@ -17,14 +17,14 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier
+package org.kapunsdk.sample.verifier
 
 import android.app.Application
-import ch.ubique.heidi.wallet.HeidiSdk
-import ch.ubique.heidi.proximity.HeidiProximity
-import ch.ubique.heidi.sample.verifier.di.networkModule
-import ch.ubique.heidi.sample.verifier.di.repositoryModule
-import ch.ubique.heidi.sample.verifier.di.viewModelsModule
+import org.kapunsdk.wallet.KapunSdk
+import org.kapunsdk.proximity.KapunProximity
+import org.kapunsdk.sample.verifier.di.networkModule
+import org.kapunsdk.sample.verifier.di.repositoryModule
+import org.kapunsdk.sample.verifier.di.viewModelsModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -33,8 +33,8 @@ class VerifierApplication : Application() {
 	override fun onCreate() {
 		super.onCreate()
 
-		HeidiSdk(this).initialize()
-		HeidiProximity(this).initialize()
+		KapunSdk(this).initialize()
+		KapunProximity(this).initialize()
 
 		startKoin {
 			androidContext(this@VerifierApplication)

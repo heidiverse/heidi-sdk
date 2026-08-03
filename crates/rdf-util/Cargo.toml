@@ -1,0 +1,12 @@
+[package]
+name = "rdf-util"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+oxrdf = { version = "0.2.1" }
+oxttl = { version = "0.1.1" }
+rdf-canon = { version = "0.15.1" }
+serde = { workspace = true }
+serde_json = { workspace = true }

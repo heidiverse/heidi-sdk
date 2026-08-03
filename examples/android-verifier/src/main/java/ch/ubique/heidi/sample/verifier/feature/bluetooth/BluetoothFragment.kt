@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.feature.bluetooth
+package org.kapunsdk.sample.verifier.feature.bluetooth
 
 import android.Manifest
 import android.content.Intent
@@ -30,10 +30,10 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.fragment.app.Fragment
-import ch.ubique.heidi.sample.verifier.compose.theme.HeidiTheme
-import ch.ubique.heidi.sample.verifier.databinding.FragmentComposeBinding
-import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreenCallbacks
-import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
+import org.kapunsdk.sample.verifier.compose.theme.HeidiTheme
+import org.kapunsdk.sample.verifier.databinding.FragmentComposeBinding
+import org.kapunsdk.sample.verifier.feature.scanner.QrScannerScreenCallbacks
+import org.kapunsdk.sample.verifier.feature.scanner.QrScannerViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class BluetoothFragment : Fragment() {

@@ -17,9 +17,9 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.data.model
+package org.kapunsdk.sample.verifier.data.model
 
-import ch.ubique.heidi.sample.verifier.data.dto.VerificationDisclosureMap
+import org.kapunsdk.sample.verifier.data.dto.VerificationDisclosureMap
 
 data class VerificationDisclosureResult(
 	val isVerificationSuccessful: Boolean,

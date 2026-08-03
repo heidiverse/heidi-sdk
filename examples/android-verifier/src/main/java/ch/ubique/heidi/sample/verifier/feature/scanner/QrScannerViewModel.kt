@@ -17,13 +17,13 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.feature.scanner
+package org.kapunsdk.sample.verifier.feature.scanner
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ch.ubique.heidi.sample.verifier.R
-import ch.ubique.heidi.sample.verifier.extensions.throttleIf
+import org.kapunsdk.sample.verifier.R
+import org.kapunsdk.sample.verifier.extensions.throttleIf
 import ch.ubique.qrscanner.state.DecodingState
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow

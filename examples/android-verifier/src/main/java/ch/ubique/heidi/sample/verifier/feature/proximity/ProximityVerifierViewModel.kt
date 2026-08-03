@@ -17,36 +17,32 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.feature.proximity
+package org.kapunsdk.sample.verifier.feature.proximity
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ch.ubique.heidi.dcql.Attribute
-import ch.ubique.heidi.dcql.AttributeType
-import ch.ubique.heidi.dcql.DcqlQuerySerializer
-import ch.ubique.heidi.dcql.sdJwtDcqlClaimsFromAttributes
-import ch.ubique.heidi.presentation.request.PresentationRequest
-import ch.ubique.heidi.proximity.ProximityProtocol
-import ch.ubique.heidi.proximity.documents.DocumentRequest
-import ch.ubique.heidi.proximity.documents.DocumentRequester
-import ch.ubique.heidi.proximity.verifier.ProximityVerifier
-import ch.ubique.heidi.proximity.verifier.ProximityVerifierState
-import ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult
-import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
-import ch.ubique.heidi.sample.verifier.feature.network.VerifierRepository
+import org.kapunsdk.Attribute
+import org.kapunsdk.AttributeType
+import org.kapunsdk.sdJwtDcqlClaimsFromAttributes
+import org.kapunsdk.presentation.request.PresentationRequest
+import org.kapunsdk.proximity.ProximityProtocol
+import org.kapunsdk.proximity.documents.DocumentRequest
+import org.kapunsdk.proximity.documents.DocumentRequester
+import org.kapunsdk.proximity.verifier.ProximityVerifier
+import org.kapunsdk.proximity.verifier.ProximityVerifierState
+import org.kapunsdk.sample.verifier.data.model.VerificationDisclosureResult
+import org.kapunsdk.sample.verifier.feature.network.ProofTemplate
+import org.kapunsdk.sample.verifier.feature.network.VerifierRepository
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.koin.core.component.KoinComponent
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
-import uniffi.heidi_dcql_rust.CredentialQuery
-import uniffi.heidi_dcql_rust.DcqlQuery
-import uniffi.heidi_dcql_rust.Meta
-import java.security.SecureRandom
-import java.util.Base64
+import uniffi.kapun_dcql_rust.CredentialQuery
+import uniffi.kapun_dcql_rust.DcqlQuery
+import uniffi.kapun_dcql_rust.Meta
 
 class ProximityVerifierViewModel(
 	private val verifierRepository: VerifierRepository,

@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet.compose.theme
+package org.kapunsdk.sample.wallet.compose.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme

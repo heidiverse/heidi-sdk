@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.feature.proximity
+package org.kapunsdk.sample.verifier.feature.proximity
 
 import android.Manifest
 import android.os.Bundle
@@ -27,8 +27,8 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.fragment.app.Fragment
-import ch.ubique.heidi.sample.verifier.compose.theme.HeidiTheme
-import ch.ubique.heidi.sample.verifier.databinding.FragmentComposeBinding
+import org.kapunsdk.sample.verifier.compose.theme.HeidiTheme
+import org.kapunsdk.sample.verifier.databinding.FragmentComposeBinding
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import org.koin.core.component.KoinComponent
 

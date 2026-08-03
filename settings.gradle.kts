@@ -1,4 +1,4 @@
-rootProject.name = "heidi-kmp"
+rootProject.name = "kapun-sdk"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
@@ -25,15 +25,14 @@ pluginManagement {
 include(":examples:android-verifier")
 include(":examples:android-wallet")
 
-include(":heidi-util")
-include(":heidi-credentials")
-include(":heidi-crypto")
-include(":heidi-issuance")
-include(":heidi-presentation")
-include(":heidi-pdf")
-include(":heidi-dcql")
-include(":heidi-proximity")
-include(":heidi-trust")
-include(":heidi-visualization")
-include(":heidi-wallet")
-
+include(":kapun-util")
+include(":kapun-credentials")
+include(":kapun-crypto")
+include(":kapun-issuance")
+include(":kapun-presentation")
+include(":kapun-pdf")
+include(":kapun-dcql")
+include(":kapun-proximity")
+include(":kapun-trust")
+include(":kapun-visualization")
+include(":kapun-wallet")

@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet.feature.scanner
+package org.kapunsdk.sample.wallet.feature.scanner
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -35,7 +35,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import ch.ubique.heidi.sample.wallet.extensions.dpToPx
+import org.kapunsdk.sample.wallet.extensions.dpToPx
 import ch.ubique.qrscanner.compose.QrScanner
 import ch.ubique.qrscanner.scanner.BarcodeFormat
 import ch.ubique.qrscanner.scanner.ScanningMode

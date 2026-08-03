@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.feature.bluetooth
+package org.kapunsdk.sample.verifier.feature.bluetooth
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -27,13 +27,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import ch.ubique.heidi.proximity.protocol.TransportProtocol
-import ch.ubique.heidi.proximity.verifier.ProximityVerifierState
-import ch.ubique.heidi.sample.verifier.compose.components.QrCodeImage
-import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
-import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreen
-import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerScreenCallbacks
-import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
+import org.kapunsdk.proximity.protocol.TransportProtocol
+import org.kapunsdk.proximity.verifier.ProximityVerifierState
+import org.kapunsdk.sample.verifier.compose.components.QrCodeImage
+import org.kapunsdk.sample.verifier.feature.network.ProofTemplate
+import org.kapunsdk.sample.verifier.feature.scanner.QrScannerScreen
+import org.kapunsdk.sample.verifier.feature.scanner.QrScannerScreenCallbacks
+import org.kapunsdk.sample.verifier.feature.scanner.QrScannerViewModel
 
 @Composable
 fun BluetoothScreen(
@@ -148,7 +148,7 @@ fun BluetoothScreen(
 
 			if (bluetoothState is ProximityVerifierState.VerificationResult<*>) {
 				val result = bluetoothState.result
-				if (result is ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult) {
+				if (result is org.kapunsdk.sample.verifier.data.model.VerificationDisclosureResult) {
 					Card(
 						modifier = Modifier
 							.fillMaxWidth()

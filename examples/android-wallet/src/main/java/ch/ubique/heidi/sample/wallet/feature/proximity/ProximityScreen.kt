@@ -17,10 +17,9 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet.feature.proximity
+package org.kapunsdk.sample.wallet.feature.proximity
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -39,11 +38,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import ch.ubique.heidi.proximity.wallet.ProximityWalletState
-import ch.ubique.heidi.sample.wallet.compose.components.QrCodeImage
-import ch.ubique.heidi.sample.wallet.feature.scanner.QrScannerScreen
-import ch.ubique.heidi.sample.wallet.feature.scanner.QrScannerScreenCallbacks
-import ch.ubique.heidi.sample.wallet.feature.scanner.QrScannerViewModel
+import org.kapunsdk.proximity.wallet.ProximityWalletState
+import org.kapunsdk.sample.wallet.compose.components.QrCodeImage
+import org.kapunsdk.sample.wallet.feature.scanner.QrScannerScreen
+import org.kapunsdk.sample.wallet.feature.scanner.QrScannerScreenCallbacks
+import org.kapunsdk.sample.wallet.feature.scanner.QrScannerViewModel
 
 @Composable
 fun ProximityScreen(

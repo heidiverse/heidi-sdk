@@ -27,7 +27,7 @@ plugins {
 }
 
 allprojects {
-	group = "ch.heidi-universe"
+	group = "org.kapunsdk"
 	version = getProjectVersion()
 }
 

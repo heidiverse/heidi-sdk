@@ -17,9 +17,9 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.data.dto
+package org.kapunsdk.sample.verifier.data.dto
 
-import uniffi.heidi_util_rust.Value
+import uniffi.kapun_util_rust.Value
 
 typealias VerificationDisclosureMap = Map<String, Map<String, Value>>
 

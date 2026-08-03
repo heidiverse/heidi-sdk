@@ -1,0 +1,25 @@
+[package]
+name = "kapun-issuance-rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "kapun_issuance_rust"
+
+[dependencies]
+reqwest = { features = ["cookies"], optional = true, default-features = false, workspace = true }
+uniffi = { features = ["tokio"], optional = true, workspace = true }
+base64.workspace = true
+kapun-util-rust = { path = "../../kapun-util/rust"}
+kapun-crypto-rust = { path = "../../kapun-crypto/rust"}
+serde_json.workspace = true
+serde.workspace = true
+tokio = { features = ["time"], optional = true, workspace = true }
+heidi-jwt.workspace = true
+
+
+[features]
+default = ["uniffi", "oid4vp"]
+uniffi = ["dep:uniffi", "dep:tokio"]
+oid4vp = ["dep:reqwest"]

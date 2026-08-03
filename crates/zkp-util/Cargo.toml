@@ -1,0 +1,39 @@
+[package]
+name = "zkp-util"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+ark-bls12-381 = { workspace = true }
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-secp256r1 = { workspace = true }
+ark-serialize = { workspace = true }
+ark-std = { workspace = true }
+base64 = { workspace = true }
+bbs_plus = { workspace = true }
+blake2 = { workspace = true }
+bulletproofs_plus_plus = { version = "0.8.0", default-features = false }
+chrono = { workspace = true }
+ciborium = { version = "0.2" }
+dock_crypto_utils = { workspace = true }
+equality_across_groups = { version = "0.1.0", default-features = false, features = [
+    "parallel",
+] }
+kvac = { version = "0.7.0", default-features = false }
+legogroth16 = { version = "0.16.0" }
+multibase = { workspace = true }
+num-bigint = { version = "0.4.6" }
+proof_system = "0.32.0"
+rand_core = { workspace = true }
+rdf-proofs = { git = "https://github.com/UbiqueInnovation/rdf-proofs", branch = "main" }
+rdf-util = { path = "../rdf-util" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+ecdsa_pops = { git = "https://github.com/lebedenko-ubique/ecdsa_pops.git", default-features = false }
+rok = { git = "https://github.com/lebedenko-ubique/ecdsa_pops.git", default-features = false }
+
+[features]
+default = []
+asm = ["ecdsa_pops/asm"]

@@ -17,12 +17,12 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier
+package org.kapunsdk.sample.verifier
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
-import ch.ubique.heidi.sample.verifier.feature.bluetooth.BluetoothFragment
+import org.kapunsdk.sample.verifier.feature.bluetooth.BluetoothFragment
 
 class VerifierActivity : AppCompatActivity() {
 	override fun onCreate(savedInstanceState: Bundle?) {

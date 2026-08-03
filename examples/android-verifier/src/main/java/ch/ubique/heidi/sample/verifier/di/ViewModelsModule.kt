@@ -17,11 +17,11 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.di
+package org.kapunsdk.sample.verifier.di
 
-import ch.ubique.heidi.sample.verifier.feature.bluetooth.BluetoothViewModel
-import ch.ubique.heidi.sample.verifier.feature.proximity.ProximityVerifierViewModel
-import ch.ubique.heidi.sample.verifier.feature.scanner.QrScannerViewModel
+import org.kapunsdk.sample.verifier.feature.bluetooth.BluetoothViewModel
+import org.kapunsdk.sample.verifier.feature.proximity.ProximityVerifierViewModel
+import org.kapunsdk.sample.verifier.feature.scanner.QrScannerViewModel
 import org.koin.dsl.module
 
 val viewModelsModule = module {

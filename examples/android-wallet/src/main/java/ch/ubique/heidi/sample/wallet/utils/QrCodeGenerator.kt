@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet.utils
+package org.kapunsdk.sample.wallet.utils
 
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color

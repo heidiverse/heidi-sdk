@@ -17,13 +17,13 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet
+package org.kapunsdk.sample.wallet
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.commit
-import ch.ubique.heidi.sample.wallet.feature.proximity.ProximityFragment
+import org.kapunsdk.sample.wallet.feature.proximity.ProximityFragment
 
 class MainActivity : AppCompatActivity() {
 	override fun onCreate(savedInstanceState: Bundle?) {

@@ -17,12 +17,12 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet
+package org.kapunsdk.sample.wallet
 
 import android.app.Application
-import ch.ubique.heidi.proximity.HeidiProximity
-import ch.ubique.heidi.sample.wallet.di.viewModelsModule
-import ch.ubique.heidi.wallet.HeidiSdk
+import org.kapunsdk.proximity.KapunProximity
+import org.kapunsdk.sample.wallet.di.viewModelsModule
+import org.kapunsdk.wallet.KapunSdk
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -31,8 +31,8 @@ class WalletApplication : Application() {
 	override fun onCreate() {
 		super.onCreate()
 
-		HeidiSdk(this).initialize()
-		HeidiProximity(this).initialize()
+		KapunSdk(this).initialize()
+		KapunProximity(this).initialize()
 
 		startKoin {
 			androidContext(this@WalletApplication)

@@ -19,46 +19,42 @@ under the License.
  */
 @file:OptIn(ExperimentalUuidApi::class)
 
-package ch.ubique.heidi.sample.verifier.feature.bluetooth
+package org.kapunsdk.sample.verifier.feature.bluetooth
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import ch.ubique.heidi.credentials.SdJwt
-import ch.ubique.heidi.credentials.models.credential.CredentialType
-import ch.ubique.heidi.dcql.Attribute
-import ch.ubique.heidi.dcql.AttributeType
-import ch.ubique.heidi.dcql.CheckVpTokenCallback
-import ch.ubique.heidi.dcql.DcqlPresentation
-import ch.ubique.heidi.dcql.checkDcqlPresentation
-import ch.ubique.heidi.dcql.sdJwtDcqlClaimsFromAttributes
-import ch.ubique.heidi.presentation.request.PresentationRequest
-import ch.ubique.heidi.proximity.ProximityProtocol
-import ch.ubique.heidi.proximity.documents.DocumentRequest
-import ch.ubique.heidi.proximity.documents.DocumentRequester
-import ch.ubique.heidi.proximity.protocol.TransportProtocol
-import ch.ubique.heidi.proximity.verifier.ProximityVerifier
-import ch.ubique.heidi.proximity.verifier.ProximityVerifierState
-import ch.ubique.heidi.sample.verifier.data.model.VerificationDisclosureResult
-import ch.ubique.heidi.sample.verifier.feature.network.ProofTemplate
-import ch.ubique.heidi.sample.verifier.feature.network.VerifierRepository
-import ch.ubique.heidi.util.extensions.asObject
-import io.ktor.client.plugins.ResponseException
+import org.kapunsdk.credentials.SdJwt
+import org.kapunsdk.credentials.models.credential.CredentialType
+import org.kapunsdk.Attribute
+import org.kapunsdk.AttributeType
+import org.kapunsdk.CheckVpTokenCallback
+import org.kapunsdk.DcqlPresentation
+import org.kapunsdk.checkDcqlPresentation
+import org.kapunsdk.sdJwtDcqlClaimsFromAttributes
+import org.kapunsdk.presentation.request.PresentationRequest
+import org.kapunsdk.proximity.ProximityProtocol
+import org.kapunsdk.proximity.documents.DocumentRequest
+import org.kapunsdk.proximity.documents.DocumentRequester
+import org.kapunsdk.proximity.protocol.TransportProtocol
+import org.kapunsdk.proximity.verifier.ProximityVerifier
+import org.kapunsdk.proximity.verifier.ProximityVerifierState
+import org.kapunsdk.sample.verifier.data.model.VerificationDisclosureResult
+import org.kapunsdk.sample.verifier.feature.network.ProofTemplate
+import org.kapunsdk.sample.verifier.feature.network.VerifierRepository
+import org.kapunsdk.util.extensions.asObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import org.kapunsdk.proximity.ProximityError
 import org.koin.core.component.KoinComponent
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
-import uniffi.heidi_dcql_rust.CredentialQuery
-import uniffi.heidi_dcql_rust.DcqlQuery
-import uniffi.heidi_dcql_rust.Meta
-import uniffi.heidi_util_rust.Value
-import java.security.SecureRandom
-import java.util.Base64
+import uniffi.kapun_dcql_rust.CredentialQuery
+import uniffi.kapun_dcql_rust.DcqlQuery
+import uniffi.kapun_dcql_rust.Meta
+import uniffi.kapun_util_rust.Value
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -102,8 +98,8 @@ class BluetoothViewModel(
 			transportProtocol?.disconnect()
 		}
 
-		override fun onError(error: Throwable) {
-			bluetoothLogMutable.update { it.plus(error.stackTraceToString()) }
+		override fun onError(error: ProximityError) {
+			bluetoothLogMutable.update { it.plus(error) }
 		}
 	}
 

@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet.feature.proximity
+package org.kapunsdk.sample.wallet.feature.proximity
 
 import android.Manifest
 import android.content.Intent
@@ -30,10 +30,10 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.fragment.app.Fragment
-import ch.ubique.heidi.sample.wallet.compose.theme.HeidiTheme
-import ch.ubique.heidi.sample.wallet.databinding.FragmentComposeBinding
-import ch.ubique.heidi.sample.wallet.feature.scanner.QrScannerScreenCallbacks
-import ch.ubique.heidi.sample.wallet.feature.scanner.QrScannerViewModel
+import org.kapunsdk.sample.wallet.compose.theme.HeidiTheme
+import org.kapunsdk.sample.wallet.databinding.FragmentComposeBinding
+import org.kapunsdk.sample.wallet.feature.scanner.QrScannerScreenCallbacks
+import org.kapunsdk.sample.wallet.feature.scanner.QrScannerViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import org.koin.core.component.KoinComponent
 

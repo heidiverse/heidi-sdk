@@ -19,7 +19,7 @@ under the License.
  */
 @file:OptIn(ExperimentalUuidApi::class)
 
-package ch.ubique.heidi.sample.verifier.feature.bluetooth
+package org.kapunsdk.sample.verifier.feature.bluetooth
 
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid

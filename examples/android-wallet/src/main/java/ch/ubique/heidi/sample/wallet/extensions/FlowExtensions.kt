@@ -17,7 +17,7 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.wallet.extensions
+package org.kapunsdk.sample.wallet.extensions
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow

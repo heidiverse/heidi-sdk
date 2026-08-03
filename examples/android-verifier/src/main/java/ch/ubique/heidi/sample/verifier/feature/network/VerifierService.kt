@@ -17,10 +17,10 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.   
  */
-package ch.ubique.heidi.sample.verifier.feature.network
+package org.kapunsdk.sample.verifier.feature.network
 
-import ch.ubique.heidi.sample.verifier.data.dto.VerificationDisclosureDto
-import ch.ubique.heidi.sample.verifier.data.dto.VerificationRequestDto
+import org.kapunsdk.sample.verifier.data.dto.VerificationDisclosureDto
+import org.kapunsdk.sample.verifier.data.dto.VerificationRequestDto
 import de.jensklingenberg.ktorfit.http.*
 
 interface VerifierService {
