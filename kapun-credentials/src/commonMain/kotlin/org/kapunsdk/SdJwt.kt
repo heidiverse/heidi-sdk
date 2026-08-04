@@ -22,15 +22,12 @@ package org.kapunsdk.credentials
 
 import org.kapunsdk.credentials.sdjwt.SdJwtVcMetadata
 import org.kapunsdk.credentials.sdjwt.SdJwtVcSignatureResolver
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import uniffi.kapun_crypto_rust.base64UrlEncode
-import uniffi.kapun_crypto_rust.sha256Rs
 import uniffi.kapun_credentials_rust.*
 import uniffi.kapun_util_rust.Value
 import kotlin.collections.set
 import org.kapunsdk.util.extensions.*
-import io.ktor.client.request.invoke
 import uniffi.kapun_util_rust.JsonNumber
 
 sealed interface SdJwtErrors {
