@@ -22,7 +22,7 @@ jobs:
           targets=()
           case "${{ matrix.platform }}" in
             kmp) targets+=("KotlinMultiplatform") ;;
-            android) targets+=("AndroidRelease") ;;
+            android) targets+=("Android") ;;
             ios) targets+=("IosArm64" "IosSimulatorArm64") ;;
             jvm) targets+=("Jvm") ;;
           esac

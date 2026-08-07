@@ -137,7 +137,7 @@ internal class GattServer(
 			.build()
 
 		try {
-			advertiser = bluetoothManager.adapter.bluetoothLeAdvertiser.also {
+			advertiser = bluetoothManager.adapter.bluetoothLeAdvertiser!!.also {
 				it.startAdvertising(settings, data, advertiserCallback)
 			}
 		} catch (e: Exception) {
