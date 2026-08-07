@@ -90,30 +90,30 @@ open class EaaIssuanceProcess(
         return try {
             initializeMetadata(credentialOfferString).getOrThrow()
 
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.ConnectionDetails(trustFlow.agentInformation)
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.ConnectionDetails(trustFlow.agentInformation)
         } catch (e: ApiException) {
             val info = e.asErrorState()
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
                 errorMessage = info.messageOrCode,
                 errorCode = info.code,
                 cause = info.cause
             )
         }catch (e: ClientRequestException) {
             if (e.response.status == HttpStatusCode.NotFound) {
-                _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
+                org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
                     errorMessage = "The credential offer is expired. Please regenerate it and try again.",
                     errorCode = e.response.status.value.toString(),
                     cause = e
                 )
             } else {
-                _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
+                org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
                     errorMessage = e.message,
                     errorCode = e.response.status.value.toString(),
                     cause = e
                 )
             }
         } catch (e: Exception) {
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
                 errorMessage = e.message ?: e::class.simpleName ?: "Unknown Error",
                 cause = e
             )
@@ -182,26 +182,26 @@ open class EaaIssuanceProcess(
 
                     val updatedIdentity = identityRepository.getById(identity.id)
                     if (updatedIdentity == null) {
-                        _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error("Failed to insert identity")
+                        org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error("Failed to insert identity")
                     } else {
                         val uiModel = viewModelFactory.getIdentityUiModel(updatedIdentity)
                         if (uiModel != null) {
-                            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.CredentialOffer(trustFlow.agentInformation, uiModel)
+                            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.CredentialOffer(trustFlow.agentInformation, uiModel)
                         } else {
-                            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error("Inserted identity could not be parsed")
+                            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error("Inserted identity could not be parsed")
                         }
                     }
                 } else {
-                    _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error("No credentials inserted")
+                    org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error("No credentials inserted")
                 }
             } else {
-                _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = "Not Ready")
+                org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = "Not Ready")
             }
         } catch (e: ApiException) {
             val info = e.asErrorState()
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = info.messageOrCode, errorCode = info.code, cause = info.cause)
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = info.messageOrCode, errorCode = info.code, cause = info.cause)
         } catch (e: Exception) {
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
                 errorMessage = e.message ?: e::class.simpleName ?: "Unknown Error",
                 cause = e
             )
@@ -223,7 +223,7 @@ open class EaaIssuanceProcess(
                 }
 
                 else -> {
-                    _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.CredentialOfferPreview(
+                    org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.CredentialOfferPreview(
                         trustFlow.agentInformation,
                         authType
                     )
@@ -232,9 +232,9 @@ open class EaaIssuanceProcess(
 
         } catch (e: ApiException) {
             val info = e.asErrorState()
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = info.messageOrCode, errorCode = info.code, cause = info.cause)
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = info.messageOrCode, errorCode = info.code, cause = info.cause)
         } catch (e: Exception) {
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
                 errorMessage = e.message ?: e::class.simpleName ?: "Unknown Error",
                 cause = e
             )
@@ -262,7 +262,7 @@ open class EaaIssuanceProcess(
                 }
 
                 is AuthorizationStep.EnterTransactionCode -> {
-                    _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.TransactionCode(
+                    org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.TransactionCode(
                         isNumeric = authorizationStep.numeric,
                         length = authorizationStep.length?.toInt(),
                         description = authorizationStep.description
@@ -270,7 +270,7 @@ open class EaaIssuanceProcess(
                 }
 
                 is AuthorizationStep.BrowseUrl -> {
-                    _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.PushedAuthorization(authorizationStep.url)
+                    org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.PushedAuthorization(authorizationStep.url)
                 }
 
                 is AuthorizationStep.Finished -> {
@@ -278,7 +278,7 @@ open class EaaIssuanceProcess(
                 }
 
                 is AuthorizationStep.WithPresentation -> {
-                    _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Presentation(
+                    org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Presentation(
                         authorizationStep.presentation,
                         authorizationStep.scope,
                         authorizationStep.authSession
@@ -287,9 +287,9 @@ open class EaaIssuanceProcess(
             }
         } catch (e: ApiException) {
             val info = e.asErrorState()
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = info.messageOrCode, errorCode = info.code, cause = info.cause)
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = info.messageOrCode, errorCode = info.code, cause = info.cause)
         } catch (e: Exception) {
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
                 errorMessage = e.message ?: e::class.simpleName ?: "Unknown Error",
                 cause = e
             )
@@ -312,13 +312,13 @@ open class EaaIssuanceProcess(
             if (step is AuthorizationStep.Finished) {
                 finalizeEaaIssuance(authorizationCode = step.code)
             } else {
-                _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = "Unexpected error, we did not get code after presentation")
+                org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = "Unexpected error, we did not get code after presentation")
             }
         } catch (e: ApiException) {
             val info = e.asErrorState()
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = info.messageOrCode, errorCode = info.code, cause = info.cause)
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(errorMessage = info.messageOrCode, errorCode = info.code, cause = info.cause)
         } catch (e: Exception) {
-            _root_ide_package_.org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
+            org.kapunsdk.wallet.process.issuance.eaa.EaaIssuanceProcessStep.Error(
                 errorMessage = e.message ?: e::class.simpleName ?: "Unknown Error",
                 cause = e
             )

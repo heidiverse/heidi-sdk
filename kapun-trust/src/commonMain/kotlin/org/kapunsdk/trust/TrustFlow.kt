@@ -34,7 +34,7 @@ class TrustFlow(
 	suspend fun validatePresentationRequest(
 		presentationRequest: PresentationRequest,
 	): org.kapunsdk.trust.framework.ValidationInfo {
-		return framework?.validatePresentationRequest(presentationRequest) ?: _root_ide_package_.org.kapunsdk.trust.framework.ValidationInfo(
+		return framework?.validatePresentationRequest(presentationRequest) ?: org.kapunsdk.trust.framework.ValidationInfo(
 			isValid = false,
 			errorInfo = "invalid_request"
 		)

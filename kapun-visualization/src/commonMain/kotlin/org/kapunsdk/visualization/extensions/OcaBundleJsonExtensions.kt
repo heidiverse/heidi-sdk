@@ -25,7 +25,7 @@ import org.kapunsdk.visualization.oca.model.computeBundleDigest
 import org.kapunsdk.visualization.oca.model.computeCesrEncodedDigest
 
 fun OcaBundleJson.verifyIntegrity() : Boolean {
-	val captureBaseDigest = _root_ide_package_.org.kapunsdk.visualization.oca.model.computeCesrEncodedDigest(
+	val captureBaseDigest = org.kapunsdk.visualization.oca.model.computeCesrEncodedDigest(
 		this.captureBase,
 		digest = this.captureBase.digest.first().toString()
 	)
@@ -39,7 +39,7 @@ fun OcaBundleJson.verifyIntegrity() : Boolean {
 	}
 }
 fun OcaBundleJson.calculateSaids() : OcaBundleJson {
-	val captureBaseDigest = _root_ide_package_.org.kapunsdk.visualization.oca.model.computeCesrEncodedDigest(this.captureBase)
+	val captureBaseDigest = org.kapunsdk.visualization.oca.model.computeCesrEncodedDigest(this.captureBase)
 	val newOverlays = this.overlays.map { overlay ->
 		val newOverlay = overlay.updateDigest("", captureBaseDigest)
 		val overlayDigest = computeCesrEncodedDigest(newOverlay)
@@ -49,5 +49,5 @@ fun OcaBundleJson.calculateSaids() : OcaBundleJson {
 }
 
 fun OcaBundleJson.getBundleHash(digest: String = "I") : String {
-	return _root_ide_package_.org.kapunsdk.visualization.oca.model.computeBundleDigest(this, digest)
+	return org.kapunsdk.visualization.oca.model.computeBundleDigest(this, digest)
 }

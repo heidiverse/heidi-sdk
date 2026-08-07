@@ -31,7 +31,7 @@ class ProcessRepository(
 	private val currentProcessStepMutable = MutableStateFlow<org.kapunsdk.wallet.process.ProcessStep?>(null)
 	val currentProcessStep = currentProcessStepMutable.asStateFlow()
 
-	suspend fun continueProcess(inputEvent: org.kapunsdk.wallet.process.ProcessEvent = _root_ide_package_.org.kapunsdk.wallet.process.ProcessEvent.Continue) {
+	suspend fun continueProcess(inputEvent: org.kapunsdk.wallet.process.ProcessEvent = org.kapunsdk.wallet.process.ProcessEvent.Continue) {
 		val currentStep = currentProcessStep.value
 
 		if (currentStep is org.kapunsdk.wallet.process.ProcessStep.ProcessCompleted) {
@@ -41,7 +41,7 @@ class ProcessRepository(
 		}
 
 		// Transform the current step to a loading step
-		currentProcessStepMutable.update { currentStep?.toLoading(inputEvent) ?: _root_ide_package_.org.kapunsdk.wallet.process.ProcessStep.Loading }
+		currentProcessStepMutable.update { currentStep?.toLoading(inputEvent) ?: org.kapunsdk.wallet.process.ProcessStep.Loading }
 
 		// Go through all process handlers until one of them can handle the current step and input event
 		val nextStep = processHandlers.firstNotNullOfOrNull {
@@ -51,7 +51,7 @@ class ProcessRepository(
 		return if (nextStep == null) {
 			// If no handler could handle the current step and input event, consider the process completed
 			cleanupProcesses()
-			currentProcessStepMutable.update { _root_ide_package_.org.kapunsdk.wallet.process.ProcessStep.ProcessCompleted }
+			currentProcessStepMutable.update { org.kapunsdk.wallet.process.ProcessStep.ProcessCompleted }
 		} else {
 			// In all other cases update the step and wait for the next input event
 			currentProcessStepMutable.update { nextStep }
