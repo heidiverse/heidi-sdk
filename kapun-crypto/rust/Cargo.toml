@@ -1,0 +1,40 @@
+[package]
+name = "kapun-crypto-rust"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "kapun_crypto_rust"
+
+[dependencies]
+uniffi.workspace = true
+base64.workspace = true
+ciborium.workspace = true
+heidi-jwt.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+p256 = { features = ["ecdsa", "jwk", "ecdh"], workspace = true }
+p384 = { features = ["ecdsa", "jwk", "ecdh"], workspace = true }
+p521 = { version = "0.13.3",  features = ["ecdsa", "jwk", "ecdh"] }
+x25519-dalek = "2.0.1"
+x448 = { version = "0.6.0", optional = true}
+kapun-x509.workspace = true
+oid-registry = "0.7.0"
+simple_x509 = { version = "1.1.0", optional = true }
+blake3 = "1.8.1"
+kapun-util-rust = { path = "../../kapun-util/rust" }
+hkdf = "0.12.4"
+aes-gcm = "0.10.3"
+
+ed25519-dalek = "2.2.0"
+multibase = { workspace = true }
+unsigned-varint = "0.8.0"
+
+[features]
+default = ["uniffi"]
+uniffi = []
+x448 = ["dep:x448"]
+cert-builder = ["simple_x509"]

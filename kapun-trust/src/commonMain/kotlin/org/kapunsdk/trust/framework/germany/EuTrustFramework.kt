@@ -1,0 +1,302 @@
+/* Copyright 2025 Ubique Innovation AG
+
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+ */
+
+package org.kapunsdk.trust.framework.germany
+
+import org.kapunsdk.credentials.SdJwt
+import org.kapunsdk.credentials.models.credential.CredentialModel
+import org.kapunsdk.disallowedClaims
+import org.kapunsdk.isSubset
+import org.kapunsdk.issuance.metadata.data.CredentialIssuerMetadata
+import org.kapunsdk.presentation.request.PresentationRequest
+import org.kapunsdk.trust.di.KapunTrustKoinComponent
+import org.kapunsdk.trust.framework.ValidationInfo
+import org.kapunsdk.trust.framework.oid4vp.IdentitySigner
+import org.kapunsdk.trust.framework.oid4vp.getString
+import org.kapunsdk.trust.model.AgentInformation
+import org.kapunsdk.trust.model.AgentType
+import org.kapunsdk.trust.revocation.RevocationCheck
+import org.kapunsdk.util.extensions.asString
+import org.kapunsdk.util.extensions.get
+import org.kapunsdk.util.extensions.transform
+import io.ktor.http.Url
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.koin.core.component.inject
+import uniffi.kapun_crypto_rust.SanType
+import uniffi.kapun_crypto_rust.base64UrlEncode
+import uniffi.kapun_crypto_rust.getX509FromJwt
+import uniffi.kapun_crypto_rust.validateJwtWithPubKey
+import uniffi.kapun_dcql_rust.ClaimsQuery
+import uniffi.kapun_dcql_rust.CredentialQuery
+import uniffi.kapun_dcql_rust.DcqlQuery
+import uniffi.kapun_dcql_rust.Meta
+import uniffi.kapun_crypto_rust.parseEncodedJwtPayload
+import uniffi.kapun_crypto_rust.sha256Rs
+import uniffi.kapun_util_rust.Value
+
+const val EU_TRUST_FRAMEWORK_ID : String = "eudi_basic_trust"
+
+class EuTrustFramework(private val documentProvider: org.kapunsdk.trust.framework.DocumentProvider, private val trustedDomains: List<String>, val trustAnchorProvider: org.kapunsdk.trust.framework.X509TrustAnchorProvider = _root_ide_package_.org.kapunsdk.trust.framework.oid4vp.StaticX509TrustAnchorProvider()) : org.kapunsdk.trust.framework.TrustFramework, KapunTrustKoinComponent {
+    override val frameworkId: String = _root_ide_package_.org.kapunsdk.trust.framework.germany.EU_TRUST_FRAMEWORK_ID
+    val revocationCheck: RevocationCheck = RevocationCheck()
+    val json : Json by inject<Json>()
+    init {
+        // Add German-Registrar trust anchor
+        trustAnchorProvider.addCertificate("MIIBdTCCARugAwIBAgIUHsSmbGuWAVZVXjqoidqAVClGx4YwCgYIKoZIzj0EAwIwGzEZMBcGA1UEAwwQR2VybWFuIFJlZ2lzdHJhcjAeFw0yNTAzMzAxOTU4NTFaFw0yNjAzMzAxOTU4NTFaMBsxGTAXBgNVBAMMEEdlcm1hbiBSZWdpc3RyYXIwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASQWCESFd0Ywm9sK87XxqxDP4wOAadEKgcZFVX7npe3ALFkbjsXYZJsTGhVp0+B5ZtUao2NsyzJCKznPwTz2wJcoz0wOzAaBgNVHREEEzARgg9mdW5rZS13YWxsZXQuZGUwHQYDVR0OBBYEFMxnKLkGifbTKrxbGXcFXK6RFQd3MAoGCCqGSM49BAMCA0gAMEUCIQD4RiLJeuVDrEHSvkPiPfBvMxAXRC6PuExopUGCFdfNLQIgHGSa5u5ZqUtCrnMiaEageO71rjzBlov0YUH4+6ELioY=")
+        trustAnchorProvider.addCertificate("MIICLzCCAdSgAwIBAgIUHyRjE466YA7tc888k03Ou2QodF4wCgYIKoZIzj0EAwIwKDELMAkGA1UEBhMCREUxGTAXBgNVBAMMEEdlcm1hbiBSZWdpc3RyYXIwHhcNMjYwMTE2MTExNTU0WhcNMjgwMTE2MTExNTU0WjAoMQswCQYDVQQGEwJERTEZMBcGA1UEAwwQR2VybWFuIFJlZ2lzdHJhcjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABMefY2X4ixfRkWEvp9grF2i21z6PKZsr8zzBaJ/+GnotCeH2cJ6GtLhxXhHfJjrETsMNIGhVaJoHoHcZTBHJrfyjgdswgdgwHQYDVR0OBBYEFKnCo9ovbaxU7s65TugsySwAg4AzMB8GA1UdIwQYMBaAFKnCo9ovbaxU7s65TugsySwAg4AzMBIGA1UdEwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/BAQDAgEGMCoGA1UdEgQjMCGGH2h0dHBzOi8vc2FuZGJveC5ldWRpLXdhbGxldC5vcmcwRgYDVR0fBD8wPTA7oDmgN4Y1GHRUcHM6Ly9zYW5kYm94LmV1ZGktd2FsbGV0Lm9yZy9zdGF0dXMtbWFuYWdlbWVudC9jcmwwCgYIKoZIzj0EAwIDSQAwRgIhAIY7ERpRrDRl0lr5H5uxjJ83JR4qua2sfPKxX+pl4Qw+AiEA2qL6LXVORA2r2VZjSEknfciwIG7laA12kjnyGAD3V/A=")
+    }
+
+    override suspend fun getIssuerInformation(
+        baseUrl: String,
+        credentialConfigurationIds: List<String>,
+        credentialIssuerMetadata: CredentialIssuerMetadata
+    ): AgentInformation? {
+        val host = runCatching { Url(baseUrl).host }.getOrDefault(baseUrl)
+        val isTrusted = when (credentialIssuerMetadata) {
+            is CredentialIssuerMetadata.Signed -> isMetadataSignatureTrustedX509(
+                credentialIssuerMetadata.originalJwt,
+                trustAnchorProvider
+            )
+            is CredentialIssuerMetadata.Unsigned -> trustedDomains.contains(host)
+        }
+        if(!isTrusted) {
+            return null
+        }
+        val displayName = credentialIssuerMetadata.claims.display?.firstOrNull()?.name ?: baseUrl
+        val displayLogo = credentialIssuerMetadata.claims.display?.firstOrNull()?.logo?.uri
+        val mutableMap = mutableMapOf<String, Value>()
+        mutableMap.apply {
+            put("entityName", Value.Object(mapOf(
+                "de" to Value.String(displayName)
+            )))
+            displayLogo?.let {
+                put("logoUri", Value.Object(mapOf(
+                    "de" to Value.String(it)
+                )))
+            }
+        }
+        val identityJwt = SdJwt.create(
+            Value.Object(
+                mutableMap
+            ),
+            listOf(), "<unsigned>",
+            key = IdentitySigner(),
+            pubKeyJwk = null,
+        )
+        return AgentInformation(
+            type = AgentType.ISSUER,
+            domain = host,
+            displayName = displayName,
+            logoUri = displayLogo,
+            isTrusted = isTrusted,
+            isVerified = true,
+            identityTrust = identityJwt?.innerJwt?.originalSdjwt,
+            trustFrameworkId = this.frameworkId,)
+    }
+
+    override suspend fun getVerifierInformation(
+        requestUri: String,
+        presentationRequest: PresentationRequest,
+        originalRequest: String?
+    ): AgentInformation? {
+        val certs = getX509FromJwt(originalRequest!!)
+        val isChainValid = certs?.let { trustAnchorProvider.verifyChain(it)  } ?: false
+        val isSigned = certs?.getOrNull(0)?.publicKey?.let {
+            validateJwtWithPubKey(originalRequest, it)
+        } ?: false
+        val isTrusted = isSigned and isChainValid
+        val san = if (presentationRequest.clientId.startsWith("x509_san_uri")){
+            SanType.Uri(presentationRequest.clientId.replace("x509_san_uri:", ""))
+        } else if (presentationRequest.clientId.startsWith("x509_san_dns"))  {
+            SanType.Dns(presentationRequest.clientId.replace("x509_san_dns:", ""))
+        } else {
+            null
+        }
+        val isValid = if (san == null) {
+            // check if we have x509_hash
+            if(presentationRequest.clientId.startsWith("x509_hash")) {
+                val clientIdHash = presentationRequest.clientId
+                    .replace("x509_hash:", "")
+                    // remove potential padding characters
+                    .trim { it == '='}
+                certs?.getOrNull(0)?.let {
+                    base64UrlEncode(sha256Rs(it.originalCert)) == clientIdHash
+                } ?: false
+            } else {
+                false
+            }
+        } else {
+            certs?.getOrNull(0)?.san?.contains(san)?:false
+        }
+
+        val baseUrl = certs?.getOrNull(0)?.subject ?: requestUri
+
+        val mutableMap = mutableMapOf<String, Value>()
+
+        mutableMap.apply {
+            put(
+                "entityName", Value.Object(
+                    mapOf(
+                        "de" to Value.String(presentationRequest.clientMetadata?.clientName ?: san?.getString() ?: "<UNKNOWN>")
+                    )
+                ),
+            )
+            presentationRequest.clientMetadata?.logoUri?.let {
+                put(
+                    "logoUri", Value.Object(
+                        mapOf(
+                            "de" to Value.String(it)
+                        )
+                    ),
+                )
+            }
+        }
+        val verifierAttestations = presentationRequest.verifierAttestations ?: return null
+        val trustedStatements = mutableListOf<JsonElement>()
+        for(attestation in verifierAttestations) {
+            val att = attestation["data"].asString() ?: continue
+            val attestationCerts = getX509FromJwt(att) ?: continue
+            if(attestationCerts.isEmpty()) {
+                continue
+            }
+            val isTrusted = trustAnchorProvider.isTrusted(attestationCerts)
+            if(!isTrusted) {
+                continue
+            }
+            val verifiedJwt = validateJwtWithPubKey(att, attestationCerts[0].publicKey)
+            if(!verifiedJwt) {
+                continue
+            }
+            val jwtPayloadString = parseEncodedJwtPayload(att) ?: continue
+            val jwtPayload = runCatching { json.parseToJsonElement(jwtPayloadString) }.getOrNull() ?: continue
+            val subject = kotlin.runCatching {   jwtPayload.jsonObject["sub"]?.jsonPrimitive?.content }.getOrNull()?: continue
+            val prSubject = certs?.getOrNull(0)?.subject ?: continue
+            if(subject != prSubject) {
+                continue
+            }
+            val statusListUri = kotlin.runCatching { jwtPayload.jsonObject["status"]?.jsonObject?.get("status_list")?.jsonObject?.get("uri")?.jsonPrimitive?.content }.getOrNull() ?: continue
+            val statusListIndex = kotlin.runCatching { jwtPayload.jsonObject["status"]?.jsonObject?.get("status_list")?.jsonObject?.get("idx")?.jsonPrimitive?.int }.getOrNull() ?: continue
+            val isRevoked = revocationCheck.check(statusListUri, statusListIndex)
+            if(isRevoked) {
+                continue
+            }
+            trustedStatements.add(jwtPayload)
+        }
+        if(trustedStatements.isEmpty()) {
+            return null
+        }
+
+        val identityJwt = SdJwt.create(
+            Value.Object(
+                mutableMap
+            ),
+            listOf(), "<unsigned>",
+            key = IdentitySigner(),
+            pubKeyJwk = null,
+        )
+        return AgentInformation(
+            type = AgentType.VERIFIER,
+            domain = baseUrl,
+            displayName = presentationRequest.clientMetadata?.clientName ?: san?.getString() ?: "<UNKNOWN>",
+            logoUri = presentationRequest.clientMetadata?.logoUri,
+            isTrusted = isTrusted,
+            isVerified = isValid,
+            identityTrust = identityJwt?.innerJwt?.originalSdjwt,
+            trustFrameworkId = this.frameworkId,
+        )
+    }
+
+    override suspend fun validatePresentationRequest(presentationRequest: PresentationRequest): ValidationInfo {
+        // Ignore dif pex, only validate dcql
+        if(presentationRequest.dcqlQuery == null && presentationRequest.presentationDefinition != null) {
+            return ValidationInfo(isValid = true)
+        } else if (presentationRequest.dcqlQuery == null && presentationRequest.presentationDefinition == null) {
+            return ValidationInfo(isValid = false, errorInfo = "invalid_request")
+        }
+        val verifierAttestations = presentationRequest.verifierAttestations ?: return ValidationInfo(isValid =  false, errorInfo = "no_attestations")
+        val overaskingFields = mutableListOf<ClaimsQuery>()
+        for(attestation in verifierAttestations) {
+            val att = attestation["data"].asString() ?: continue
+            val jwtPayloadString = parseEncodedJwtPayload(att) ?: continue
+            val jwtPayload = runCatching { json.decodeFromString<Value>(jwtPayloadString) }.getOrNull() ?: continue
+
+            val dcqlRegister = DcqlQuery(createIdForCredential(jwtPayload["credentials"].transform() ?: emptyList()), jwtPayload["credential_sets"].transform())
+            if(presentationRequest.dcqlQuery?.isSubset(dcqlRegister) == true) {
+                return ValidationInfo(isValid = true)
+            }
+            overaskingFields.addAll(presentationRequest.dcqlQuery?.disallowedClaims(dcqlRegister)?: emptyList())
+        }
+        return ValidationInfo(isValid = false, disallowedProperties = overaskingFields, errorInfo = "overasking")
+    }
+
+    override suspend fun getAllowedDocuments(
+        presentationRequest: PresentationRequest,
+        includeUsedCredentials: Boolean
+    ): List<CredentialModel> {
+        val verifierAttestations = presentationRequest.verifierAttestations ?: return emptyList()
+        val credentials = mutableListOf<CredentialModel>()
+        for(attestation in verifierAttestations) {
+            val att = attestation["data"].asString() ?: continue
+            val jwtPayloadString = parseEncodedJwtPayload(att) ?: continue
+            val jwtPayload = runCatching { json.decodeFromString<Value>(jwtPayloadString) }.getOrNull() ?: continue
+
+            val dcqlRegister = DcqlQuery(createIdForCredential(jwtPayload["credentials"].transform() ?: emptyList()), jwtPayload["credential_sets"].transform())
+            for(cq in dcqlRegister.credentials ?: emptyList()) {
+                when(cq.meta) {
+                    is Meta.SdjwtVc -> {
+                        for(vct in (cq.meta as Meta.SdjwtVc).vctValues) {
+                            credentials += documentProvider.getCredentialsByDocType(vct, includeUsedCredentials)
+                        }
+                    }
+                    is Meta.IsoMdoc -> {
+                        credentials += documentProvider.getCredentialsByDocType((cq.meta as Meta.IsoMdoc).doctypeValue, includeUsedCredentials)
+                    }
+                    else -> {}
+                }
+            }
+        }
+        return credentials
+    }
+}
+
+fun createIdForCredential(cq: List<Value>): List<CredentialQuery> {
+    val queries = mutableListOf<CredentialQuery>()
+    var index = 0
+    for(v in cq) {
+        queries.add(
+            CredentialQuery(
+                id = "$index",
+                format = v["format"].transform() ?: continue,
+                multiple = v["multiple"].transform(),
+                meta = v["meta"].transform(),
+                trustedAuthorities = v["trusted_authorities"].transform(),
+                requireCryptographicHolderBinding = v["require_cryptographic_holder_binding"].transform(),
+                claims = v["claims"].transform(),
+                claimSets = v["claim_sets"].transform()
+            )
+        )
+        index += 1
+    }
+    return queries
+}

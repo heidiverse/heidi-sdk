@@ -1,0 +1,35 @@
+[package]
+name = "kapun-x509"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+x509-parser = { version = "0.16.0", features = ["validate"] }
+oid-registry = "0.7.0"
+ureq = { workspace = true, optional = true }
+whitespace-sifter = "2.3.7"
+tracing = "^0.1"
+josekit = { git = "https://github.com/heidiverse/josekit-rs.git", default-features = false, features = [
+    "rustcrypto"
+] }
+rsa = { version = "0.10.0-rc.9", features = [
+    "pkcs5",
+    "sha2",
+    "sha1",
+] }
+sha1 = "0.11.0"
+
+
+
+
+[features]
+default = ["crl", "pqc"]
+uniffi = []
+crl = ["dep:ureq"]
+pqc = ["josekit/pqc"]
+
+[dev-dependencies]
+flate2 = "1.1.9"
+tar = "0.4.45"
+pem = "3.0.6"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

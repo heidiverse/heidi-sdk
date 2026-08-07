@@ -1,0 +1,22 @@
+[package]
+name = "kapun-x509-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+kapun-x509 = {path = "../kapun-x509"}
+oid-registry = "0.7.0"
+clap = { version = "4.6.1", features = ["derive"] }
+pem = "3.0.6"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+josekit = { git = "https://github.com/heidiverse/josekit-rs.git", default-features = false, features = [
+    "rustcrypto",
+] }
+serde_json.workspace = true
+rsa = { version = "0.10.0-rc.9", features = [
+    "pkcs5",
+    "sha2",
+    "sha1",
+] }
+sha1 = "0.11.0"
+base64 = "0.22.1"

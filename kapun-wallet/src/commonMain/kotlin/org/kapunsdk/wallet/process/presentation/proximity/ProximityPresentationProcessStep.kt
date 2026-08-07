@@ -1,0 +1,69 @@
+/* Copyright 2025 Ubique Innovation AG
+
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+ */
+
+package org.kapunsdk.wallet.process.presentation.proximity
+
+import org.kapunsdk.trust.framework.ValidationInfo
+import org.kapunsdk.trust.model.AgentInformation
+import org.kapunsdk.wallet.credentials.presentation.CredentialSelectionUiModel
+import org.kapunsdk.wallet.credentials.presentation.PresentationUiModel
+import org.kapunsdk.wallet.process.ProcessStep
+import org.kapunsdk.wallet.process.legacy.presentation.PresentationError
+import org.kapunsdk.wallet.process.presentation.PresentationStep
+
+sealed interface ProximityPresentationProcessStep : ProcessStep {
+
+	data class Error(
+		val errorMessage: String,
+		val errorCode: String? = null,
+		val cause: Exception? = null,
+		val retry: (() -> Unit)? = null,
+	) : ProximityPresentationProcessStep
+
+	data class QrCodeEngagementReady(val engagementData: String) : ProximityPresentationProcessStep
+
+	data object PeerConnecting : ProximityPresentationProcessStep
+	data object PeerConnected: ProximityPresentationProcessStep
+
+	data class CredentialSelection(
+		override val presentationModel: PresentationUiModel,
+		override val agentInformation: AgentInformation,
+		override val validationInfo: ValidationInfo? = null
+	) : ProximityPresentationProcessStep, PresentationStep.CredentialSelection
+
+	data class EnterPin(
+		val viewModel: Map.Entry<String, CredentialSelectionUiModel>,
+		val credentialsWithPin: MutableList<Map.Entry<String, CredentialSelectionUiModel>>,
+		val credentialsWithFrost: MutableList<Map.Entry<String, CredentialSelectionUiModel>>,
+		val needsBiometry: Boolean = false,
+		val error: PresentationError? = null,
+	) : ProximityPresentationProcessStep
+
+	data class EnterPassphrase(
+		val viewModel: Map.Entry<String, CredentialSelectionUiModel>,
+		val credentialsWithFrost: MutableList<Map.Entry<String, CredentialSelectionUiModel>>,
+		val error: PresentationError? = null,
+	) : ProximityPresentationProcessStep
+
+	data class Success(
+		val token: ByteArray
+	) : ProximityPresentationProcessStep
+
+}

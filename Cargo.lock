@@ -3833,98 +3833,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "heidi-credentials-rust"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ark-serialize",
- "base64 0.22.1",
- "chrono",
- "ciborium",
- "curve25519-dalek 4.1.2",
- "heidi-crypto-rust",
- "heidi-util-rust",
- "iref",
- "json-ld",
- "json-syntax",
- "mime",
- "multibase",
- "next-gen-signatures",
- "num-bigint 0.4.8",
- "openssl-sys",
- "p256 0.13.2",
- "png 0.18.1",
- "rand 0.8.7",
- "rand_core 0.6.4",
- "rdf-util",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "static-iref",
- "tokio",
- "uniffi",
- "zkp-util",
-]
-
-[[package]]
-name = "heidi-crypto-rust"
-version = "0.1.0"
-dependencies = [
- "aes-gcm 0.10.3",
- "base64 0.22.1",
- "blake3",
- "ciborium",
- "ed25519-dalek 2.2.0",
- "heidi-jwt",
- "heidi-util-rust",
- "heidi-x509",
- "hkdf 0.12.4",
- "multibase",
- "oid-registry",
- "p256 0.13.2",
- "p384",
- "p521",
- "rand 0.8.7",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "simple_x509",
- "uniffi",
- "unsigned-varint",
- "x25519-dalek 2.0.1",
- "x448",
-]
-
-[[package]]
-name = "heidi-dcql-rust"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "heidi-credentials-rust",
- "heidi-util-rust",
- "jlc",
- "serde",
- "serde_json",
- "uniffi",
-]
-
-[[package]]
-name = "heidi-issuance-rust"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "heidi-crypto-rust",
- "heidi-jwt",
- "heidi-util-rust",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "tokio",
- "uniffi",
-]
-
-[[package]]
 name = "heidi-jwt"
 version = "0.1.2"
 source = "git+https://github.com/heidiverse/heidi-jwt?tag=v0.2.0#c774bd7c78f2c3dfc5518933daeed6532e1601b3"
@@ -3937,130 +3845,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
-]
-
-[[package]]
-name = "heidi-pdf-rust"
-version = "0.1.0"
-dependencies = [
- "fontdb 0.16.2",
- "tar",
- "time",
- "ttf-parser 0.25.1",
- "typst",
- "typst-assets",
- "typst-pdf",
- "uniffi",
- "ureq 3.3.0",
- "zune-inflate",
-]
-
-[[package]]
-name = "heidi-presentation-rust"
-version = "0.1.0"
-dependencies = [
- "uniffi",
-]
-
-[[package]]
-name = "heidi-trust-rust"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "heidi-jwt",
- "josekit",
- "openidconnect-federation",
- "reqwest 0.11.27",
- "serde_json",
- "uniffi",
-]
-
-[[package]]
-name = "heidi-util-rust"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "ciborium",
- "flate2",
- "jlc",
- "libc",
- "openidconnect-federation",
- "p256 0.13.2",
- "rand 0.8.7",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "uniffi",
-]
-
-[[package]]
-name = "heidi-wallet-rust"
-version = "0.1.0"
-dependencies = [
- "aes-gcm 0.10.3",
- "anyhow",
- "ark-secp256r1",
- "ark-serialize",
- "async-trait",
- "base64 0.22.1",
- "bip39-dict",
- "bs58 0.5.1",
- "chrono",
- "ciborium",
- "console_error_panic_hook",
- "crunchy",
- "did-key",
- "ed25519-dalek 2.2.0",
- "elliptic-curve 0.13.8",
- "frost-ed25519",
- "heidi-credentials-rust",
- "heidi-jwt",
- "heidi-util-rust",
- "heidi-x509",
- "hex",
- "hkdf 0.12.4",
- "http 0.2.12",
- "is_empty",
- "josekit",
- "jsonpath_lib",
- "jsonschema",
- "lazy_static",
- "libc",
- "lipsum",
- "monostate",
- "next-gen-signatures",
- "open",
- "openidconnect-federation",
- "p256 0.13.2",
- "p384",
- "rand 0.8.7",
- "rand_core 0.6.4",
- "rand_distr",
- "rdf-util",
- "regex",
- "reqwest 0.11.27",
- "reqwest-middleware 0.2.5",
- "reqwest-retry",
- "reqwest_cookie_store",
- "sdjwt",
- "secret_sharing_and_dkg 0.13.0",
- "security-framework 2.10.0",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "serde_with_macros 3.21.0",
- "sha2 0.10.9",
- "task-local-extensions",
- "tokio",
- "uniffi",
- "uuid",
- "wasm-bindgen",
- "web-time",
- "webpki-roots 0.26.11",
- "wiremock",
- "x509-parser",
- "zeroize",
 ]
 
 [[package]]
@@ -5263,6 +5047,256 @@ dependencies = [
 ]
 
 [[package]]
+name = "kapun-credentials-rust"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ark-serialize",
+ "base64 0.22.1",
+ "chrono",
+ "ciborium",
+ "curve25519-dalek 4.1.2",
+ "iref",
+ "json-ld",
+ "json-syntax",
+ "kapun-crypto-rust",
+ "kapun-util-rust",
+ "mime",
+ "multibase",
+ "next-gen-signatures",
+ "num-bigint 0.4.8",
+ "openssl-sys",
+ "p256 0.13.2",
+ "png 0.18.1",
+ "rand 0.8.7",
+ "rand_core 0.6.4",
+ "rdf-util 0.1.0",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "static-iref",
+ "tokio",
+ "uniffi",
+ "zkp-util 0.1.0",
+]
+
+[[package]]
+name = "kapun-crypto-rust"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm 0.10.3",
+ "base64 0.22.1",
+ "blake3",
+ "ciborium",
+ "ed25519-dalek 2.2.0",
+ "heidi-jwt",
+ "hkdf 0.12.4",
+ "kapun-util-rust",
+ "kapun-x509",
+ "multibase",
+ "oid-registry",
+ "p256 0.13.2",
+ "p384",
+ "p521",
+ "rand 0.8.7",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "simple_x509",
+ "uniffi",
+ "unsigned-varint",
+ "x25519-dalek 2.0.1",
+ "x448",
+]
+
+[[package]]
+name = "kapun-dcql-rust"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "jlc",
+ "kapun-credentials-rust",
+ "kapun-util-rust",
+ "serde",
+ "serde_json",
+ "uniffi",
+]
+
+[[package]]
+name = "kapun-issuance-rust"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "heidi-jwt",
+ "kapun-crypto-rust",
+ "kapun-util-rust",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uniffi",
+]
+
+[[package]]
+name = "kapun-pdf-rust"
+version = "0.1.0"
+dependencies = [
+ "fontdb 0.16.2",
+ "tar",
+ "time",
+ "ttf-parser 0.25.1",
+ "typst",
+ "typst-assets",
+ "typst-pdf",
+ "uniffi",
+ "ureq 3.3.0",
+ "zune-inflate",
+]
+
+[[package]]
+name = "kapun-presentation-rust"
+version = "0.1.0"
+dependencies = [
+ "uniffi",
+]
+
+[[package]]
+name = "kapun-trust-rust"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "heidi-jwt",
+ "josekit",
+ "openidconnect-federation",
+ "reqwest 0.11.27",
+ "serde_json",
+ "uniffi",
+]
+
+[[package]]
+name = "kapun-util-rust"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "ciborium",
+ "flate2",
+ "jlc",
+ "libc",
+ "openidconnect-federation",
+ "p256 0.13.2",
+ "rand 0.8.7",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "uniffi",
+]
+
+[[package]]
+name = "kapun-wallet-rust"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm 0.10.3",
+ "anyhow",
+ "ark-secp256r1",
+ "ark-serialize",
+ "async-trait",
+ "base64 0.22.1",
+ "bip39-dict",
+ "bs58 0.5.1",
+ "chrono",
+ "ciborium",
+ "console_error_panic_hook",
+ "crunchy",
+ "did-key",
+ "ed25519-dalek 2.2.0",
+ "elliptic-curve 0.13.8",
+ "frost-ed25519",
+ "heidi-jwt",
+ "hex",
+ "hkdf 0.12.4",
+ "http 0.2.12",
+ "is_empty",
+ "josekit",
+ "jsonpath_lib",
+ "jsonschema",
+ "kapun-credentials-rust",
+ "kapun-util-rust",
+ "kapun-x509",
+ "lazy_static",
+ "libc",
+ "lipsum",
+ "monostate",
+ "next-gen-signatures",
+ "open",
+ "openidconnect-federation",
+ "p256 0.13.2",
+ "p384",
+ "rand 0.8.7",
+ "rand_core 0.6.4",
+ "rand_distr",
+ "rdf-util 0.1.0",
+ "regex",
+ "reqwest 0.11.27",
+ "reqwest-middleware 0.2.5",
+ "reqwest-retry",
+ "reqwest_cookie_store",
+ "sdjwt",
+ "secret_sharing_and_dkg 0.13.0",
+ "security-framework 2.10.0",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_with_macros 3.21.0",
+ "sha2 0.10.9",
+ "task-local-extensions",
+ "tokio",
+ "uniffi",
+ "uuid",
+ "wasm-bindgen",
+ "web-time",
+ "webpki-roots 0.26.11",
+ "wiremock",
+ "x509-parser",
+ "zeroize",
+]
+
+[[package]]
+name = "kapun-x509"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "josekit",
+ "oid-registry",
+ "pem",
+ "rsa 0.10.0-rc.18",
+ "sha1",
+ "tar",
+ "tracing",
+ "tracing-subscriber 0.3.23",
+ "ureq 3.3.0",
+ "whitespace-sifter",
+ "x509-parser",
+]
+
+[[package]]
+name = "kapun-x509-cli"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "josekit",
+ "kapun-x509",
+ "oid-registry",
+ "pem",
+ "rsa 0.10.0-rc.18",
+ "serde_json",
+ "sha1",
+ "tracing-subscriber 0.3.23",
+]
+
+[[package]]
 name = "keccak"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6032,13 +6066,13 @@ dependencies = [
  "openssl",
  "paste",
  "rand_core 0.6.4",
- "rdf-util",
+ "rdf-util 0.1.0 (git+https://github.com/heidiverse/zk-bridge-services.git)",
  "rocket",
  "schnorr_pok 0.20.0",
  "serde",
  "serde_json",
  "static-iref",
- "zkp-util",
+ "zkp-util 0.1.0 (git+https://github.com/heidiverse/zk-bridge-services.git)",
 ]
 
 [[package]]
@@ -7491,6 +7525,18 @@ dependencies = [
  "slab",
  "static-iref",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "rdf-util"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oxrdf",
+ "oxttl",
+ "rdf-canon",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -11784,6 +11830,39 @@ dependencies = [
 [[package]]
 name = "zkp-util"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-secp256r1",
+ "ark-serialize",
+ "ark-std",
+ "base64 0.22.1",
+ "bbs_plus 0.24.0",
+ "blake2",
+ "bulletproofs_plus_plus 0.8.0",
+ "chrono",
+ "ciborium",
+ "dock_crypto_utils 0.22.0",
+ "ecdsa_pops",
+ "equality_across_groups 0.1.0",
+ "kvac 0.7.0",
+ "legogroth16",
+ "multibase",
+ "num-bigint 0.4.8",
+ "proof_system",
+ "rand_core 0.6.4",
+ "rdf-proofs",
+ "rdf-util 0.1.0",
+ "rok",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "zkp-util"
+version = "0.1.0"
 source = "git+https://github.com/heidiverse/zk-bridge-services.git#8a0b2cb9850885e2b023764687f5eaae1527efd1"
 dependencies = [
  "anyhow",
@@ -11809,7 +11888,7 @@ dependencies = [
  "proof_system",
  "rand_core 0.6.4",
  "rdf-proofs",
- "rdf-util",
+ "rdf-util 0.1.0 (git+https://github.com/heidiverse/zk-bridge-services.git)",
  "rok",
  "serde",
  "serde_json",

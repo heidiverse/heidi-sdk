@@ -1,0 +1,62 @@
+/* Copyright 2024 Ubique Innovation AG
+
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.   
+ */
+package org.kapunsdk.proximity.documents
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class DcRequests(val requests : List<DcRequest>) {
+	@Serializable
+	data class DcRequest(val protocol: String, val data : DcData) {
+		@Serializable
+		data class DcData(val request : String)
+	}
+}
+
+sealed interface DocumentRequest {
+
+	data class OpenId4Vp(
+		// TODO For now we just send the entire JWT we receive from the /par endpoint. In the end we want to send the presentation definition and verifier trust statements
+		val parJwt: String,
+		val origin: String? = null
+//		val presentationDefinition: String,
+	) : DocumentRequest {
+		fun asDcRequest() : DcRequests {
+			// The PAR request is a signed jwt, so we use the v1-signed protocol
+			// https://openid.net/specs/openid-4-verifiable-presentations-1_0.html#appendix-A.1-4.2
+			val dcRequests = DcRequests(listOf(DcRequests.DcRequest(protocol = "openid4vp-v1-signed", data = DcRequests.DcRequest.DcData(parJwt))))
+			return dcRequests
+		}
+	}
+	data class Mdl (
+			val documents: List<MdlDocument>
+			) : DocumentRequest
+
+	data class MdlDocument(
+		val documentType: String,
+		val requestedDocumentItems: List<MdlDocumentItem>
+	)
+
+	data class MdlDocumentItem(
+		val namespace: String,
+		val elementIdentifier: String,
+		val optional: Boolean
+	)
+}

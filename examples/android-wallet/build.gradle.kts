@@ -10,13 +10,13 @@ kotlin {
 }
 
 android {
-	namespace = "ch.ubique.heidi.sample.wallet"
+	namespace = "org.kapunsdk.sample.wallet"
 	compileSdk = libs.versions.android.compileSdk.get().toInt()
 
 	ndkVersion = libs.versions.android.ndk.get()
 
 	defaultConfig {
-		applicationId = "ch.ubique.heidi.sample.wallet"
+		applicationId = "org.kapunsdk.sample.wallet"
 		minSdk = libs.versions.android.minSdk.get().toInt()
 		targetSdk = libs.versions.android.targetSdk.get().toInt()
 		versionCode = 1
@@ -42,9 +42,6 @@ android {
 	packaging {
 		resources {
 			excludes += listOf(
-//				"/META-INF/{AL2.0,LGPL2.1}",
-//				"META-INF/DEPENDENCIES",
-//				"META-INF/INDEX.LIST",
 				"META-INF/versions/9/OSGI-INF/MANIFEST.MF",
 			)
 		}
@@ -52,9 +49,9 @@ android {
 }
 
 dependencies {
-	implementation(project(":heidi-wallet"))
-	implementation(project(":heidi-proximity"))
-	implementation(project(":heidi-crypto"))
+	implementation(project(":kapun-wallet"))
+	implementation(project(":kapun-proximity"))
+	implementation(project(":kapun-crypto"))
 
 	implementation(libs.androidx.coreKtx)
 	implementation(libs.androidx.appcompat)

@@ -1,18 +1,22 @@
 [workspace]
 resolver = "3"
 members = [
-    "heidi-credentials/rust",
-    "heidi-crypto/rust",
-    "heidi-dcql/rust",
-    "heidi-issuance/rust",
-    "heidi-presentation/rust",
-    "heidi-trust/rust",
-    "heidi-util/rust",
-    "heidi-wallet/rust",
-    "heidi-pdf/rust",
+    "kapun-credentials/rust",
+    "kapun-crypto/rust",
+    "kapun-dcql/rust",
+    "kapun-issuance/rust",
+    "kapun-presentation/rust",
+    "kapun-trust/rust",
+    "kapun-util/rust",
+    "kapun-wallet/rust",
+    "kapun-pdf/rust",
+    "crates/zkp-util",
+    "crates/rdf-util",
+    "crates/kapun-x509/kapun-x509",
+     "crates/kapun-x509/kapun-x509-cli"
 ]
 [workspace.dependencies]
-serde_json = "1.0.133"
+serde_json = "1.0.149"
 sha2 = "0.10.8"
 chrono = "0.4.39"
 anyhow = "1.0.98"
@@ -30,7 +34,7 @@ reqwest = { version = "0.11", default-features = false, features = [
      "cookies",
      "json",
 ] }
-heidi-x509 = { git = "https://github.com/heidiverse/heidi-x509.git" }
+kapun-x509 = { path = "crates/kapun-x509/kapun-x509" }
 heidi-jwt = { git = "https://github.com/heidiverse/heidi-jwt", tag = "v0.2.0" }
 serde_with_macros = "3.16.1"
 jsonschema = { version = "0.17", default-features = false }
@@ -40,11 +44,29 @@ ark-serialize = "0.4.2"
 josekit = { git = "https://github.com/heidiverse/josekit-rs.git", default-features = false, features = [
     "rustcrypto",
 ] }
-zkp-util = { git = "https://github.com/heidiverse/zk-bridge-services.git"}
-rdf-util = { git = "https://github.com/heidiverse/zk-bridge-services.git" }
+zkp-util = { path = "crates/zkp-util" }
+rdf-util = { path = "crates/rdf-util"}
 next-gen-signatures = { git = "https://github.com/heidiverse/zk-bridge-services.git", features = [
     "zkp",
 ] }
+
+
+ark-bls12-381 = { version = "^0.4.0", default-features = false, features = [
+    "curve",
+] }
+ark-ec = { version = "^0.4.1", default-features = false }
+ark-ff = { version = "^0.4.1", default-features = false }
+ark-secp256r1 = { version = "^0.4.0", default-features = false }
+
+ark-std = { version = "^0.4.0", default-features = false }
+bbs_plus = { version = "0.24.0", default-features = false, features = [
+    "parallel",
+] }
+blake2 = { version = "0.10", default-features = false }
+dock_crypto_utils = { version = "0.22.0", default-features = false }
+multibase = { version = "0.9.2" }
+num-bigint = { version = "0.4.6" }
+ureq = "3.3.0"
 
 [profile.dev]
 debug = false

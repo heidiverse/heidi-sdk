@@ -1,25 +1,25 @@
-# Heidi SDK 
+# Kapun SDK 
 
 ## Introduction
 
-This repository contains the source code for the Heidi SDK. The SDK is written in Kotlin Multiplatform and can be used to build Android and iOS applications.
+This repository contains the source code for the Kapun SDK. The SDK is written in Kotlin Multiplatform and can be used to build Android and iOS applications.
 
 ## Architecture
 
-The Heidi SDK consists of a collection of independent modules, where each module implements specific features used for digital identity wallets and verifiers.
+The Kapun SDK consists of a collection of independent modules, where each module implements specific features used for digital identity wallets and verifiers.
 
 ### Modules
 
-#### Heidi Core
+#### Kapun Core
 The core module acts as a baseline for the SDK and contains basic functionality used by all other modules. This includes utility and extension functions.
 
-#### Heidi Proximity
+#### Kapun Proximity
 The proximity module includes an implementation of the [OpenID for Verifiable Presentations over BLE](https://openid.net/specs/openid-4-verifiable-presentations-1_0.html) specification.
 This implementation allows a wallet to present verifiable credentials to a verifier over Bluetooth Low Energy (BLE).
 Right now, only the transport layer is implemented, the actual credential presentation and verification needs to be done by the implementing wallet and verifier.
 
 #### Sample applications
-There are crude sample applications for Android and iOS that demonstrate how to use the Heidi SDK.
+There are crude sample applications for Android and iOS that demonstrate how to use the Kapun SDK.
 Since the SDK is still in early development, they are not yet fully functional and are suspect to change fundamentally.
 
 ## Getting started
@@ -53,8 +53,8 @@ To build and run the iOS sample app:
 
 > It is required to open the project folder first in Android Studio to generate the necessary *local.properties* file containing the ANDROID_HOME environment variable.
 
-1. Open `sample-ios-heidi.xcodeproj` in Xcode.
-2. The sample project is configured for a specific provisioning profile. To install the app on your own device, you will have to update the settings using your own provisioning profile. You find the signing options in the *sample-ios-heidi* Target configation
+1. Open `sample-ios-kapun.xcodeproj` in Xcode.
+2. The sample project is configured for a specific provisioning profile. To install the app on your own device, you will have to update the settings using your own provisioning profile. You find the signing options in the *sample-ios-kapun* Target configation
 3. Select the target device or simulator. Note that the device is required to have iOS 16.0 or higher installed.
 4. Click the Run button in Xcode.
 
