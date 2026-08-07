@@ -16,7 +16,7 @@ members = [
      "crates/kapun-x509/kapun-x509-cli"
 ]
 [workspace.dependencies]
-serde_json = "1.0.133"
+serde_json = "1.0.149"
 sha2 = "0.10.8"
 chrono = "0.4.39"
 anyhow = "1.0.98"
@@ -64,8 +64,9 @@ bbs_plus = { version = "0.24.0", default-features = false, features = [
 ] }
 blake2 = { version = "0.10", default-features = false }
 dock_crypto_utils = { version = "0.22.0", default-features = false }
-multibase = { version = "0.9.1" }
+multibase = { version = "0.9.2" }
 num-bigint = { version = "0.4.6" }
+ureq = "3.3.0"
 
 [profile.dev]
 debug = false

@@ -12,7 +12,7 @@ uniffi.workspace = true
 typst = "0.14.0"
 typst-assets = {version = "0.14.0", features = ["fonts"]}
 typst-pdf = "0.14.0"
-ureq = "3.1.2"
+ureq.workspace = true
 fontdb = "0.16.2"
 # Fetching and unzipping packages
 zune-inflate = { version = "0.2", default-features = false, features = [

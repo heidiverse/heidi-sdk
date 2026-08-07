@@ -30,7 +30,7 @@ hkdf = "0.12.4"
 aes-gcm = "0.10.3"
 
 ed25519-dalek = "2.2.0"
-multibase = "0.9.2"
+multibase = { workspace = true }
 unsigned-varint = "0.8.0"
 
 [features]
