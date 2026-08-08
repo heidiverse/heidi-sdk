@@ -23,7 +23,6 @@ package org.kapunsdk.wallet.process.presentation
 import org.kapunsdk.util.log.Logger
 import org.kapunsdk.presentation.request.model.DocumentDigest
 import org.kapunsdk.presentation.request.model.TransactionData
-import okio.internal.commonToUtf8String
 import uniffi.kapun_crypto_rust.base64UrlDecodePad
 import uniffi.kapun_crypto_rust.sha256Rs
 
@@ -41,7 +40,7 @@ private fun validateHash(data: ByteArray, hash: String?, hashAlgorithmOID: Strin
 
 	Logger.debug("Document hash: $hashString")
 
-	val documentHash = base64UrlDecodePad(hash).commonToUtf8String()
+	val documentHash = base64UrlDecodePad(hash).decodeToString()
 	return hashString == documentHash
 }
 

@@ -304,7 +304,7 @@ class SdJwtTests {
 //        assertEquals(8, sd.v1.size)
 //        assertEquals("US", nationalities.v1[0].asString())
 //        assertEquals("DE", nationalities.v1[1].asString())
-//        val claimsString = base64UrlDecode(sdjwt.innerJwt.originalJwt.split(".")[1]).commonToUtf8String()
+//        val claimsString = base64UrlDecode(sdjwt.innerJwt.originalJwt.split(".")[1]).decodeToString()
 //        val jwt : Value = Json.decodeFromString(claimsString)
 //
 //        for(e in jwt["nationalities"].asArray()!!) {
