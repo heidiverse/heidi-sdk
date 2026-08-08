@@ -135,9 +135,13 @@ internal class GattClient(
             .build()
 
         try {
-            scanner = bluetoothManager.adapter.bluetoothLeScanner!!.also {
-                it.startScan(listOf(filter), settings, scanCallback)
+            val scanner = bluetoothManager.adapter.bluetoothLeScanner
+            if (!bluetoothManager.adapter.isEnabled || scanner == null) {
+                scannerListener?.onError("Bluetooth is turned off")
+                return
             }
+            scanner.startScan(listOf(filter), settings, scanCallback)
+            this.scanner = scanner
         } catch (e: Exception) {
             scannerListener?.onError(e.message ?: e.javaClass.simpleName)
         }
