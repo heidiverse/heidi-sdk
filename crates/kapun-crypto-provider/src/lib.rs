@@ -55,7 +55,9 @@ pub trait Verifying: Send + Sync {
         hash: Vec<u8>,
         context: Vec<u8>,
         signature: Vec<u8>,
-    ) -> Result<(), VerificationProblem>;
+    ) -> Result<(), VerificationProblem> {
+        unimplemented!("Not available");
+    }
 }
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 pub trait Metadata: Send + Sync {
