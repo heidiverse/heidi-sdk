@@ -18,15 +18,16 @@ specific language governing permissions and limitations
 under the License.
  */
 
-use crate::crypto::base64_url_encode;
 #[cfg(feature = "cert-builder")]
 use crate::crypto::SignatureCreator;
-use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+use crate::crypto::base64_url_encode;
 use base64::Engine;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+use josekit::jws::alg::JosekitCryptoProvider;
 use kapun_x509::{der_parser::oid, x509_parser};
-use oid_registry::{OidEntry, OidRegistry, OID_KEY_TYPE_EC_PUBLIC_KEY};
-use p256::pkcs8::DecodePublicKey;
+use oid_registry::{OID_KEY_TYPE_EC_PUBLIC_KEY, OidEntry, OidRegistry};
 use p256::NistP256;
+use p256::pkcs8::DecodePublicKey;
 #[cfg(feature = "cert-builder")]
 use std::sync::Arc;
 
@@ -78,8 +79,8 @@ pub fn create_cert(
     signer: Arc<dyn SignatureCreator>,
 ) -> Option<Vec<u8>> {
     use crate::crypto::base64_url_decode;
-    use p256::pkcs8::der::Encode;
     use p256::pkcs8::EncodePublicKey;
+    use p256::pkcs8::der::Encode;
     use simple_x509::X509Builder;
 
     let X509PublicKey::P256 { x, y } = pubkey else {
@@ -132,7 +133,7 @@ pub fn create_cert(
 pub fn extract_certs(buf: Vec<u8>) -> Vec<X509Certificate> {
     let mut oid_registry = OidRegistry::default().with_x509();
     let entry = OidEntry::new("organizationIdentifier", "organizationIdentifier");
-    oid_registry.insert(oid!(2.5.4 .97), entry);
+    oid_registry.insert(oid!(2.5.4.97), entry);
     let mut certificates = vec![];
     let mut remaining_buf = buf.as_slice();
     loop {
@@ -152,7 +153,7 @@ pub fn extract_certs(buf: Vec<u8>) -> Vec<X509Certificate> {
                 }
             }
         }
-        let aki = if let Ok(Some(extension)) = cert.get_extension_unique(&oid!(2.5.29 .35)) {
+        let aki = if let Ok(Some(extension)) = cert.get_extension_unique(&oid!(2.5.29.35)) {
             Some(BASE64_URL_SAFE_NO_PAD.encode(extension.value))
         } else {
             None
@@ -209,7 +210,7 @@ fn verify_chain(certs: Vec<X509Certificate>) -> bool {
         .into_iter()
         .map(|a| a.original_cert)
         .collect::<Vec<_>>();
-    kapun_x509::x509::verify_chain(chain)
+    kapun_x509::x509::verify_chain::<JosekitCryptoProvider>(chain)
 }
 
 #[cfg(test)]

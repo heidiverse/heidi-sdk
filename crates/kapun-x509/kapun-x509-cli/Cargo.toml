@@ -11,7 +11,9 @@ pem = "3.0.6"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 josekit = { git = "https://github.com/heidiverse/josekit-rs.git", default-features = false, features = [
     "rustcrypto",
-] }
+    "pqc",
+    "legacy-crypto"
+], branch = "feature/digest-signing"}
 serde_json.workspace = true
 rsa = { version = "0.10.0-rc.9", features = [
     "pkcs5",

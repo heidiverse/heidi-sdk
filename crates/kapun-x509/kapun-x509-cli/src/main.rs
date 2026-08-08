@@ -1,14 +1,14 @@
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use clap::{Parser, Subcommand, ValueEnum};
-use josekit::{jwk::Jwk, Value};
+use josekit::{Value, jwk::Jwk, jws::alg::JosekitCryptoProvider};
 use kapun_x509::x509_parser::{
     self,
-    prelude::{oid_registry, X509Certificate},
+    prelude::{X509Certificate, oid_registry},
 };
 use oid_registry::{
     OID_KEY_TYPE_EC_PUBLIC_KEY, OID_PKCS1_RSASSAPSS, OID_PKCS1_SHA1WITHRSA,
     OID_PKCS1_SHA256WITHRSA, OID_PKCS1_SHA384WITHRSA, OID_PKCS1_SHA512WITHRSA,
-    OID_SIG_ECDSA_WITH_SHA384, OID_SIG_ECDSA_WITH_SHA512, OID_SIG_ED25519, OID_SIG_ED448,
+    OID_SIG_ECDSA_WITH_SHA384, OID_SIG_ECDSA_WITH_SHA512, OID_SIG_ED448, OID_SIG_ED25519,
 };
 use rsa::{pkcs8::DecodePublicKey, traits::PublicKeyParts};
 
@@ -52,7 +52,7 @@ enum What {
 }
 
 fn main() {
-    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
     let _ = tracing_subscriber::registry()
         .with(fmt::layer())
         .with(EnvFilter::from_default_env())
@@ -171,7 +171,8 @@ fn main() {
                             }
                         }
 
-                        let res = kapun_x509::x509::verify_chain(certs_array);
+                        let res =
+                            kapun_x509::x509::verify_chain::<JosekitCryptoProvider>(certs_array);
                         println!();
                         println!();
                         println!("Certificate Chain valid: {}", res);
@@ -187,7 +188,8 @@ fn main() {
                             println!();
                         }
                         certs_array.reverse();
-                        let res = kapun_x509::x509::verify_chain(certs_array);
+                        let res =
+                            kapun_x509::x509::verify_chain::<JosekitCryptoProvider>(certs_array);
                         println!();
                         println!();
                         println!("Certificate Chain valid: {}", res);

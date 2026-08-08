@@ -43,7 +43,8 @@ rand_core = { version = "0.6.4", features = ["getrandom"] }
 ark-serialize = "0.4.2"
 josekit = { git = "https://github.com/heidiverse/josekit-rs.git", default-features = false, features = [
     "rustcrypto",
-] }
+], branch = "feature/digest-signing" }
+
 zkp-util = { path = "crates/zkp-util" }
 rdf-util = { path = "crates/rdf-util"}
 next-gen-signatures = { git = "https://github.com/heidiverse/zk-bridge-services.git", features = [
