@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 uniffi = {workspace = true, optional = true}
 kapun-util-rust = { path = "../../kapun-util/rust" }
+oid-registry = "0.7.0"
 
 [features]
 default = []

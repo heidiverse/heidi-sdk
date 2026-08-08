@@ -1,6 +1,8 @@
 use std::{fmt, unimplemented};
 
 pub use kapun_util_rust::value::Value as KapunValue;
+pub use oid_registry;
+use oid_registry::Oid;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
@@ -95,7 +97,13 @@ pub trait KeyEncoding: Send + Sync {
 
 pub trait KapunCryptoProvider {
     fn verifier(key_data: Vec<u8>) -> Box<dyn Verifier>;
+    fn verifier_for_oid(key_data: Vec<u8>, _oid: Oid<'static>) -> Box<dyn Verifier> {
+        Self::verifier(key_data)
+    }
     fn signer(key_data: Vec<u8>) -> Box<dyn Signer>;
+    fn signer_for_oid(key_data: Vec<u8>, _oid: Oid<'static>) -> Box<dyn Signer> {
+        Self::signer(key_data)
+    }
 }
 
 pub trait Verifier: Verifying + KeyEncoding + Metadata {}
