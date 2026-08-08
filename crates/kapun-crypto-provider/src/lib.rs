@@ -32,9 +32,9 @@ impl fmt::Display for SigningProblem {
 
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 pub trait Signing: Send + Sync {
-    fn sign(&self, data: Vec<u8>) -> Result<Vec<u8>, SigningProblem>;
-    fn sign_hash(&self, hash: Vec<u8>) -> Result<Vec<u8>, SigningProblem>;
-    fn sign_hash_context(
+    fn kapun_sign(&self, data: Vec<u8>) -> Result<Vec<u8>, SigningProblem>;
+    fn kapun_sign_hash(&self, hash: Vec<u8>) -> Result<Vec<u8>, SigningProblem>;
+    fn kapun_sign_hash_context(
         &self,
         _hash: Vec<u8>,
         _context: Vec<u8>,
@@ -44,9 +44,13 @@ pub trait Signing: Send + Sync {
 }
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 pub trait Verifying: Send + Sync {
-    fn verify(&self, data: Vec<u8>, signature: Vec<u8>) -> Result<(), VerificationProblem>;
-    fn verify_hash(&self, hash: Vec<u8>, signature: Vec<u8>) -> Result<(), VerificationProblem>;
-    fn verify_hash_context(
+    fn kapun_verify(&self, data: Vec<u8>, signature: Vec<u8>) -> Result<(), VerificationProblem>;
+    fn kapun_verify_hash(
+        &self,
+        hash: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<(), VerificationProblem>;
+    fn kapun_verify_hash_context(
         &self,
         hash: Vec<u8>,
         context: Vec<u8>,
@@ -55,34 +59,34 @@ pub trait Verifying: Send + Sync {
 }
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 pub trait Metadata: Send + Sync {
-    fn jose_alg(&self) -> Option<String> {
+    fn kapun_jose_alg(&self) -> Option<String> {
         None
     }
-    fn oid(&self) -> Option<Vec<u8>> {
+    fn kapun_oid(&self) -> Option<Vec<u8>> {
         None
     }
-    fn additional(&self) -> Option<Value> {
+    fn kapun_additional(&self) -> Option<Value> {
         None
     }
 }
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 pub trait KeyEncoding: Send + Sync {
-    fn private_jwk(&self) -> Option<String> {
+    fn kapun_private_jwk(&self) -> Option<String> {
         None
     }
-    fn public_jwk(&self) -> Option<String> {
+    fn kapun_public_jwk(&self) -> Option<String> {
         None
     }
-    fn private_pkcs8_der(&self) -> Option<Vec<u8>> {
+    fn kapun_private_pkcs8_der(&self) -> Option<Vec<u8>> {
         None
     }
-    fn private_pkcs8_pem(&self) -> Option<String> {
+    fn kapun_private_pkcs8_pem(&self) -> Option<String> {
         None
     }
-    fn public_spki_der(&self) -> Option<Vec<u8>> {
+    fn kapun_public_spki_der(&self) -> Option<Vec<u8>> {
         None
     }
-    fn public_spki_pem(&self) -> Option<String> {
+    fn kapun_public_spki_pem(&self) -> Option<String> {
         None
     }
 }
