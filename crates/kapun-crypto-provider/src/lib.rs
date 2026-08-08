@@ -95,13 +95,23 @@ pub trait KeyEncoding: Send + Sync {
     }
 }
 
+pub enum DecodingError {
+    InvalidAlgorithm,
+}
+
 pub trait KapunCryptoProvider {
-    fn verifier(key_data: Vec<u8>) -> Box<dyn Verifier>;
-    fn verifier_for_oid(key_data: Vec<u8>, _oid: Oid<'static>) -> Box<dyn Verifier> {
+    fn verifier(key_data: Vec<u8>) -> Result<Box<dyn Verifier>, DecodingError>;
+    fn verifier_for_oid<'a>(
+        key_data: Vec<u8>,
+        _oid: Oid<'a>,
+    ) -> Result<Box<dyn Verifier + 'a>, DecodingError> {
         Self::verifier(key_data)
     }
-    fn signer(key_data: Vec<u8>) -> Box<dyn Signer>;
-    fn signer_for_oid(key_data: Vec<u8>, _oid: Oid<'static>) -> Box<dyn Signer> {
+    fn signer(key_data: Vec<u8>) -> Result<Box<dyn Signer>, DecodingError>;
+    fn signer_for_oid<'a>(
+        key_data: Vec<u8>,
+        _oid: Oid<'a>,
+    ) -> Result<Box<dyn Signer + 'a>, DecodingError> {
         Self::signer(key_data)
     }
 }
