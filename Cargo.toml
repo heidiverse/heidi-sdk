@@ -14,7 +14,7 @@ members = [
     "crates/rdf-util",
     "crates/kapun-x509/kapun-x509",
      "crates/kapun-x509/kapun-x509-cli"
-]
+, "crates/kapun-crypto-provider"]
 [workspace.dependencies]
 serde_json = "1.0.149"
 sha2 = "0.10.8"

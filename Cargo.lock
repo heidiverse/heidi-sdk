@@ -5082,6 +5082,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kapun-crypto-provider"
+version = "0.1.0"
+dependencies = [
+ "kapun-util-rust",
+ "uniffi",
+]
+
+[[package]]
 name = "kapun-crypto-rust"
 version = "0.1.0"
 dependencies = [
