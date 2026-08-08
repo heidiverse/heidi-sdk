@@ -94,8 +94,8 @@ pub trait KeyEncoding: Send + Sync {
 }
 
 pub trait KapunCryptoProvider {
-    fn verifier() -> impl Verifying + KeyEncoding + Metadata;
-    fn signer() -> impl Signing + KeyEncoding + Metadata;
+    fn verifier(key_data: Vec<u8>) -> impl Verifying + KeyEncoding + Metadata;
+    fn signer(key_data: Vec<u8>) -> impl Signing + KeyEncoding + Metadata;
 }
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();
