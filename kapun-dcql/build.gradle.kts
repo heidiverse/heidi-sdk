@@ -2,7 +2,7 @@ import ch.ubique.uniffi.plugin.extensions.useRustUpLinker
 
 plugins {
 	alias(libs.plugins.kotlin.multiplatform)
-	alias(libs.plugins.android.library)
+	alias(libs.plugins.android.kotlin.multiplatform.library)
 	alias(libs.plugins.skie)
 	alias(libs.plugins.kotlin.atomicfu)
 	alias(libs.plugins.uniffi.plugin)
@@ -18,8 +18,17 @@ kotlin {
 
 	jvmToolchain(17)
 
-	androidTarget {
-		publishLibraryVariants = listOf("release")
+	android {
+		namespace = "org.kapunsdk.dcql"
+		compileSdk = libs.versions.android.compileSdk.get().toInt()
+		minSdk = libs.versions.android.minSdk.get().toInt()
+
+		withHostTest {}
+
+		optimization {
+			consumerKeepRules.publish = true
+			consumerKeepRules.file(rootProject.file("consumer-jna-rules.pro"))
+		}
 	}
 	jvm()
 	listOf(
@@ -62,23 +71,6 @@ kotlin {
 	}
 }
 
-android {
-	namespace = "org.kapunsdk.dcql"
-	compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-	ndkVersion = libs.versions.android.ndk.get()
-
-	defaultConfig {
-		minSdk = libs.versions.android.minSdk.get().toInt()
-		consumerProguardFiles(rootProject.file("consumer-jna-rules.pro"))
-	}
-
-	compileOptions {
-		sourceCompatibility = JavaVersion.VERSION_17
-		targetCompatibility = JavaVersion.VERSION_17
-	}
-}
-
 skie {
 	analytics {
 		enabled = false
@@ -96,6 +88,7 @@ uniffi {
 
 cargo {
 	packageDirectory = layout.projectDirectory.dir("rust")
+	ndkVersion = libs.versions.android.ndk.get()
 }
 
 mavenPublishing {

@@ -1,7 +1,7 @@
 [versions]
 accompanist = "0.37.3"
-agp = "8.10.1"
-android-compileSdk = "36"
+agp = "9.2.1"
+android-compileSdk = "37"
 android-minSdk = "28"
 android-targetSdk = "34"
 android-ndk = "28.2.13676358"
@@ -12,25 +12,25 @@ androidx-coreKtx = "1.17.0"
 androidx-lifecycle-runtimeKtx = "2.9.4"
 bouncycastle = "1.82"
 compose-bom = "2025.09.01"
-compose-multiplatform = "1.9.0"
+compose-multiplatform = "1.11.1"
 koin = "4.1.1"
-kotlin = "2.2.10"
+kotlin = "2.4.10"
 kotlin-coroutines = "1.10.2"
 kotlin-datetime = "0.7.1"
 kotlin-serialization = "1.9.0"
-ksp = "2.2.10-2.0.2"
+ksp = "2.3.11"
 ktor = "3.3.0"
-ktorfit = "2.6.4"
+ktorfit = "2.7.5"
 owf-identity = "202411.1"
-skie = "0.10.6"
+skie = "0.10.14"
 sqldelight = "2.1.0"
 ubique-gradle-alpaka = "8.10.0"
 ubique-gradle-preset = "8.10.0"
 ubique-gradle-signing = "8.10.0"
 ubique-qrscanner = "1.1.1"
 vanniktech-publish = "0.34.0"
-uniffi-bindgen = "v1.0.14"
-uniffi-plugin = "1.0.14"
+uniffi-bindgen = "v1.1.0"
+uniffi-plugin = "1.1.0"
 material-icons = "1.7.8"
 
 [libraries]
@@ -78,10 +78,9 @@ compose-material-icons = {module = "androidx.compose.material:material-icons-ext
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-android-library = { id = "com.android.library", version.ref = "agp" }
+android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-atomicfu = { id = "org.jetbrains.kotlin.plugin.atomicfu", version.ref = "kotlin" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }

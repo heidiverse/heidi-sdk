@@ -57,29 +57,29 @@ private fun hash(digest: String, stringifiedObject: String) : ByteArray {
 
 fun computeCesrEncodedDigest(captureBase: org.kapunsdk.visualization.oca.model.CaptureBase, digest: String = "I") : String {
 	// Set the digest dummy (44 '#' for SHA-256 digest)
-	val replacedCaptureBase = captureBase.copy(digest = _root_ide_package_.org.kapunsdk.visualization.oca.model.SAID_HASH_PLACEHOLDER)
-	val stringifiedObject = _root_ide_package_.org.kapunsdk.visualization.oca.model.canonicalize(replacedCaptureBase)
-	var hashresult = _root_ide_package_.org.kapunsdk.visualization.oca.model.hash(digest, stringifiedObject).toMutableList()
+	val replacedCaptureBase = captureBase.copy(digest = org.kapunsdk.visualization.oca.model.SAID_HASH_PLACEHOLDER)
+	val stringifiedObject = org.kapunsdk.visualization.oca.model.canonicalize(replacedCaptureBase)
+	var hashresult = org.kapunsdk.visualization.oca.model.hash(digest, stringifiedObject).toMutableList()
 	hashresult.add(0, 0)
 	val hash = base64UrlEncode(hashresult.toByteArray())
 	return hash.replaceRange(0,1,digest)
 }
 fun  computeCesrEncodedDigest(layer: org.kapunsdk.visualization.oca.model.overlay.Overlay, digest: String = "I") : String {
 	// Set the digest dummy (44 '#' for SHA-256 digest)
-	val replacedCaptureBase = layer.updateDigest(_root_ide_package_.org.kapunsdk.visualization.oca.model.SAID_HASH_PLACEHOLDER)
-	val stringifiedObject = _root_ide_package_.org.kapunsdk.visualization.oca.model.canonicalize(
-		_root_ide_package_.org.kapunsdk.visualization.oca.model.json.encodeToString(replacedCaptureBase)
+	val replacedCaptureBase = layer.updateDigest(org.kapunsdk.visualization.oca.model.SAID_HASH_PLACEHOLDER)
+	val stringifiedObject = org.kapunsdk.visualization.oca.model.canonicalize(
+		org.kapunsdk.visualization.oca.model.json.encodeToString(replacedCaptureBase)
 	)
-	var hashresult = _root_ide_package_.org.kapunsdk.visualization.oca.model.hash(digest, stringifiedObject).toMutableList()
+	var hashresult = org.kapunsdk.visualization.oca.model.hash(digest, stringifiedObject).toMutableList()
 	hashresult.add(0, 0)
 	val hash = base64UrlEncode(hashresult.toByteArray())
 	return hash.replaceRange(0,1,digest)
 }
 fun  computeBundleDigest(ocaBundle: org.kapunsdk.visualization.oca.model.OcaBundleJson, digest: String = "I") : String {
-	val stringifiedObject = _root_ide_package_.org.kapunsdk.visualization.oca.model.canonicalize(
-		_root_ide_package_.org.kapunsdk.visualization.oca.model.json.encodeToString(ocaBundle)
+	val stringifiedObject = org.kapunsdk.visualization.oca.model.canonicalize(
+		org.kapunsdk.visualization.oca.model.json.encodeToString(ocaBundle)
 	)
-	var hashresult = _root_ide_package_.org.kapunsdk.visualization.oca.model.hash(digest, stringifiedObject).toMutableList()
+	var hashresult = org.kapunsdk.visualization.oca.model.hash(digest, stringifiedObject).toMutableList()
 	hashresult.add(0, 0)
 	val hash = base64UrlEncode(hashresult.toByteArray())
 	return hash.replaceRange(0,1,digest)
@@ -89,8 +89,8 @@ fun  computeBundleDigest(ocaBundle: org.kapunsdk.visualization.oca.model.OcaBund
  * Simple implementation following https://www.rfc-editor.org/rfc/rfc8785.html
  */
 fun canonicalize(captureBase: org.kapunsdk.visualization.oca.model.CaptureBase) : String {
-	return _root_ide_package_.org.kapunsdk.visualization.oca.model.canonicalizeObject(
-		_root_ide_package_.org.kapunsdk.visualization.oca.model.json.encodeToJsonElement(
+	return org.kapunsdk.visualization.oca.model.canonicalizeObject(
+		org.kapunsdk.visualization.oca.model.json.encodeToJsonElement(
 			captureBase
 		).jsonObject
 	)
@@ -99,21 +99,21 @@ fun canonicalize(captureBase: org.kapunsdk.visualization.oca.model.CaptureBase) 
  * Simple implementation following https://www.rfc-editor.org/rfc/rfc8785.html
  */
 fun canonicalize(input: String) : String {
-	val inputObject : JsonObject = _root_ide_package_.org.kapunsdk.visualization.oca.model.json.decodeFromString(input)
-	return _root_ide_package_.org.kapunsdk.visualization.oca.model.canonicalizeObject(inputObject)
+	val inputObject : JsonObject = org.kapunsdk.visualization.oca.model.json.decodeFromString(input)
+	return org.kapunsdk.visualization.oca.model.canonicalizeObject(inputObject)
 }
 /**
  * Simple implementation following https://www.rfc-editor.org/rfc/rfc8785.html
  */
 fun canonicalize(input: JsonObject) : String {
-	return _root_ide_package_.org.kapunsdk.visualization.oca.model.canonicalizeObject(input)
+	return org.kapunsdk.visualization.oca.model.canonicalizeObject(input)
 }
 /**
  * Simple implementation following https://www.rfc-editor.org/rfc/rfc8785.html
  */
 fun canonicalize(ocaBundle: org.kapunsdk.visualization.oca.model.OcaBundleJson) : String {
-	return _root_ide_package_.org.kapunsdk.visualization.oca.model.canonicalizeObject(
-		_root_ide_package_.org.kapunsdk.visualization.oca.model.json.encodeToJsonElement(
+	return org.kapunsdk.visualization.oca.model.canonicalizeObject(
+		org.kapunsdk.visualization.oca.model.json.encodeToJsonElement(
 			ocaBundle
 		).jsonObject
 	)
@@ -125,7 +125,7 @@ private fun canonicalizeObject(obj: JsonObject) : String {
 	for(key in orderedAttributes) {
 		val value = obj[key]
 		// we know the value exists as it is a key (see above)
-		val stringifiedValue = _root_ide_package_.org.kapunsdk.visualization.oca.model.stringifyJsonElement(value!!)
+		val stringifiedValue = org.kapunsdk.visualization.oca.model.stringifyJsonElement(value!!)
 		outputString += "\"$key\":$stringifiedValue,"
 	}
 	if(outputString.contains(",")) {
@@ -137,7 +137,7 @@ private fun canonicalizeObject(obj: JsonObject) : String {
 private fun canonicalizeArray(arr: JsonArray) : String {
 	var outputString = "["
 	for(element in arr) {
-		outputString += _root_ide_package_.org.kapunsdk.visualization.oca.model.stringifyJsonElement(element) + ","
+		outputString += org.kapunsdk.visualization.oca.model.stringifyJsonElement(element) + ","
 	}
 	if(outputString.contains(",")) {
 		outputString = outputString.substring(0,outputString.length-1)

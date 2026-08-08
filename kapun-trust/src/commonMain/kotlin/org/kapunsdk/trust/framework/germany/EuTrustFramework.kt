@@ -57,8 +57,8 @@ import uniffi.kapun_util_rust.Value
 
 const val EU_TRUST_FRAMEWORK_ID : String = "eudi_basic_trust"
 
-class EuTrustFramework(private val documentProvider: org.kapunsdk.trust.framework.DocumentProvider, private val trustedDomains: List<String>, val trustAnchorProvider: org.kapunsdk.trust.framework.X509TrustAnchorProvider = _root_ide_package_.org.kapunsdk.trust.framework.oid4vp.StaticX509TrustAnchorProvider()) : org.kapunsdk.trust.framework.TrustFramework, KapunTrustKoinComponent {
-    override val frameworkId: String = _root_ide_package_.org.kapunsdk.trust.framework.germany.EU_TRUST_FRAMEWORK_ID
+class EuTrustFramework(private val documentProvider: org.kapunsdk.trust.framework.DocumentProvider, private val trustedDomains: List<String>, val trustAnchorProvider: org.kapunsdk.trust.framework.X509TrustAnchorProvider = org.kapunsdk.trust.framework.oid4vp.StaticX509TrustAnchorProvider()) : org.kapunsdk.trust.framework.TrustFramework, KapunTrustKoinComponent {
+    override val frameworkId: String = org.kapunsdk.trust.framework.germany.EU_TRUST_FRAMEWORK_ID
     val revocationCheck: RevocationCheck = RevocationCheck()
     val json : Json by inject<Json>()
     init {

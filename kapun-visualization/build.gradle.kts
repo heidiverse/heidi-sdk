@@ -4,7 +4,7 @@ plugins {
 	alias(libs.plugins.kotlin.serialization)
 	alias(libs.plugins.compose.multiplatform)
 	alias(libs.plugins.compose.compiler)
-	alias(libs.plugins.android.library)
+	alias(libs.plugins.android.kotlin.multiplatform.library)
 	alias(libs.plugins.skie)
 	alias(libs.plugins.vanniktech.publish)
 }
@@ -18,8 +18,12 @@ kotlin {
 
 	jvm()
 
-	androidTarget {
-		publishLibraryVariants = listOf("release")
+	android {
+		namespace = "org.kapunsdk.visualization"
+		compileSdk = libs.versions.android.compileSdk.get().toInt()
+		minSdk = libs.versions.android.minSdk.get().toInt()
+
+		withHostTest {}
 	}
 
 	listOf(
@@ -61,22 +65,6 @@ kotlin {
 		androidMain.dependencies {
 			implementation(libs.koin.android)
 		}
-	}
-}
-
-android {
-	namespace = "org.kapunsdk.visualization"
-	compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-	ndkVersion = libs.versions.android.ndk.get()
-
-	defaultConfig {
-		minSdk = libs.versions.android.minSdk.get().toInt()
-	}
-
-	compileOptions {
-		sourceCompatibility = JavaVersion.VERSION_17
-		targetCompatibility = JavaVersion.VERSION_17
 	}
 }
 

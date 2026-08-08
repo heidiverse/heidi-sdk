@@ -27,7 +27,6 @@ import org.kapunsdk.util.extensions.get
 import org.kapunsdk.util.extensions.json
 import org.kapunsdk.util.log.Logger
 import kotlinx.serialization.Serializable
-import okio.internal.commonToUtf8String
 import uniffi.kapun_credentials_rust.SpecVersion
 import uniffi.kapun_util_rust.Value
 import kotlin.io.encoding.Base64
@@ -51,10 +50,10 @@ sealed class TransactionDataWrapper {
 						Logger.info("decoding transaction data: \"$base64String\"")
 						try {
 							val jsonString = try {
-								Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).decode(base64String).commonToUtf8String()
+								Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).decode(base64String).decodeToString()
 							} catch (e: Exception) {
 								Logger.info("Decoding without padding failed, retrying with padding")
-								Base64.UrlSafe.withPadding(Base64.PaddingOption.PRESENT).decode(base64String).commonToUtf8String()
+								Base64.UrlSafe.withPadding(Base64.PaddingOption.PRESENT).decode(base64String).decodeToString()
 							}
 							val decoded = json.decodeFromString<TransactionData>(jsonString)
 							Pair(base64String, decoded)
@@ -76,10 +75,10 @@ sealed class TransactionDataWrapper {
 					Logger.info("decoding transaction data: \"$base64String\"")
 					try {
 						val jsonString = try {
-							Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).decode(base64String).commonToUtf8String()
+							Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).decode(base64String).decodeToString()
 						} catch (e: Exception) {
 							Logger.info("Decoding without padding failed, retrying with padding")
-							Base64.UrlSafe.withPadding(Base64.PaddingOption.PRESENT).decode(base64String).commonToUtf8String()
+							Base64.UrlSafe.withPadding(Base64.PaddingOption.PRESENT).decode(base64String).decodeToString()
 						}
 						val decoded = json.decodeFromString<TransactionData>(jsonString)
 						Pair(base64String, decoded)

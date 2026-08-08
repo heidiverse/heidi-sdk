@@ -137,9 +137,13 @@ internal class GattServer(
 			.build()
 
 		try {
-			advertiser = bluetoothManager.adapter.bluetoothLeAdvertiser.also {
-				it.startAdvertising(settings, data, advertiserCallback)
+			val advertiser = bluetoothManager.adapter.bluetoothLeAdvertiser
+			if (!bluetoothManager.adapter.isEnabled || advertiser == null) {
+				advertiserListener?.onError("Bluetooth is turned off")
+				return
 			}
+			advertiser.startAdvertising(settings, data, advertiserCallback)
+			this.advertiser = advertiser
 		} catch (e: Exception) {
 			advertiserListener?.onError(e.message ?: e.javaClass.simpleName)
 		}
