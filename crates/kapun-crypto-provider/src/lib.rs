@@ -1,6 +1,6 @@
 use std::{fmt, unimplemented};
 
-use kapun_util_rust::value::Value;
+pub use kapun_util_rust::value::Value as KapunValue;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
@@ -67,7 +67,7 @@ pub trait Metadata: Send + Sync {
     fn kapun_oid(&self) -> Option<Vec<u8>> {
         None
     }
-    fn kapun_additional(&self) -> Option<Value> {
+    fn kapun_additional(&self) -> Option<KapunValue> {
         None
     }
 }
