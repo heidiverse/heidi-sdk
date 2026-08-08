@@ -17,11 +17,28 @@ impl fmt::Display for VerificationProblem {
     }
 }
 
+#[derive(Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
+pub enum SigningProblem {
+    SigningFailed,
+}
+impl fmt::Display for SigningProblem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SigningProblem::SigningFailed => f.write_str("Signing failed"),
+        }
+    }
+}
+
 #[cfg_attr(feature = "uniffi", uniffi::export(with_foreign))]
 pub trait Signing: Send + Sync {
-    fn sign(&self, data: Vec<u8>) -> Vec<u8>;
-    fn sign_hash(&self, hash: Vec<u8>) -> Vec<u8>;
-    fn sign_hash_context(&self, _hash: Vec<u8>, _context: Vec<u8>) -> Vec<u8> {
+    fn sign(&self, data: Vec<u8>) -> Result<Vec<u8>, SigningProblem>;
+    fn sign_hash(&self, hash: Vec<u8>) -> Result<Vec<u8>, SigningProblem>;
+    fn sign_hash_context(
+        &self,
+        _hash: Vec<u8>,
+        _context: Vec<u8>,
+    ) -> Result<Vec<u8>, SigningProblem> {
         unimplemented!("Not available");
     }
 }
