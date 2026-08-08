@@ -4760,7 +4760,7 @@ dependencies = [
 [[package]]
 name = "josekit"
 version = "0.11.0"
-source = "git+https://github.com/heidiverse/josekit-rs.git?branch=feature%2Fdigest-signing#00f7d4886b49afa68d94ab5b467eb422338eb9dd"
+source = "git+https://github.com/heidiverse/josekit-rs.git?branch=feature%2Fdigest-signing#8610c754c809d7539d5231764161d6a51c5f4fa4"
 dependencies = [
  "aes 0.8.4",
  "aes-gcm 0.10.3",
