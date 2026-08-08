@@ -52,9 +52,9 @@ pub trait Verifying: Send + Sync {
     ) -> Result<(), VerificationProblem>;
     fn kapun_verify_hash_context(
         &self,
-        hash: Vec<u8>,
-        context: Vec<u8>,
-        signature: Vec<u8>,
+        _hash: Vec<u8>,
+        _context: Vec<u8>,
+        _signature: Vec<u8>,
     ) -> Result<(), VerificationProblem> {
         unimplemented!("Not available");
     }
