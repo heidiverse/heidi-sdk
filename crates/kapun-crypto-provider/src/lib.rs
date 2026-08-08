@@ -92,5 +92,10 @@ pub trait KeyEncoding: Send + Sync {
         None
     }
 }
+
+pub trait KapunCryptoProvider {
+    fn verifier() -> impl Verifying + KeyEncoding + Metadata;
+    fn signer() -> impl Signing + KeyEncoding + Metadata;
+}
 #[cfg(feature = "uniffi")]
 uniffi::setup_scaffolding!();
